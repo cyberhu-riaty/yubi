@@ -1,0 +1,407 @@
+"""
+面板/模型库面板.py —— 模型库 / 切换机械臂 / 显示当前项目（方案 C 的界面）
+
+它解决什么问题：
+    以前一打开软件就直接加载 UR5e，用户没得选。现在启动是**空场景**，
+    这个面板负责"选一台机械臂 / 换一台 / 从本地导入"。
+
+★ 方案 C 之后它还负责显示**当前项目与算法列表**：
+    点一个模型不只是换物理对象，还会按"哪个项目用了这个模型"把控制算法
+    **整组换掉**（规则见 软件/项目.py，执行点见 软件/启动.py 的 `_装配项目()`）。
+    所以面板上要多两行：
+        Project: UR5e_基础PD
+        Algorithms (5): 关节 PD 位置控制 v1.1 | 参数辨识 v1.1 | ...
+    没有这两行，用户会疑惑"我点了 xArm7，怎么算法变了"，或者反过来"怎么没变"。
+    数据来自仿真侧发的 `项目状态`（见 模型桥.py）；装配完成时**立刻**发一条，
+    所以点下去马上就能看到更新，不用等 2 秒的节拍。
+
+★ 它是一个"固定面板"（不是会消失的浮窗）：
+    ① **固定在窗口左上角**（默认 12,56；大小 360×460）。想挪就挪，位置会被记住 ——
+       但只在**第一次**由我们摆放，之后不干涉用户。
+    ② **不可关闭**（类属性 `不可关闭 = True`，且 `imgui.Begin` 不传 p_open → 没有 ×）。
+       它是选机械臂的**唯一入口**，被关掉就麻烦了 —— 实测踩过：用户点了 ×
+       之后每次启动都不显示，只能按 F9 才找得回来。
+    ③ 每次启动**必定出现**。
+
+★ 为什么没有"停靠进官方左侧 Options 栏"（试过，做不到）：
+    官方 `ux.configure_docking_layout()` 内部是
+        DockBuilderAddNode(节点id, …)  →  DockBuilderDockWindow(窗口名, 节点id)
+    而**节点 id 是 DockBuilderAddNode 现场生成的**（官方 so 里那句调试串
+    `[docking] DockBuilderAddNode 0x%08X` 就是它），既不是 `GetID("Options")`
+    这种按名字可算的值，官方也没提供"把自定义面板加进布局"的接口。
+    实测证据：启动日志里会出现
+        【面板】模型库 官方停靠栏（Options / Inspector）对接不上 …
+    （`GetID` 还带当前窗口的 ID 栈做种子，从我们这边算出来的值对不上。
+      官方 so 里虽然能挖出 `Dockspace` / `Options` / `Inspector` 这些字符串，
+      但那是窗口标题与内部节点名，不是可复现的节点 id。）
+
+界面上有什么：
+    当前模型 + 状态 | 机械臂列表（点一下即切换，当前项打 ●）
+    [从本地导入模型…]（macOS 原生文件选择器，后台线程不冻界面）  [空场景]  [重新加载当前]  [刷新列表]
+    一个手输路径的输入框（给"路径不在模型库里"的场合兜底）
+
+数据从哪来：
+    · 列表：直接读 `模型/模型库.json`（由 工具/导入模型.py 生成），不占消息通道
+    · 当前模型与状态：仿真侧每 2 Hz 发一条 `模型状态`（见 模型桥.py）
+
+切换怎么走：
+    面板 →（`换模型命令`）→ 仿真侧 `模型应用器` → 外壳真正加载并重绑 model/data
+    →（`ModelEvent`）→ 窗口侧画面换掉。详见 模型桥.py 与 启动.py 的说明。
+
+★ 也可以不用这个面板：官方 Studio 内建了"把 .xml 文件拖进窗口"的能力，
+  拖拽那条路同样会被仿真侧的 `模型应用器` 接住（见 模型桥.py）。
+
+★ 面板上的文字**只能是 ASCII**：官方 UI 字体（Atkinson Hyperlegible）没有中文字形，
+  也没装 ● ○ ✓ ✗ （） 这些符号，ImGui 遇到缺字形会回退画 `?`（就是"弹窗里很多问号"）。
+  所以这里：按钮/标签用英文，状态用 [ok]/[fail]/[..] 这类 ASCII 标记，
+  中文的状态原文与路径留给终端（终端用系统字体，中文正常）。
+  校验：./.venv/bin/python 优化（软件优化的报告都放这里面来）/验证/字体覆盖.py
+"""
+from __future__ import annotations
+
+import os as _os
+import sys as _sys
+
+_外壳目录 = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _外壳目录 not in _sys.path:
+    _sys.path.insert(0, _外壳目录)
+
+from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E402
+from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
+
+import 模型桥                                                        # noqa: E402
+from 模型桥 import (换模型命令, 模型状态, 项目状态, 读取模型库,      # noqa: E402
+                    后台选择器, 空场景路径, 绝对路径, 模型目录)
+
+import 面板注册表                                                      # noqa: E402
+import 界面文字                                                        # noqa: E402
+
+# 配色（TextColored 只吃 Vec4 对象，传元组会报 "incompatible function calls"）
+绿 = lambda: imgui.Vec4(0.30, 0.85, 0.40, 1.0)
+橙 = lambda: imgui.Vec4(0.95, 0.45, 0.30, 1.0)
+黄 = lambda: imgui.Vec4(0.95, 0.80, 0.25, 1.0)
+灰 = lambda: imgui.Vec4(0.65, 0.68, 0.72, 1.0)
+
+# 官方停靠栏的名字（从官方 ux.so 里挖出来的字符串，见 _摆放窗口 的说明）
+停靠候选 = ("Options", "Inspector")
+
+
+class 模型库面板:
+    """窗口侧插件：列出模型库、发换模型命令、显示当前模型。
+
+    ★ 第 3 步起它默认住在【工作台】窗口的第一个页签里（见 面板容器.py）：
+      所以"固定在左上角 + 不可关闭"这两条只在**被弹成独立窗口**时才生效。
+      在容器里时它由容器统一管开关 —— 面板列表里它不会被误关，
+      而"选机械臂"这个唯一入口也永远不会丢（实在找不到还有 F9 与菜单 Panels）。
+    """
+
+    面板显示名 = "模型库"
+    页签名 = "Model library"
+
+    # ★ 不可关闭：它是选机械臂的唯一入口（细节见 面板注册表.每帧 的说明）
+    #   仅当它被弹出成独立窗口时生效；在容器页签里由容器管开关。
+    不可关闭 = True
+
+    def __init__(self):
+        self.viewer = None
+        self.可见 = True
+        self.模型列表: list[dict] = []
+        self.当前路径 = ""
+        self.当前显示名 = "（未知）"
+        self.状态 = "等待仿真侧…"
+        self.自由度 = 0
+        self.收帧 = 0
+        self.切换次数 = 0
+        self.绘制次数 = 0
+        self.错误次数 = 0
+        self.手动路径 = ""
+        # ---- 方案 C：当前项目与这一组装了哪些算法（由 项目状态 消息填）----
+        self.当前项目 = ""
+        self.算法列表: list[dict] = []
+        self.装配报告: list[str] = []
+        # 文件选择器跑在后台线程：直接调用会阻塞窗口线程、把 3D 视图冻住
+        self.选择器 = 后台选择器()
+        # 摆放状态：只在**第一次**由我们决定位置，之后不干涉用户自己拖动
+        #   取值：None（还没定过）/ "Options" / "Inspector" / "固定位置"
+        self._摆放已定 = 模型桥.读取设置("模型库摆放") is not None
+        self._摆放方式 = 模型桥.读取设置("模型库摆放") or ""
+        self._停靠尝试目标 = ""
+        self._摆放尝试 = 0
+        self._刷新列表()
+
+    def _刷新列表(self) -> None:
+        self.模型列表 = 读取模型库(只取机械臂=True)
+
+    # ------------------------------------------------------------------
+    # 摆放窗口：优先停靠进官方栏，做不到就固定在左上角
+    # ------------------------------------------------------------------
+    def _摆放窗口(self) -> None:
+        """只在第一次运行时决定窗口位置（细节见文件顶部 ③ 的说明）。
+
+        ★ 住在工作台页签里时**不摆放**（也就不用去试官方停靠栏了）：页签没有自己的
+          位置；只有被弹成独立窗口时才走这条老路。
+        """
+        if self._摆放已定 or not 面板注册表.是弹出(self):
+            return
+        self._摆放尝试 += 1
+
+        # 前 ~1.5 秒先试试能不能找到官方停靠节点（布局可能在首帧还没建好）
+        if self._摆放尝试 <= 90:
+            for 名 in 停靠候选:
+                编号 = imgui.GetID(名)
+                if imgui.DockBuilderGetNode(编号):
+                    imgui.SetNextWindowDockID(编号, imgui.Cond.Always.value)
+                    self._停靠尝试目标 = 名
+                    return
+            return
+
+        # 对接不上 → 固定位置，并把选择记下来（免得每次启动都覆盖用户挪过的位置）
+        self._摆放已定 = True
+        self._摆放方式 = "固定位置"
+        模型桥.写入设置("模型库摆放", "固定位置")
+        imgui.SetNextWindowPos(imgui.Vec2(12.0, 56.0), imgui.Cond.Always.value)
+        imgui.SetNextWindowSize(imgui.Vec2(360.0, 460.0), imgui.Cond.Always.value)
+        print("【面板】模型库 官方停靠栏（Options / Inspector）对接不上 —— 官方节点 id 是 "
+              "DockBuilderAddNode 现场生成的，Python 层拿不到。已改为【固定在窗口左上角】"
+              "并且不可关闭：它不会消失，想挪位置直接拖（会被记住）", flush=True)
+
+    def _确认摆放(self) -> None:
+        """`Begin` 之后调：看这一帧到底停靠上没有，成功就写下选择。"""
+        if self._摆放已定 or not self._停靠尝试目标:
+            return
+        try:
+            if not imgui.IsWindowDocked():
+                return
+        except Exception:                                            # noqa: BLE001
+            return
+        self._摆放已定 = True
+        self._摆放方式 = self._停靠尝试目标
+        模型桥.写入设置("模型库摆放", self._摆放方式)
+        print(f"【面板】模型库 已停靠进官方「{self._摆放方式}」栏", flush=True)
+
+    # ------------------------------------------------------------------
+    @messages.handler(priority=messages.Priority.CRITICAL)
+    def 记下窗口(self, event: viewer_protocol.ViewerInitEvent) -> bool:
+        self.viewer = event.viewer
+        return False
+
+    @messages.handler
+    def 收状态(self, 消息: 模型状态) -> bool:
+        self.收帧 += 1
+        self.当前路径 = getattr(消息, "当前路径", "") or ""
+        self.当前显示名 = getattr(消息, "当前显示名", "") or "（未知）"
+        self.状态 = getattr(消息, "状态", "") or "就绪"
+        self.自由度 = int(getattr(消息, "自由度", 0) or 0)
+        return False
+
+    @messages.handler
+    def 收项目状态(self, 消息: 项目状态) -> bool:
+        """仿真侧告诉我们"现在是哪个项目、挂了哪些算法"。
+
+        ★ 这就是"点模型 → 界面上算法列表自动更新"的落地点：
+          装配完成时仿真侧会主动发一条，所以这里收到的就是最新的一组。
+        """
+        self.当前项目 = str(getattr(消息, "项目", "") or "")
+        self.算法列表 = list(getattr(消息, "算法", None) or [])
+        self.装配报告 = list(getattr(消息, "报告", None) or [])
+        return False
+
+    # ------------------------------------------------------------------
+    def _发命令(self, 路径: str, 显示名: str = "") -> None:
+        if self.viewer is None or not 路径:
+            return
+        try:
+            self.viewer.send_to_sim(换模型命令(路径=路径, 显示名=显示名))
+            self.切换次数 += 1
+            self.状态 = f"正在加载 {显示名 or _os.path.basename(路径)} …"
+        except Exception as 异常:                                       # noqa: BLE001
+            print(f"⚠ 换模型命令发送失败：{异常}")
+
+    # ------------------------------------------------------------------
+    @messages.handler
+    def 画面板(self, event: messages.BuildGuiEvent) -> bool:
+        # ★ 必须在"可见性检查"之前：即使本面板被收进容器，也要能响应 F9（何况它不可关闭）
+        面板注册表.每帧(self)
+        if not self.可见:
+            return False
+        if 面板注册表.画在容器里(self):
+            return False
+        self.绘制次数 += 1
+        self._摆放窗口()
+        # ★ 不传 p_open（第二项为 None）→ ImGui 不画关闭按钮 → 没有 ×
+        #   （这是刻意的：见类文档 ②）
+        展开, _ = imgui.Begin("Model library", None, 0)
+        self._确认摆放()
+        try:
+            if not 展开:
+                return False
+            self._画内容()
+        except Exception as 异常:                                       # noqa: BLE001
+            self.错误次数 += 1
+            if self.错误次数 <= 2:
+                print(f"⚠ 模型库面板绘制出错：{type(异常).__name__}: {异常}")
+        finally:
+            imgui.End()
+        return False
+
+    # ------------------------------------------------------------------
+    # 面板上显示用的文字：一律 ASCII（见类文档）
+    # ------------------------------------------------------------------
+    def _界面状态(self) -> str:
+        """把仿真侧的中文状态串翻成短英文（面板画中文会变成 ?）。"""
+        原始 = str(self.状态 or "")
+        if 原始.startswith("✗"):
+            前缀, 余 = "[fail] ", 原始[1:]
+        elif 原始.startswith("✓"):
+            前缀, 余 = "[ok] ", 原始[1:]
+        elif "…" in 原始:
+            前缀, 余 = "[..] ", 原始
+        else:
+            前缀, 余 = "", 原始
+        return 前缀 + (界面文字.英文(余.strip()) or "(status in terminal)")
+
+    def _界面模型名(self) -> str:
+        """当前模型的显示名（空场景那种中文名换成英文）。"""
+        if self.当前路径 and _os.path.normpath(绝对路径(self.当前路径)) == _os.path.normpath(空场景路径):
+            return "Empty scene (no robot)"
+        return 界面文字.英文(self.当前显示名 or "(unknown)")
+
+    def _画内容(self) -> None:
+        # 容器把本面板画在页签里时，容器负责跳过"没打开的页签"；这里再挡一道
+        if not self.可见:
+            return
+        self.绘制次数 += 1
+        # 文件对话框的结果（后台线程，每帧查一次即可）
+        选中的 = self.选择器.取()
+        if 选中的:
+            self._发命令(选中的, _os.path.basename(选中的))
+
+        当前绝对 = _os.path.normpath(绝对路径(self.当前路径)) if self.当前路径 else ""
+
+        # ---- 当前模型 ----
+        imgui.Text("Current")
+        imgui.SameLine()
+        if self.当前路径 and 当前绝对 == _os.path.normpath(空场景路径):
+            imgui.TextColored(灰(), self._界面模型名())
+        else:
+            imgui.TextColored(绿(), self._界面模型名())
+            if self.自由度:
+                imgui.SameLine()
+                imgui.TextDisabled(f"({self.自由度} axes)")
+        imgui.TextDisabled("  " + self._界面状态())
+        imgui.Separator()
+
+        # ---- 当前项目 + 这一组算法（方案 C：点模型会自动换一组算法）----
+        #   面板上只能 ASCII，所以项目名走"能翻就翻、翻不了就原样"的兜底
+        imgui.Text("Project")
+        imgui.SameLine()
+        if self.当前项目:
+            imgui.TextColored(绿(), 界面文字.英文(self.当前项目))
+        else:
+            imgui.TextColored(灰(), "(none - no algorithms loaded)")
+        # 算法列表：名字 + 版本。用英文名（插件自己声明的 `英文名`），没有就查术语表。
+        if self.算法列表:
+            imgui.TextDisabled(f"  Algorithms ({len(self.算法列表)}):")
+            for a in self.算法列表:
+                名 = str(a.get("名称", "?"))
+                英文 = str(a.get("英文名", "") or "") or 界面文字.英文(名)
+                版 = str(a.get("版本", "-"))
+                参数 = a.get("参数") or {}
+                后缀 = f"  ({len(参数)} params)" if 参数 else ""
+                imgui.TextDisabled(f"    · {界面文字.安全(英文)} v{版}{后缀}")
+        else:
+            imgui.TextDisabled("  Algorithms (0): none for this model")
+            imgui.TextDisabled("    -> add a project file (see terminal for the folder name)")
+            self._提醒项目说明()
+        # 装配报告里如果有"被跳过"的算法，就在面板上提醒一句（细节在终端）
+        跳过数 = sum(1 for 行 in self.装配报告 if str(行).startswith("–"))
+        if 跳过数:
+            imgui.TextColored(黄(), f"  {跳过数} algorithm(s) skipped (model incompatible)")
+            imgui.TextDisabled("    details printed in the terminal")
+        imgui.Separator()
+
+        # ---- 机械臂列表 ----
+        imgui.TextDisabled(f"Model library ({len(self.模型列表)} arms; click to switch)")
+        if not self.模型列表:
+            imgui.TextColored(橙(), "  No usable arms in the library.")
+            imgui.TextDisabled("  Run the model import tool (command printed in terminal).")
+            self._提醒导入命令()
+        for m in self.模型列表:
+            路径 = 绝对路径(m.get("扭矩模型", ""))
+            选中 = 当前绝对 == _os.path.normpath(路径)
+            标记 = "*" if 选中 else " "
+            标签 = f"{标记} {界面文字.英文(m.get('显示名', m.get('标识', '?')))}"
+            if imgui.Selectable(f"{标签}##{m.get('标识', '')}", 选中):
+                if not 选中:
+                    self._发命令(路径, str(m.get("显示名", "")))
+            imgui.SameLine()
+            try:
+                轴 = int(m.get("自由度", 0) or 0)
+            except Exception:                                            # noqa: BLE001
+                轴 = 0
+            imgui.TextDisabled(f"{轴} axes | {界面文字.安全(m.get('许可', '?'))}")
+
+        imgui.Separator()
+
+        # ---- 操作按钮 ----
+        if self.选择器.进行中:
+            imgui.BeginDisabled()
+        if imgui.Button("Import model file..."):
+            self.选择器.开始(起始目录=模型目录)
+        if self.选择器.进行中:
+            imgui.EndDisabled()
+            imgui.SameLine()
+            imgui.TextColored(黄(), "(pick a file in the system dialog...)")
+        else:
+            imgui.SameLine()
+        if imgui.Button("Empty scene"):
+            self._发命令(空场景路径, "空场景（无机械臂）")
+        imgui.SameLine()
+        if imgui.Button("Reload current"):
+            if self.当前路径:
+                self._发命令(self.当前路径, self.当前显示名)
+        imgui.SameLine()
+        if imgui.Button("Refresh list"):
+            self._刷新列表()
+
+        # ---- 手输路径（兜底）----
+        imgui.SetNextItemWidth(340.0)
+        变了, self.手动路径 = imgui.InputText("##manual path", self.手动路径)
+        imgui.SameLine()
+        if imgui.Button("Load this path"):
+            if self.手动路径.strip():
+                self._发命令(self.手动路径.strip(), _os.path.basename(self.手动路径.strip()))
+        if 变了 and self.手动路径 and not _os.path.exists(self.手动路径.strip()):
+            imgui.TextColored(橙(), "  path not found")
+
+        imgui.Separator()
+        imgui.TextDisabled("You can also drag an .xml / .mjb / .mjz FILE into the window (built in)")
+        imgui.TextDisabled("Note: dropping a FOLDER does not work - the loader only accepts files")
+        imgui.TextDisabled(f"frames={self.收帧}  switches={self.切换次数}  "
+                           f"draw={self.绘制次数}  lib={len(self.模型列表)}")
+
+    def _提醒项目说明(self) -> None:
+        """没挂算法时，在终端说明"算法从哪来"（面板上画不了中文）。"""
+        if getattr(self, "_已提醒项目", False):
+            return
+        self._已提醒项目 = True
+        print("【项目】当前模型没有对应的项目，所以没挂任何控制算法。\n"
+              "        算法由「项目」声明，不是写死在代码里：\n"
+              "          · 看看有哪些项目：  ./.venv/bin/python 软件/主程序.py --列项目\n"
+              "          · 新建一个项目：   在 项目/ 下加一个 .json，`模型` 字段指向本模型，\n"
+              "                              `算法` 字段写 \"*\"（用算法库全部）或列出具体算法\n"
+              "          · 加一个算法：     把 .py 放进 算法库/通用/ 或 算法库/实验/\n"
+              "        详见 文档/架构… 与 算法库/通用/我的控制律_模板.py 的说明。", flush=True)
+
+    def _提醒导入命令(self) -> None:
+        """模型库为空时，把中文命令行提示打到终端（面板上画不了中文）。"""
+        if getattr(self, "_已提醒导入", False):
+            return
+        self._已提醒导入 = True
+        print("【模型库】库里没有可用的机械臂。导入命令（面板上显示不了中文，故在此提示）：\n"
+              "        ./.venv/bin/python 工具/导入模型.py --列表\n"
+              "        ./.venv/bin/python 工具/导入模型.py <模型名> [<模型名> ...]", flush=True)
+
+
+# 启动器约定：模块里叫"面板类"的就是要实例化的面板
+面板类 = 模型库面板
