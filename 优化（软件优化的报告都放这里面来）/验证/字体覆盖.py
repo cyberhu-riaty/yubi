@@ -64,10 +64,12 @@ def 主() -> int:
     行们: list[str] = []
     行们.append("字体覆盖实测（面板上能画哪些字）")
     行们.append(f"字体目录：{资源目录}")
-    行们.append(f"日期：2026-09-17 ｜ 环境：mujoco 3.13.0 / Python {sys.version.split()[0]}")
+    行们.append(f"环境：mujoco 3.13.0 / Python {sys.version.split()[0]}")
     行们.append("")
-    行们.append("判据：Atkinson Hyperlegible 是纯拉丁字体；ImGui 缺字形时回退画 "
+    行们.append("判据：Atkinson Hyperlegible 原本是纯拉丁字体（362 个码位）；ImGui 缺字形时回退画 "
               f"`ImFont::FallbackChar`（默认 '?'）→ 面板上就是问号。")
+    行们.append("      ★ 若主字体已被 `工具/打补丁_中文字体.py` 补上汉字字形，"
+              "本表里「中文常用字」会变成 ✓ 全有 —— 那不是错，是补丁生效了。")
     行们.append("")
 
     缺集中: set[str] = set()
@@ -88,9 +90,23 @@ def 主() -> int:
                 行们.append(f"     {类:10s}：✓ 全有")
         行们.append("")
 
-    行们.append(f"结论：官方字体一共缺 {len(缺集中)} 个面板常用字符"
-              f"（含全部中文与 ●○✓✗←→｜（））")
-    行们.append(f"     → 面板上只允许 ASCII，外加这些 Atkinson 确实有的符号：{允许}")
+    主字体汉字 = 0
+    try:
+        _cm = TTFont(os.path.join(资源目录, 字体们[0]), fontNumber=0, lazy=True).getBestCmap()
+        主字体汉字 = sum(1 for cp in _cm if 0x4e00 <= cp <= 0x9fff)
+    except Exception:                                                    # noqa: BLE001
+        pass
+    if 主字体汉字 > 0:
+        行们.append(f"结论：★ 主 UI 字体**已打中文字体补丁**（{主字体汉字} 个汉字码位）"
+                   f" → 面板可以显示中文。")
+        行们.append("     → 打开/还原：`.venv/bin/python 工具/打补丁_中文字体.py`"
+                   "（`--还原` 退回官方原样）")
+        行们.append(f"     → 未打补丁时面板只允许 ASCII，外加这些符号：{允许}")
+    else:
+        行们.append(f"结论：官方字体一共缺 {len(缺集中)} 个面板常用字符"
+                   f"（含全部中文与 ●○✓✗←→｜（））")
+        行们.append(f"     → 面板上只允许 ASCII，外加这些 Atkinson 确实有的符号：{允许}")
+        行们.append("     → 想让面板显示中文：`.venv/bin/python 工具/打补丁_中文字体.py`")
     行们.append("")
     行们.append("=" * 78)
     行们.append("静态扫描：软件/面板/*.py 里『会被画出来』的字面量是否都画得出来")
