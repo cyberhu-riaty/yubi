@@ -64,7 +64,25 @@ if ls "$PKG/离线依赖/"scipy-*.whl >/dev/null 2>&1; then
       || echo "  （部分依赖没装上，参数辨识可能不可用；界面和执行控制不受影响）"
 fi
 
-# ---------- 6. 自检 ----------
+# ---------- 6. 可选：中文字体补丁（让面板能显示中文）----------
+#   官方 UI 字体 Atkinson Hyperlegible 是纯拉丁（362 个码位），ImGui 缺字形会回退画 '?'
+#   → 面板上任何中文都是一串问号。这个补丁把汉字字形**并进字体文件**（不碰二进制；
+#   靠的是官方用的 Dear ImGui 1.92 动态字形图集：用到哪个码位就现烘焙哪个）。
+#   ★ 生成物只写进 .venv、**不入库** —— 汉字源是 macOS 自带的 STHeiti（Apple 许可只
+#     允许在 macOS 上使用），合并后再分发有许可风险；本机现场生成就没这个问题。
+#   需要 fontTools。没有就跳过，软件照常能用（面板只画 ASCII，中文在终端正常）。
+echo
+echo "== 中文字体补丁（可选：让面板能显示中文）=="
+if "$PKG/.venv/bin/python" -c "import fontTools" 2>/dev/null; then
+  "$PKG/.venv/bin/python" "$PKG/工具/打补丁_中文字体.py" \
+      || echo "  （补丁没打上，不影响使用：面板继续只画 ASCII，终端仍是中文）"
+else
+  echo "  跳过：当前环境没有 fontTools。想要中文面板就装一下再重跑本步："
+  echo "    \"$PKG/.venv/bin/pip\" install fonttools"
+  echo "    \"$PKG/.venv/bin/python\" \"$PKG/工具/打补丁_中文字体.py\""
+fi
+
+# ---------- 7. 自检 ----------
 echo
 echo "== 自检 =="
 "$PKG/.venv/bin/python" - <<'PY'

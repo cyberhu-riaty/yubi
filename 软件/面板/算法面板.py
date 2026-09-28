@@ -113,6 +113,8 @@ class 算法面板:
         self.可选: list[str] = []            # 算法库里全部算法的**插件名**（有序）
         self.在跑: list[str] = []            # 当前真正在跑的那组（插件名，有序）
         self.不兼容: list[str] = []          # 与当前模型不兼容、被预检跳过的（显示名）
+        self.控盘 = ""                       # 真正在驱动机器人的那个（显示名）
+        self.被覆盖: list[str] = []           # 输出被整体盖掉、等于没挂的（显示名）
         self.已存盘 = True
         self.报告: list[str] = []
         # ---- 界面本地状态（用户编辑，未 Apply 之前只在这里）----
@@ -150,6 +152,8 @@ class 算法面板:
         self.报告 = [str(x) for x in (getattr(消息, "报告", None) or [])]
         self.不兼容 = [行.split("：", 1)[0].lstrip("– ").strip()
                      for 行 in self.报告 if 行.startswith("–")]
+        self.控盘 = str(getattr(消息, "控盘", "") or "")
+        self.被覆盖 = [str(x) for x in (getattr(消息, "被覆盖", None) or [])]
 
         # 在跑的算法：状态消息给的是**显示名**，转成插件名再比
         在跑 = []
@@ -237,6 +241,28 @@ class 算法面板:
             imgui.TextDisabled("  (saved in project file)")
         else:
             imgui.TextColored(黄(), "  (temporary - not in project file)")
+        # ---- ★ 谁在控盘 / 谁被覆盖（"挂了的算法其实没生效"必须让人看见）----
+        #   多个算法都写 ctrl[:] 时只有**最后一个**真正生效，前面那些等于没挂。
+        #   以前这件事完全不可见，用户只会觉得"这个算法的效果怎么是这样"。
+        #   检测逻辑在 装配器._抢方向盘体检()，经 项目状态 送过来。
+        if self.控盘:
+            imgui.Text("  Controls")
+            imgui.SameLine()
+            imgui.TextColored(绿(), 界面文字.安全(界面文字.英文(self.控盘) or self.控盘))
+            if self.被覆盖:
+                imgui.SameLine()
+                imgui.TextColored(橙(), f"(masking {len(self.被覆盖)})")
+        elif self.勾选:
+            imgui.TextColored(灰(), "  Controls: (none - no algorithm writes ctrl)")
+        #   ★ 这里**只能用 ASCII**：面板字面量的白名单检查（字体覆盖.py）仍然只认 ASCII。
+        #     虽然主 UI 字体已打中文补丁（脚本自己会报"面板可以显示中文"），但那条白名单
+        #     还没跟着放开 —— 两者目前是矛盾的，见 CHANGELOG v0.6.1 的记录。
+        #     在规则统一之前，面板文字一律走 ASCII，中文说明留在终端。
+        if self.被覆盖:
+            imgui.TextColored(橙(), "  Masked (loaded but output is overwritten):")
+            for 名 in self.被覆盖:
+                imgui.TextDisabled(f"    - {界面文字.安全(界面文字.英文(名) or 名)}")
+            imgui.TextDisabled("    -> move the one you want to the BOTTOM of the list")
         imgui.Separator()
 
         if not self.可选:
