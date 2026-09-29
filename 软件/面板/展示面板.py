@@ -48,6 +48,7 @@ from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E40
 from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
 
 import 面板注册表                                                      # noqa: E402
+import 重力桥                                                          # noqa: E402
 from 重力桥 import 发布器, 重力状态                                     # noqa: E402
 
 # 第一次出现时放哪（左上角；之后由 ImGui 记住用户拖到的位置）
@@ -75,7 +76,9 @@ class 展示面板:
         #   ★ 默认 **不勾**（= 不加载重力 = 冻结在默认位置）—— 这是用户要的开箱行为。
         #     勾选框的初值必须与仿真侧的初值一致（那边 `重力应用器._重力开 = False`），
         #     否则第一帧会产生一次"状态纠正"，白跑一趟。
-        self.加载重力 = False          # 勾选框状态：True = 施用重力，物理推进
+        #   ★ 而且它读的是**界面侧共享状态**（`重力桥.界面重力开`），不是自己的一份：
+        #     【Algorithms】面板上也有一个开关，两份状态会互相顶掉（踩过）。
+        self.加载重力 = 重力桥.界面重力开   # 勾选框状态：True = 施用重力，物理推进
         self.摆放过 = False
         self.绘制次数 = 0
         self.错误次数 = 0
@@ -100,7 +103,8 @@ class 展示面板:
         ★ 不看 `self.可见`：面板被收进容器或被拖到看不见的地方时，
           这条开关也必须继续生效（否则"物理停着但勾选框已经取消"会打架）。
         """
-        self._发布.也许发布(self.加载重力, _time.perf_counter())
+        # 发布**共享状态**：别的面板（【Algorithms】）改了它，这里下一拍就会发出去
+        self._发布.也许发布共享(_time.perf_counter())
         return False
 
     # ------------------------------------------------------------------
@@ -139,6 +143,7 @@ class 展示面板:
         变了, 新值 = imgui.Checkbox("Load gravity", self.加载重力)
         if 变了:
             self.加载重力 = bool(新值)
+            重力桥.设界面重力(self.加载重力)      # ★ 先改共享状态（别的面板读它）
             if self.加载重力 != self._上次勾选:
                 self._上次勾选 = self.加载重力
                 # 立刻发一次，不用等到下一个 10 Hz 节拍（点一下要马上有反应）

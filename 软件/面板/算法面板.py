@@ -116,6 +116,7 @@ class 算法面板:
         self.不兼容: list[str] = []          # 与当前模型不兼容、被预检跳过的（显示名）
         self.控盘 = ""                       # 真正在驱动机器人的那个（显示名）
         self.被覆盖: list[str] = []           # 输出被整体盖掉、等于没挂的（显示名）
+        self.重力开 = False                  # 物理跑不跑（仿真侧的状态）
         self.已存盘 = True
         self.报告: list[str] = []
         # ---- 界面本地状态（用户编辑，未 Apply 之前只在这里）----
@@ -155,6 +156,7 @@ class 算法面板:
                      for 行 in self.报告 if 行.startswith("–")]
         self.控盘 = str(getattr(消息, "控盘", "") or "")
         self.被覆盖 = [str(x) for x in (getattr(消息, "被覆盖", None) or [])]
+        self.重力开 = bool(getattr(消息, "重力开", False))
 
         # 在跑的算法：状态消息给的是**显示名**，转成插件名再比
         在跑 = []
@@ -242,6 +244,27 @@ class 算法面板:
             imgui.TextDisabled("  (saved in project file)")
         else:
             imgui.TextColored(黄(), "  (temporary - not in project file)")
+        # ---- ★★ 最重要的一条提示：物理跑不跑 ----
+        #   装载算法 ≠ 模型会动。物理是**另一个独立开关**（左上角【Display】的
+        #   「Load gravity」）。用户看到"算法挂上了但机械臂一动不动"，
+        #   第一反应一定是"这算法坏了/没生效" —— 所以这里必须直说，并且**给个开关**
+        #   让他当场就能开，不用去别处找。
+        if self.重力开:
+            imgui.Text("  Physics")
+            imgui.SameLine()
+            imgui.TextColored(绿(), "running (gravity on)")
+            imgui.SameLine()
+            if imgui.SmallButton("freeze##phys_off"):
+                self._发重力(False)
+        else:
+            imgui.TextColored(橙(), "  Physics FROZEN - the robot will NOT move")
+            imgui.SameLine()
+            if imgui.SmallButton("run physics##phys_on"):
+                self._发重力(True)
+            if self.勾选 or self.在跑:
+                imgui.TextDisabled("    -> an algorithm is loaded but physics is frozen:")
+                imgui.TextDisabled("       check 'Load gravity' (top-left) or click the button above")
+
         # ---- ★ 谁在控盘 / 谁被覆盖（"挂了的算法其实没生效"必须让人看见）----
         #   多个算法都写 ctrl[:] 时只有**最后一个**真正生效，前面那些等于没挂。
         #   以前这件事完全不可见，用户只会觉得"这个算法的效果怎么是这样"。
@@ -374,6 +397,38 @@ class 算法面板:
         imgui.TextDisabled(f"frames={self.绘制次数}  submits={self.提交次数}")
 
     # ------------------------------------------------------------------
+    def _发重力(self, 开: bool) -> None:
+        """从本面板直接开关物理（等价于点左上角【Display】的「Load gravity」）。
+
+        ★ 为什么这里要有一个：用户在这个面板挂好算法后，最自然的疑问就是
+          "它怎么不动"。让他**就地**能把物理打开，比提示他去左上角找开关有效得多。
+          两边发的是**同一条消息**（`重力桥.重力状态`），所以状态永远一致。
+        """
+        if self.viewer is None:
+            print("⚠ 算法选择：还没拿到 viewer，无法发重力开关")
+            return
+        try:
+            import 重力桥
+            from 重力桥 import 重力状态
+            self.viewer.send_to_sim(重力状态(重力开=bool(开)))
+            # ★ 改**界面侧共享状态**，并同步给【Display】面板的勾选框。
+            #   不同步的话：这里开了物理，那边勾选框还显示"没勾"，而它每 10 Hz
+            #   发布的是**它自己那份状态** —— 于是下一拍又把物理关回去（踩过这个坑）。
+            重力桥.设界面重力(bool(开))
+            展示 = 面板注册表._面板.get("展示")
+            if 展示 is not None:
+                展示.加载重力 = bool(开)
+                try:
+                    展示._上次勾选 = bool(开)
+                    展示._发布._上次值 = bool(开)      # 让它的发布器别拿旧值去顶
+                except Exception:                                      # noqa: BLE001
+                    pass
+            self.重力开 = bool(开)
+            print(f"【算法】界面把物理{'打开（加载重力）' if 开 else '冻结'}了"
+                  f"（已同步左上角勾选框）", flush=True)
+        except Exception as 异常:                                          # noqa: BLE001
+            print(f"⚠ 重力开关发送失败：{异常}")
+
     def _发送(self, 落盘: bool) -> None:
         if self.viewer is None:
             print("⚠ 算法选择：还没拿到 viewer，无法发送（窗口还没初始化完？）")
