@@ -95,8 +95,28 @@ research/
 .pylibs/
 .research2/
 .tools/
+# 各厂商选型/比价的抓取产物与解包目录（体积很大：_res 780M / _gh 694M / _pdfx 163M …）
+_gh/
+_pdfx/
+_res/
+.scratch_intl/
+dl.sh
+# 抓取出来的厂商手册/专利文本（一堆 out_*.txt）
+out_*.txt
+# 别家机器人的 URDF（调研素材，不是本软件的模型资产）
+fanuc_urdf/
+# 零散调研笔记（`research_*.md` 已在上方忽略；这两个名字不以 research_ 开头，单独列）
+doosan_joint_motor_research.md
+inspire_robots_joint_module_research.md
+kinova_research/
+# PDF 抽取用的一次性小脚本（调研工具，不是本软件的一部分）
+pdf*.py
 *.pdf
 单关节模组调研/
+# 调研汇报的 PPT 与其工程目录（被误放进了 输出/，那不是软件的运行产物）
+*.pptx
+.~*.pptx
+projects/
 actuator-module-research-*.md
 inspire_robots_joint_module_research.md
 research_*.md
