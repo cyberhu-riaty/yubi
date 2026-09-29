@@ -1,10 +1,15 @@
 """
-面板/展示面板.py —— 左上角的小方框：**勾选 = 无重力的展示姿态；不勾 = 正常有重力**
+面板/展示面板.py —— 左上角的小方框：**勾选 = 加载重力；不勾 = 冻结在默认位置**
 
-它解决什么问题（用户原话）：
-    "模型刚加载的时候就受到重力影响往下掉。如果在纯展示的时候（即没有加载控制算法），
-     在界面的左上角设计一个小方框，勾选的时候展示模型的默认姿态（即无重力影响），
-     没有勾选的时候则有重力影响。"
+它解决什么问题（用户需求，2026-09-24 语义反转后的最终形态）：
+    "点进任意模型时默认不加载任何控制算法，一开始是静止的默认位置；
+     点了左上角的『加载重力』才施用重力，模型自然下落。
+     只有我选定控制算法并 Apply 之后才开始运动控制。"
+
+所以这个开关现在是**物理总闸**：
+    · 不勾（默认）→ 模型冻结在默认位置（物理暂停），一动不动
+    · 勾上        → 物理开始推进：重力生效，模型自然下落 / 被算法驱动
+它管的只是"物理跑不跑"，**与挂不挂控制算法完全无关**（见下面的"为什么关不掉"）。
 
 为什么是**独立的小窗口**，而不是塞进【工作台】的页签：
     用户明确要"界面左上角的一个小方框"，展示场景下要一眼看到、随手指点。
@@ -12,13 +17,15 @@
     第一次由我们摆在左上角（`FirstUseEver`，之后 ImGui 记住用户拖到的位置）。
 
 ★ 它为什么**关不掉**（`不可关闭 = True`）：
-    它是"展示模式"的唯一开关。要是被关掉，用户就再也找不到（这正是
-    `面板注册表.py` 文件头记着的那次事故）。所以它和【模型库】一样不可关闭。
+    它是"物理跑不跑"的唯一开关。要是被关掉，用户会看到机械臂悬在空中不动、
+    却找不到原因（这正是 `面板注册表.py` 文件头记着的那次事故的同类）。
+    所以它和【模型库】一样不可关闭。
 
 它到底做了什么（技术要点，实测过）：
     **光把重力设成 0 是不够的** —— 机械臂会停在"掉到一半"的姿态，而且还会继续动。
     正确做法是 ① 数据复位到默认姿态 ② **暂停物理**。
-    这两件事在仿真侧由 `重力桥.重力状态应用器` 做：
+    这两件事在仿真侧由 **内置件** `重力桥.重力应用器` 做（由 `启动.py` 常驻注册，
+    **不是**算法库里的算法 —— 否则清空算法列表就会让开关静默失效）：
         · 默认姿态 = 模型的 `home` 关键帧；没有 keyframe 的模型（如空场景）用"加载时的姿态"
         · 暂停用官方 `sim.StepControl.set_pause_state(NORMAL_PAUSED)`
           —— 实测暂停后连打 500 次 `advance()`，`qpos` 变化 **0.0**（真冻住）
@@ -41,7 +48,7 @@ from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E40
 from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
 
 import 面板注册表                                                      # noqa: E402
-from 重力桥 import 发布器, 关重力状态                                   # noqa: E402
+from 重力桥 import 发布器, 重力状态                                     # noqa: E402
 
 # 第一次出现时放哪（左上角；之后由 ImGui 记住用户拖到的位置）
 初始位置 = (12.0, 56.0)
@@ -49,7 +56,7 @@ from 重力桥 import 发布器, 关重力状态                                
 
 
 class 展示面板:
-    """窗口侧插件：左上角的小方框（关重力 / 回默认姿态）。"""
+    """窗口侧插件：左上角的小方框（加载重力 / 回默认位置并冻结）。"""
 
     面板显示名 = "展示"
     页签名 = "Display"
@@ -65,7 +72,10 @@ class 展示面板:
     def __init__(self):
         self.viewer = None
         self.可见 = True
-        self.关闭重力 = False          # 勾选框状态：True = 无重力展示姿态
+        #   ★ 默认 **不勾**（= 不加载重力 = 冻结在默认位置）—— 这是用户要的开箱行为。
+        #     勾选框的初值必须与仿真侧的初值一致（那边 `重力应用器._重力开 = False`），
+        #     否则第一帧会产生一次"状态纠正"，白跑一趟。
+        self.加载重力 = False          # 勾选框状态：True = 施用重力，物理推进
         self.摆放过 = False
         self.绘制次数 = 0
         self.错误次数 = 0
@@ -78,7 +88,7 @@ class 展示面板:
         self.viewer = event.viewer
         return False
 
-    def _发送(self, 消息: 关重力状态) -> None:
+    def _发送(self, 消息: 重力状态) -> None:
         if self.viewer is not None:
             self.viewer.send_to_sim(消息)
 
@@ -90,7 +100,7 @@ class 展示面板:
         ★ 不看 `self.可见`：面板被收进容器或被拖到看不见的地方时，
           这条开关也必须继续生效（否则"物理停着但勾选框已经取消"会打架）。
         """
-        self._发布.也许发布(self.关闭重力, _time.perf_counter())
+        self._发布.也许发布(self.加载重力, _time.perf_counter())
         return False
 
     # ------------------------------------------------------------------
@@ -124,20 +134,23 @@ class 展示面板:
 
     # ------------------------------------------------------------------
     def _画内容(self) -> None:
-        变了, 新值 = imgui.Checkbox("Gravity off (default pose)", self.关闭重力)
+        # 面板上只能 ASCII（见文件头）。中文对照：
+        #   "Load gravity" = 加载重力
+        变了, 新值 = imgui.Checkbox("Load gravity", self.加载重力)
         if 变了:
-            self.关闭重力 = bool(新值)
-            if self.关闭重力 != self._上次勾选:
-                self._上次勾选 = self.关闭重力
+            self.加载重力 = bool(新值)
+            if self.加载重力 != self._上次勾选:
+                self._上次勾选 = self.加载重力
                 # 立刻发一次，不用等到下一个 10 Hz 节拍（点一下要马上有反应）
-                self._发布.也许发布(self.关闭重力, _time.perf_counter() + 1e9)
+                self._发布.也许发布(self.加载重力, _time.perf_counter() + 1e9)
 
-        if self.关闭重力:
-            imgui.TextDisabled("showing the model's default pose")
-            imgui.TextDisabled("(physics paused - no gravity drop)")
+        if self.加载重力:
+            imgui.TextDisabled("gravity acts - the model can move")
+            imgui.TextDisabled("(no algorithm? it just falls)")
         else:
-            imgui.TextDisabled("gravity on - the model behaves normally")
-        imgui.TextDisabled("uncheck to let gravity act again")
+            imgui.TextDisabled("frozen at the default pose")
+            imgui.TextDisabled("(no physics, no gravity)")
+        imgui.TextDisabled("check it to let gravity act")
 
 
 # 启动器约定：模块里叫“面板类”的就是要实例化的面板
