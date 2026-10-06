@@ -243,26 +243,92 @@ def 曲线调色板(风格: str) -> list[tuple[float, float, float, float]]:
 # ---------------------------------------------------------------------------
 # 存档：输出/外观.json
 # ---------------------------------------------------------------------------
-def 读取存档() -> str:
+def _读取存档字典() -> dict:
+    """存档的原始字典（读不出来就给空 dict，永不抛）。"""
     try:
         with open(存档路径, encoding="utf-8") as f:
             数据 = json.load(f)
-        风格 = str((数据 or {}).get("风格") or "")
-        return 风格 if 风格 in 选择项() else ""
+        return 数据 if isinstance(数据, dict) else {}
     except FileNotFoundError:
-        return ""
+        return {}
     except Exception as 异常:                                             # noqa: BLE001
         print(f"⚠ 外观存档读取失败（按默认处理）：{type(异常).__name__}: {异常}")
-        return ""
+        return {}
 
 
-def 写入存档(风格: str) -> None:
+def _写入存档字典(数据: dict) -> None:
     try:
         os.makedirs(os.path.dirname(存档路径), exist_ok=True)
         with open(存档路径, "w", encoding="utf-8") as f:
-            json.dump({"风格": 风格}, f, ensure_ascii=False, indent=2, sort_keys=True)
+            json.dump(数据, f, ensure_ascii=False, indent=2, sort_keys=True)
     except Exception as 异常:                                             # noqa: BLE001
         print(f"⚠ 外观存档保存失败（不影响使用）：{type(异常).__name__}: {异常}")
+
+
+def 读取存档() -> str:
+    风格 = str(_读取存档字典().get("风格") or "")
+    return 风格 if 风格 in 选择项() else ""
+
+
+def 写入存档(风格: str, *, 完整面板: bool | None = None) -> None:
+    """写存档。`完整面板=None` 表示"保持原值"（旧调用点不用改）。"""
+    数据 = _读取存档字典()
+    数据["风格"] = 风格
+    if 完整面板 is not None:
+        数据["完整面板"] = bool(完整面板)
+    _写入存档字典(数据)
+
+
+def 完整面板可见() -> bool:
+    """【外观】面板那个独立小窗口开不开（默认关：看风格直接走菜单栏 Appearance）。
+
+    ★ 为什么这个开关放在皮肤桥而不是面板注册表：它是**外观自己的事**，
+      面板注册表管的是"面板在哪儿画"，不该知道某一块面板的业务含义。
+    """
+    return bool(_读取存档字典().get("完整面板", False))
+
+
+def 设完整面板可见(值: bool) -> None:
+    数据 = _读取存档字典()
+    数据["完整面板"] = bool(值)
+    _写入存档字典(数据)
+
+
+def _有界面上下文() -> bool:
+    """ImGui 上下文在不在。
+
+    ★ 没有上下文时调用任何 imgui/ux 函数都可能**直接段错误**（实测），
+      而本模块会被"不开窗"的自检脚本导入，所以凡是要碰界面 API 的地方都先过这一关。
+    """
+    try:
+        return bool(imgui.GetCurrentContext())
+    except Exception:                                                    # noqa: BLE001
+        return False
+
+
+def 设用户基底主题(键名: str, *, 存盘: bool = True) -> bool:
+    """切换官方基底主题（皮肤关掉时用它兜底）。返回是否认得这个名字。
+
+    ★ 环境变量 `MUJOCO_STUDIO_THEME` 是基底主题的**单一真源**：
+      界面桥启动时读它、`用户基底主题()` 读它、`主程序.py` 也从它推风格。
+      所以这里先改环境变量，再立刻应用一次；没有界面上下文时只改环境变量。
+    """
+    global 基底已应用
+    键 = str(键名).strip().upper()
+    if 键 not in _主题表:
+        return False
+    os.environ["MUJOCO_STUDIO_THEME"] = 键
+    基底已应用 = ""                       # 逼下一帧重新应用（带窗口侧对象再确认一次）
+    if not _有界面上下文():
+        return True
+    try:
+        应用基底主题(键)
+        if 存盘:
+            ux.save_settings(_主题表[键])   # 写进 ~/.mujoco.ini，下次启动仍是它
+    except Exception as 异常:                                             # noqa: BLE001
+        print(f"⚠ 皮肤：基底主题切换失败（不影响使用）：{type(异常).__name__}: {异常}")
+    return True
+
 
 
 def 决定启动风格(命令行风格: str | None = None) -> tuple[str, str]:

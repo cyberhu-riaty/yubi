@@ -41,6 +41,7 @@ from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E4
 
 import 面板注册表                                                      # noqa: E402
 import 皮肤桥                                                          # noqa: E402
+import 菜单栏                                                          # noqa: E402
 
 轮换快捷键 = imgui.Key.F10
 _上一帧 = -1
@@ -51,6 +52,11 @@ class 外观面板:
 
     面板显示名 = "外观"
     页签名 = "Appearance"
+
+    # ★ 独立窗口：**不占侧栏的格子**。换风格日常走菜单栏 `Appearance`（点开就能切，不用开窗），
+    #   这个完整面板（色卡 / 实时预览 / FPS / 见证指示灯）只在需要时由菜单里的
+    #   `Open Appearance panel` 打开 —— 开关存在 输出/外观.json，默认关。
+    独立窗口 = True
 
     def __init__(self):
         self.viewer = None
@@ -63,6 +69,9 @@ class 外观面板:
         # ★ 包装官方 ux.setup_theme（幂等）—— 这是"官方 19 个面板也能换肤"的唯一路径。
         #   放在这里而不是模块顶部，是为了让"什么时候装的"看得见、可排查。
         皮肤桥.安装包装()
+        # ★ 把 Appearance / Panels 挂进官方菜单栏那一行（幂等；必须在第一帧之前装好）。
+        #   挂载原理见 菜单栏.py 文件头：官方菜单栏结束前的那一刻才插得进去。
+        菜单栏.安装包装()
 
     # ------------------------------------------------------------------
     # ① 拿到 viewer（换基底主题要用它把 theme 同步给官方 App）
@@ -134,7 +143,9 @@ class 外观面板:
         面板注册表.每帧(self)
         if not self.可见:
             return False
-        if 面板注册表.画在容器里(self):
+        # ★ 它不占侧栏格子：这个完整面板只在菜单栏 Appearance 里点开时才画。
+        #   点右上角 × 也走同一个开关（否则"可见性每帧广播"会把窗口立刻顶回来）。
+        if not 皮肤桥.完整面板可见():
             return False
         self.绘制次数 += 1
         if not self.摆放过:
@@ -142,9 +153,13 @@ class 外观面板:
             # 只用 FirstUseEver：ImGui 自己记住用户拖到的位置，我们只决定"第一次"放哪
             imgui.SetNextWindowPos(imgui.Vec2(384.0, 56.0), imgui.Cond.FirstUseEver.value)
             imgui.SetNextWindowSize(imgui.Vec2(352.0, 430.0), imgui.Cond.FirstUseEver.value)
-        展开, self.可见 = imgui.Begin("Appearance", self.可见, 0)
+        展开, 新可见 = imgui.Begin("Appearance", self.可见, 0)
         面板注册表.记录(self)
         try:
+            if not 新可见:
+                皮肤桥.设完整面板可见(False)
+                print("【菜单栏】外观面板（完整版）→ 关闭（菜单 Appearance 里可再打开）", flush=True)
+                return False
             if not 展开:
                 return False
             self._画内容()
