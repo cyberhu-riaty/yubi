@@ -47,7 +47,7 @@ cd "$HOME/Desktop/驭臂"
 .venv/bin/python 软件/主程序.py --主题 classic  # 经典
 ```
 
-也可以在窗口里改：**Options → Theme** 菜单。主题会存进 `~/.mujoco.ini`
+也可以在窗口里改：顶部菜单 **Appearance → base theme**。主题会存进 `~/.mujoco.ini`
 （`[Studio][UX] theme=0/1/2`），下次启动自动沿用。
 
 > 本外壳**默认就是深色**（和老 viewer 观感一致）；想要白底就用 `--主题 light`。
@@ -58,10 +58,10 @@ cd "$HOME/Desktop/驭臂"
 |---|---|
 | 3D 视图 | 机械臂；左键拖动转视角、右键平移、滚轮缩放、Ctrl+拖动可以"抓住"机械臂拉 |
 | 左侧/右侧面板 | 官方那 19 个现成面板（Simulation / Physics / Rendering / Joints / **Controls** / Sensors / Watch / State / Counts / Convergence …） |
-| **Workbench**（工作台）窗口 | **我们自研的 7 个面板全在这一个窗口里，用页签切换**：Model library / Appearance / Controller params / System identification / Recorder / Monitor / About。一个窗口 = 一个 ×；页签上的 `pop out` 可以把某个面板弹成独立窗口，**F9** 一键收回/找回，顶部菜单 **Panels** 是永远都在的入口 |
+| **侧栏**（两条 26px 标签条） | **我们自研的 7 个面板分列 3D 视口两侧**：左＝Model library / Algorithms / Controller params / System identification，右＝Monitor / Recorder / About。点标签即从边上抽出（300 宽），鼠标移开 0.8 秒自动收回，标题行的 `pin` 可钉住常驻；**Esc** 收起，**F9** 找回全部，顶部菜单 **Panels** 是永远都在的入口。★ 收起态只占两侧各 26px，**3D 视口一格不占** |
 | **Simulation** 面板 | 暂停 / 继续 / 单步 / 倍速 / 倒带 |
 | **Controls** 面板 | 6 个关节的目标值滑杆 —— **拖它就能实时改关节 PD 的目标**（插件会自动跟着走） |
-| **Options → Theme** | 切换界面主题 |
+| **Appearance** 菜单（与 `File`/`Help` 同一行） | 直接切基底主题与 5 套皮肤；`Open Appearance panel` 打开完整外观面板（色卡/预览/FPS） |
 
 终端里每 2 秒会打印一行插件状态，例如：
 
@@ -113,9 +113,10 @@ git checkout -- <文件>   # 改坏了回退
 ├── 皮肤桥.py        ← 面板外观换肤引擎（逐帧推样式 + 包装官方 ux.setup_theme）
 ├── 风格表.json      ← 5 套外观风格的全部参数（改它就能加/调风格）
 ├── 骨架/            ← 24 项官方接口自检（官方升级了会在这里报警）
-├── 面板/            ← 自研面板：面板容器.py 把 8 个面板收进【工作台】的页签里
+├── 菜单栏.py        ← 把 Appearance / Panels 挂进官方菜单栏那一行（包装 EndMainMenuBar）
+├── 面板/            ← 自研面板：侧栏.py 把 7 个面板分到 3D 两侧的标签条里
 │   ├── 算法面板.py       ★ 【Algorithms】勾选/调序/Apply/Save
-│   ├── 面板容器.py       ★ 一个窗口 + 页签切换 + 顶部菜单 Panels
+│   ├── 侧栏.py           ★ 两条 26px 标签条 + 抽出式面板（左4/右3）+ 钉住/自动收起
 │   └── 面板注册表.py       登记 / F9 恢复 / 弹出收回 / 重置版面（页面板的公共机制）
 └── README.md        ← 本文件
 
@@ -163,7 +164,7 @@ cp 算法库/通用/我的控制律_模板.py 算法库/通用/我的算法.py
 
 ### 在界面上换算法（【Algorithms】面板）
 
-选完机械臂之后要改算法，不用碰文件：【工作台】→ `Algorithms` 页签 →
+选完机械臂之后要改算法，不用碰文件：左栏 `Algorithms` 格 →
 勾选 / 用 `^` `v` 调序 → `Apply (temporary)` 立即生效，或 `Save to project file` 写回项目文件。
 
 实现要点（改这块代码时先看这三条）：

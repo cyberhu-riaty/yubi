@@ -317,7 +317,7 @@ def main() -> int:
     print(f"        （{原因}）")
     print(f"【外观】{皮肤桥.显示名(风格)}（{风格来源}）")
     print(f"        {皮肤桥.一句话(风格) if 风格 != 皮肤桥.关闭 else '界面就是官方主题的原样'}")
-    print(f"        换风格：界面【Appearance】面板点一下，或按 F10 轮换，或 --风格 xxx")
+    print(f"        换风格：顶部菜单【Appearance】点一下，或按 F10 轮换，或 --风格 xxx")
 
     if args.检查 or args.自检:
         print(f"\n（{'--检查' if args.检查 else '--自检'} 模式：不开窗口，到此结束）")
@@ -345,21 +345,21 @@ def main() -> int:
         return 0
 
     print("\n【操作提示】")
-    print("  · 【工作台】窗口：自研面板全在这一个窗口里，用页签切换")
-    print("    （Model library / Appearance / Controller params / SysID / Recorder / Monitor / About）")
-    print("  · 【Display】左上角小方框：勾上 = 无重力的默认姿态（模型不会掉，方便展示）；"
-          "取消 = 恢复重力")
-    print("  · 【模型库】页签：点一下就换机械臂；也可以把 .xml 直接拖进窗口，或点【从本地导入模型…】")
-    print("  · 顶部菜单【Panels】：开关工作台、跳到某个页签、把某个面板单独弹成窗口")
+    print("  · 【侧栏】：自研面板分列 3D 视口两侧 —— 左条 Model library / Algorithms / "
+          "Controller params / SysID，右条 Monitor / Recorder / About")
+    print("    点标签即从边上抽出，鼠标移开 0.8 秒自动收回；点面板上的 [pin] 可让它常驻")
+    print("  · 【Display】左上角小方框：勾上 = 加载重力（物理推进）；取消 = 回默认姿态并冻结")
+    print("  · 【Model library】格：点一下就换机械臂；也可以把 .xml 直接拖进窗口，或点【从本地导入模型…】")
+    print("  · 顶部菜单【Panels】：展开/钉住某个面板、全部恢复（F9）、重置版面（Shift+F9）")
     print("  · 左侧工具栏可以开关官方那 19 个面板；把【Controls】面板打开，拖滑杆能实时改目标")
     print("  · 【Simulation】面板：暂停 / 单步 / 倍速 / 倒带")
     print("  · 鼠标左键拖动转视角，右键拖动平移，滚轮缩放；按住 Ctrl 拖机械臂可以拉扯它")
-    print(f"  · 【Appearance】页签：{len(皮肤桥.全部风格())} 套外观风格"
+    print(f"  · 顶部菜单【Appearance】：{len(皮肤桥.全部风格())} 套外观风格"
           f"（{' / '.join(皮肤桥.全部风格())}）点一下即换，也可以按 F10 轮换")
-    print("  · 找不到面板就按 F9：打开工作台 + 把弹出去的窗口收回来")
+    print("  · 找不到面板就按 F9：显示标签条 + 收起临时展开（钉住的保留）")
     print("  · 窗口被拖到屏幕外/版面乱了：Shift+F9 重置版面（或 --恢复默认界面），然后重开软件")
-    print(f"  · 界面主题：当前基底 {皮肤桥.基底主题(风格).lower()}（改基底：--主题 dark/light/classic，"
-          f"或在窗口里 Options → Theme；换风格会自动带配套基底）")
+    print(f"  · 界面主题：当前基底 {皮肤桥.基底主题(风格).lower()}（改基底：菜单 Appearance → base theme，"
+          f"或 --主题 dark/light/classic；换风格会自动带配套基底）")
     print("  · 关窗口或在这个终端按 Ctrl+C 都能退出\n")
 
     return 启动.启动外壳(配置, args.模型, 插件框架.viewer_app.ViewerApp,
