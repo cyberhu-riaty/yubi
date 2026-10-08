@@ -45,8 +45,12 @@ import 菜单栏                                                         # noqa:
 # 常量（与 验证/面板窗自检.py 同步；这些是"看起来对不对"的量，改前先量一下）
 # ---------------------------------------------------------------------------
 页签条高 = 24.0          # 官方页签栏那一行的高度（菜单栏 24 + 页签条 ≈ 24）
-官方页签宽 = 78.0        # 官方 `Inspector` 页签大致占的宽度 —— 我们的页签从它右边开始
-页签最小宽 = 64.0
+# ★ 官方 `Inspector` 页签实际占多宽：**这个值是按用户截屏校准的，不是按字体算的**。
+#   实测字号 16、CalcTextSize("Inspector")=52、FramePadding.x=7（按公式只有 67），
+#   但截屏里那个页签块实际约 118px 宽 —— 所以别用公式，用这个常量。
+#   调法：我们的页签跟官方页签**叠在一起**就调大，**离得太远**就调小（唯一的一个旋钮）。
+官方页签宽 = 124.0
+页签最小宽 = 56.0
 最小可画宽 = 120.0
 最小可画高 = 200.0
 
@@ -237,35 +241,38 @@ class 面板窗:
         x, y, w, h = 算页签矩形(三D, 窗口宽, 宽)
         if w <= 0:
             return
-        imgui.SetNextWindowPos(imgui.Vec2(x, y), imgui.Cond.Always.value)
-        imgui.SetNextWindowSize(imgui.Vec2(w, h), imgui.Cond.Always.value)
-        展开, _ = imgui.Begin("##面板窗页签", None, int(面板窗.窗口标志))
+        可见 = 面板注册表.面板窗可见()
+        # 点官方 `Inspector` 页签那一小块 → 让位（两个页签像真的一样互斥）
+        官x, 官y, 官w, 官h = 官方页签矩形(三D, 窗口宽)
         try:
-            if not 展开:
-                return
-            可见 = 面板注册表.面板窗可见()
-            # 点官方 `Inspector` 页签那一小块 → 让位（两个页签像真的一样互斥）
-            官x, 官y, 官w, 官h = 官方页签矩形(三D, 窗口宽)
+            if (可见 and imgui.IsMouseClicked(0)
+                    and imgui.IsMouseHoveringRect(imgui.Vec2(官x, 官y),
+                                                  imgui.Vec2(官x + 官w, 官y + 官h))):
+                面板注册表.设面板窗可见(False)
+                可见 = False
+        except Exception:                                                # noqa: BLE001
+            pass
+        # ★ 背景取官方页签栏的配色（开=Tab，关=TabDimmed），这样它看起来就是那一行的页签，
+        #   而不是一个浮在页签栏上的按钮。
+        try:
+            底色 = imgui.GetStyleColorVec4(int(imgui.Col.Tab if 可见 else imgui.Col.TabDimmed))
+        except Exception:                                                # noqa: BLE001
+            底色 = imgui.Vec4(0.16, 0.16, 0.18, 1.0)
+        imgui.PushStyleColor(int(imgui.Col.WindowBg), 底色)
+        try:
+            imgui.SetNextWindowPos(imgui.Vec2(x, y), imgui.Cond.Always.value)
+            imgui.SetNextWindowSize(imgui.Vec2(w, h), imgui.Cond.Always.value)
+            展开, _ = imgui.Begin("##面板窗页签", None, int(面板窗.窗口标志))
             try:
-                if (可见 and imgui.IsMouseClicked(0)
-                        and imgui.IsMouseHoveringRect(imgui.Vec2(官x, 官y),
-                                                      imgui.Vec2(官x + 官w, 官y + 官h))):
-                    面板注册表.设面板窗可见(False)
-                    可见 = False
-            except Exception:                                            # noqa: BLE001
-                pass
-            压栈 = 0
-            if 可见:
-                imgui.PushStyleColor(int(imgui.Col.Button), imgui.Vec4(0.20, 0.45, 0.75, 1.0))
-                压栈 = 1
-            try:
-                if imgui.Button(f"{文字}##面板窗开关"):
+                if not 展开:
+                    return
+                if imgui.Selectable(f"{文字}##面板窗开关", 可见, 0,
+                                    imgui.Vec2(max(8.0, w - 4.0), max(8.0, h - 4.0))):
                     面板注册表.设面板窗可见(not 可见)
             finally:
-                if 压栈:
-                    imgui.PopStyleColor()
+                imgui.End()
         finally:
-            imgui.End()
+            imgui.PopStyleColor()
 
     # -- 内容窗 --------------------------------------------------------
     def _画内容窗(self, 三D, 窗口宽: float) -> None:
