@@ -83,7 +83,9 @@ class 辨识面板:
                 self._已打日志.add(文本)
                 print(f"【辨识】{文本}", flush=True)
         if 隐藏:
-            imgui.TextDisabled(f"  (+{隐藏} non-ASCII log line(s) - shown in terminal)")
+            imgui.TextDisabled(文案.格式化("辨识.隐藏日志",
+                                                  "  (+{n} non-ASCII log line(s) - shown in terminal)",
+                                                  n=隐藏))
 
     def _发命令(self, 动作: str) -> None:
         self.上次动作 = 动作
@@ -148,7 +150,9 @@ class 辨识面板:
                               f"{界面文字.英文(self.状态.状态)}: "
                               f"{界面文字.英文(self.状态.进度)}")
         else:
-            imgui.TextDisabled(f"idle   sampled steps={self.状态.采样步数}"
+            imgui.TextDisabled(文案.格式化("辨识.空闲状态",
+                                                   "idle   sampled steps={步数}",
+                                                   步数=self.状态.采样步数)
                                + (f"   last={self.上次动作}" if self.上次动作 else ""))
 
         # ---- 结果表 ----
@@ -163,11 +167,13 @@ class 辨识面板:
         if 拟合.get("标称") is not None and 拟合.get("辨识后") is not None:
             改善 = 拟合["标称"] / max(拟合["辨识后"], 1e-12)
             imgui.Separator()
-            imgui.Text(f"Fit residual:  {拟合['标称']:.6f} -> {拟合['辨识后']:.6f}")
+            imgui.Text(文案.格式化("辨识.拟合行",
+                                              "Fit residual:  {前:.6f} -> {后:.6f}",
+                                              前=拟合["标称"], 后=拟合["辨识后"]))
             imgui.SameLine()
             imgui.TextColored(imgui.Vec4(0.30, 0.85, 0.40, 1.0) if 改善 > 1.5
                               else imgui.Vec4(0.95, 0.45, 0.30, 1.0),
-                              f"({改善:.1f}x better)")
+                              文案.格式化("辨识.改善", "({倍:.1f}x better)", 倍=改善))
             imgui.TextDisabled(文案.取("辨识.残差说明一"))
             imgui.TextDisabled(文案.取("辨识.残差说明二"))
 
@@ -178,8 +184,10 @@ class 辨识面板:
             self._画日志()
 
         imgui.Separator()
-        imgui.TextDisabled(f"frames={self.收帧}  cmds={self.发出命令}  "
-                           f"draw={self.绘制次数}")
+        imgui.TextDisabled(文案.格式化("辨识.统计行",
+                                           "frames={帧}  cmds={命令}  draw={画}",
+                                           帧=self.收帧, 命令=self.发出命令,
+                                           画=self.绘制次数))
 
 
 # 启动器约定：模块里叫"面板类"的就是要实例化的面板

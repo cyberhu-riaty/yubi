@@ -53,6 +53,7 @@ from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E4
 
 from 模型桥 import 应用算法命令, 项目状态                             # noqa: E402
 
+import 文案
 import 面板注册表                                                      # noqa: E402
 import 界面文字                                                        # noqa: E402
 
@@ -236,34 +237,34 @@ class 算法面板:
         if self.项目:
             imgui.TextColored(绿(), 界面文字.英文(self.项目))
         else:
-            imgui.TextColored(灰(), "(no project)")
+            imgui.TextColored(灰(), 文案.取("算法.无项目"))
         imgui.SameLine()
         if self._脏:
-            imgui.TextColored(黄(), "  * unsaved edits")
+            imgui.TextColored(黄(), 文案.取("算法.未保存"))
         elif self.已存盘:
-            imgui.TextDisabled("  (saved in project file)")
+            imgui.TextDisabled(文案.取("算法.已存盘"))
         else:
-            imgui.TextColored(黄(), "  (temporary - not in project file)")
+            imgui.TextColored(黄(), 文案.取("算法.临时"))
         # ---- ★★ 最重要的一条提示：物理跑不跑 ----
         #   装载算法 ≠ 模型会动。物理是**另一个独立开关**（左上角【Display】的
         #   「Load gravity」）。用户看到"算法挂上了但机械臂一动不动"，
         #   第一反应一定是"这算法坏了/没生效" —— 所以这里必须直说，并且**给个开关**
         #   让他当场就能开，不用去别处找。
         if self.重力开:
-            imgui.Text("  Physics")
+            imgui.Text(文案.取("算法.物理"))
             imgui.SameLine()
-            imgui.TextColored(绿(), "running (gravity on)")
+            imgui.TextColored(绿(), 文案.取("算法.跑着"))
             imgui.SameLine()
-            if imgui.SmallButton("freeze##phys_off"):
+            if imgui.SmallButton(文案.取("算法.冻结按钮")):
                 self._发重力(False)
         else:
-            imgui.TextColored(橙(), "  Physics FROZEN - the robot will NOT move")
+            imgui.TextColored(橙(), 文案.取("算法.冻结中"))
             imgui.SameLine()
-            if imgui.SmallButton("run physics##phys_on"):
+            if imgui.SmallButton(文案.取("算法.跑物理按钮")):
                 self._发重力(True)
             if self.勾选 or self.在跑:
-                imgui.TextDisabled("    -> an algorithm is loaded but physics is frozen:")
-                imgui.TextDisabled("       check 'Load gravity' (top-left) or click the button above")
+                imgui.TextDisabled(文案.取("算法.挂了但冻结"))
+                imgui.TextDisabled(文案.取("算法.去勾重力"))
 
         # ---- ★ 谁在控盘 / 谁被覆盖（"挂了的算法其实没生效"必须让人看见）----
         #   多个算法都写 ctrl[:] 时只有**最后一个**真正生效，前面那些等于没挂。
@@ -275,23 +276,24 @@ class 算法面板:
             imgui.TextColored(绿(), 界面文字.安全(界面文字.英文(self.控盘) or self.控盘))
             if self.被覆盖:
                 imgui.SameLine()
-                imgui.TextColored(橙(), f"(masking {len(self.被覆盖)})")
+                imgui.TextColored(橙(), 文案.格式化("算法.覆盖数", "(masking {n})", n=len(self.被覆盖)))
         elif self.勾选:
-            imgui.TextColored(灰(), "  Controls: (none - no algorithm writes ctrl)")
+            imgui.TextColored(灰(), 文案.取("算法.没人控"))
         #   ★ 这里**只能用 ASCII**：面板字面量的白名单检查（字体覆盖.py）仍然只认 ASCII。
         #     虽然主 UI 字体已打中文补丁（脚本自己会报"面板可以显示中文"），但那条白名单
         #     还没跟着放开 —— 两者目前是矛盾的，见 CHANGELOG v0.6.1 的记录。
         #     在规则统一之前，面板文字一律走 ASCII，中文说明留在终端。
         if self.被覆盖:
-            imgui.TextColored(橙(), "  Masked (loaded but output is overwritten):")
+            imgui.TextColored(橙(), 文案.取("算法.被覆盖标头"))
             for 名 in self.被覆盖:
-                imgui.TextDisabled(f"    - {界面文字.安全(界面文字.英文(名) or 名)}")
-            imgui.TextDisabled("    -> move the one you want to the BOTTOM of the list")
+                imgui.TextDisabled(文案.格式化("算法.被覆盖行", "    - {名}",
+                                                     名=文案.状态(名)))
+            imgui.TextDisabled(文案.取("算法.挪到底部"))
         imgui.Separator()
 
         if not self.可选:
-            imgui.TextColored(橙(), "No algorithms found in the library.")
-            imgui.TextDisabled("  Put a control algorithm .py into the algorithms library.")
+            imgui.TextColored(橙(), 文案.取("算法.空库"))
+            imgui.TextDisabled(文案.取("算法.空库提示"))
             self._提醒空库()
             return
 
@@ -300,7 +302,7 @@ class 算法面板:
         #   藏进子窗口或折叠区就等于把最关键的规则藏起来。
         imgui.Columns(2, "##algo_cols", True)
 
-        imgui.TextDisabled(f"Library ({len(self.可选)} available)")
+        imgui.TextDisabled(文案.格式化("算法.库标头", "Library ({n} available)", n=len(self.可选)))
         for 插件名 in self.可选:
             选中 = 插件名 in self.勾选
             变了, 新值 = imgui.Checkbox(f"{self._面板名(插件名)}##pick_{插件名}", 选中)
@@ -313,11 +315,13 @@ class 算法面板:
                 self._脏 = True
             if self._被跳过(插件名):
                 imgui.SameLine()
-                imgui.TextColored(橙(), "(incompatible)")
+                imgui.TextColored(橙(), 文案.取("算法.不兼容"))
 
         imgui.NextColumn()
 
-        imgui.TextDisabled(f"Selected ({len(self.勾选)}) - last one wins")
+        imgui.TextDisabled(文案.格式化("算法.已选标头",
+                                             "Selected ({n}) - last one wins",
+                                             n=len(self.勾选)))
         for i, 插件名 in enumerate(self.勾选):
             最后 = (i == len(self.勾选) - 1)
             imgui.TextColored(绿() if 最后 else 灰(), f"{i + 1}.")
@@ -325,7 +329,7 @@ class 算法面板:
             imgui.Text(self._面板名(插件名))
             if 最后:
                 imgui.SameLine()
-                imgui.TextColored(绿(), "<- controls the robot")
+                imgui.TextColored(绿(), 文案.取("算法.谁控盘"))
             # 上下调序：★ 顺序 = 谁说了算，所以这不是锦上添花，是核心功能
             imgui.SameLine()
             if i == 0:
@@ -345,7 +349,7 @@ class 算法面板:
                 imgui.EndDisabled()
 
         if not self.勾选:
-            imgui.TextColored(橙(), "  (nothing selected - pick at least one)")
+            imgui.TextColored(橙(), 文案.取("算法.没勾"))
 
         imgui.Columns(1)
         imgui.Separator()
@@ -354,7 +358,7 @@ class 算法面板:
         能提交 = bool(self.勾选) and self._脏
         if not 能提交:
             imgui.BeginDisabled()
-        if imgui.Button("Apply (temporary)"):
+        if imgui.Button(文案.取("算法.应用")):
             self._发送(落盘=False)
         if not 能提交:
             imgui.EndDisabled()
@@ -364,13 +368,13 @@ class 算法面板:
         能存 = bool(self.勾选) and (self._脏 or not self.已存盘)
         if not 能存:
             imgui.BeginDisabled()
-        if imgui.Button("Save to project file"):
+        if imgui.Button(文案.取("算法.保存")):
             self._发送(落盘=True)
         if not 能存:
             imgui.EndDisabled()
 
         imgui.SameLine()
-        if imgui.Button("Revert"):
+        if imgui.Button(文案.取("算法.还原")):
             self.勾选 = list(self.在跑)
             self._脏 = False
 
@@ -378,23 +382,26 @@ class 算法面板:
         #   ★ 这一条是用户实测报上来的问题：不重置的话，新算法会在**上一个算法留下的
         #     姿态**上开始控制（因为多数算法"拿第一次看到的位置当基准"），
         #     现象就是"试过几轮算法之后，机器人再也回不到默认位置了"。
-        变了, self.重置姿态 = imgui.Checkbox("Reset robot pose to home", bool(self.重置姿态))
+        变了, self.重置姿态 = imgui.Checkbox(文案.取("算法.重置姿态"), bool(self.重置姿态))
         if 变了:
             print(f"【算法】换算法时{'重置' if self.重置姿态 else '不重置'}机器人姿态"
                   f"（不重置 = 接着上一个算法的姿态继续）", flush=True)
         imgui.SameLine()
-        imgui.TextDisabled("(uncheck to continue from the current pose)")
+        imgui.TextDisabled(文案.取("算法.不重置提示"))
 
         # ---- 说明与状态（面板上只能 ASCII）----
-        imgui.TextDisabled("The LAST one in the list writes ctrl[] - it controls the robot.")
-        imgui.TextDisabled("Apply = try now (not saved).  Save = write into the project file.")
-        imgui.TextDisabled("Switching algorithms resets the pose first (see the checkbox above).")
+        imgui.TextDisabled(文案.取("算法.说明一"))
+        imgui.TextDisabled(文案.取("算法.说明二"))
+        imgui.TextDisabled(文案.取("算法.说明三"))
         if self._脏:
-            imgui.TextColored(黄(), "Selection changed - press Apply or Save.")
+            imgui.TextColored(黄(), 文案.取("算法.改选提示"))
         if self.不兼容:
-            imgui.TextColored(橙(), f"{len(self.不兼容)} skipped (incompatible with this model)")
-            imgui.TextDisabled("  details printed in the terminal")
-        imgui.TextDisabled(f"frames={self.绘制次数}  submits={self.提交次数}")
+            imgui.TextColored(橙(), 文案.格式化("算法.跳过数",
+                                              "{n} skipped (incompatible with this model)",
+                                              n=len(self.不兼容)))
+            imgui.TextDisabled(文案.取("算法.跳过详情"))
+        imgui.TextDisabled(文案.格式化("算法.统计", "frames={帧}  submits={提交}",
+                                            帧=self.绘制次数, 提交=self.提交次数))
 
     # ------------------------------------------------------------------
     def _发重力(self, 开: bool) -> None:

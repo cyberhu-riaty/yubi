@@ -132,14 +132,14 @@ def 菜单数据() -> dict:
 # 画菜单（只允许在"官方菜单栏关掉之前"这一刻调用）
 # ---------------------------------------------------------------------------
 def _画外观菜单() -> None:
-    if not imgui.BeginMenu("Appearance"):
+    if not imgui.BeginMenu(文案.取("顶栏.外观")):
         return
     数据 = 菜单数据()
     开 = bool(数据["外观面板"])
-    if imgui.MenuItem("Open Appearance panel (swatches / preview / FPS)", "", 开):
+    if imgui.MenuItem(文案.取("顶栏.打开外观面板"), "", 开):
         设外观面板可见(not 开)
     imgui.Separator()
-    imgui.TextDisabled("  skin (ours)      F10 cycles")
+    imgui.TextDisabled(文案.取("顶栏.皮肤行"))
     for 键, 显示, 选中 in 数据["皮肤"]:
         if imgui.MenuItem(f"    {显示}", "", 选中):
             if not 选中:
@@ -151,7 +151,7 @@ def _画外观菜单() -> None:
                 文案.设语言(语)
         imgui.EndMenu()
     imgui.Separator()
-    imgui.TextDisabled("  base theme       (used when the skin is off)")
+    imgui.TextDisabled(文案.取("顶栏.基底主题行"))
     for 键, 显示, 选中 in 数据["基底"]:
         if imgui.MenuItem(f"    {显示}", "", 选中):
             if not 选中:
@@ -160,17 +160,17 @@ def _画外观菜单() -> None:
 
 
 def _画面板菜单() -> None:
-    if not imgui.BeginMenu("Panels"):
+    if not imgui.BeginMenu(文案.取("顶栏.面板")):
         return
     可见 = 面板注册表.面板窗可见()
-    if imgui.MenuItem("Show panels window", "", 可见):
+    if imgui.MenuItem(文案.取("顶栏.显示面板窗"), "", 可见):
         面板注册表.设面板窗可见(not 可见)
-    if imgui.MenuItem("Reveal all (F9)"):
+    if imgui.MenuItem(文案.取("顶栏.全部恢复")):
         面板注册表.全部显示()
-    if imgui.MenuItem("Reset panel layout (Shift+F9)"):
+    if imgui.MenuItem(文案.取("顶栏.重置版面")):
         面板注册表.重置版面()
     imgui.Separator()
-    imgui.TextDisabled("  panels       (Ctrl+1 .. Ctrl+7)")
+    imgui.TextDisabled(文案.取("顶栏.面板区提示"))
     名单函 = getattr(面板注册表, "面板顺序", None)
     段展开 = getattr(面板注册表, "段展开", None)
     跳到段 = getattr(面板注册表, "跳到段", None)
@@ -178,9 +178,9 @@ def _画面板菜单() -> None:
         for i, 名 in enumerate(名单函()):
             快捷键 = f"Ctrl+{i + 1}" if i < 9 else ""
             打开 = bool(段展开(名)) if callable(段展开) else False
-            if imgui.MenuItem(f"    {名}", 快捷键, 打开):
+            if imgui.MenuItem(f"    {文案.面板名(名)}", 快捷键, 打开):
                 跳到段(名)
-    imgui.TextDisabled("  Esc = close panels window")
+    imgui.TextDisabled(文案.取("顶栏.面板窗提示"))
     imgui.EndMenu()
 
 

@@ -119,7 +119,7 @@ class 关于面板:
             for 名, 版 in self.插件清单:
                 ig.BulletText(f"{名}  v{版}")
         else:
-            ig.TextDisabled("  (none)")
+            ig.TextDisabled(文案.取("关于.无算法"))
         ig.Separator()
 
         ig.Text(文案.取("关于.面板"))
@@ -131,17 +131,9 @@ class 关于面板:
 
         ig.Separator()
         ig.TextColored(暗, 文案.取("关于.声明"))
-        ig.TextWrapped(
-            "This software is an independent project. It is NOT affiliated with, "
-            "endorsed by, or sponsored by Google DeepMind."
-        )
-        ig.TextWrapped(
-            "Built on MuJoCo (Apache-2.0). MuJoCo is a trademark of its owner; "
-            "this project does not use that name as part of its own name."
-        )
-        ig.TextWrapped(
-            "Robot models come from the mujoco_menagerie repository (BSD-style licence)."
-        )
+        ig.TextWrapped(文案.取("关于.声明一"))
+        ig.TextWrapped(文案.取("关于.声明二"))
+        ig.TextWrapped(文案.取("关于.声明三"))
         ig.Separator()
         ig.TextDisabled(f"drawn {self.绘制次数} times")
 

@@ -205,6 +205,114 @@ _包根 = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
                  "    -> add a project file (see terminal for the folder name)"),
     "模型库.算法行": ("    · {名} v{版}{后缀}", "    · {名} v{版}{后缀}"),
     "模型库.参数数": ("（{n} 个参数）", "({n} params)"),
+
+    # ---- 算法面板 ----
+    "算法.无项目": ("（没有项目）", "(no project)"),
+    "算法.未保存": ("  ＊有未保存的改动", "  * unsaved edits"),
+    "算法.已存盘": ("  （已存进项目文件）", "  (saved in project file)"),
+    "算法.临时": ("  （临时的 —— 没写进项目文件）", "  (temporary - not in project file)"),
+    "算法.物理": ("  物理", "  Physics"),
+    "算法.跑着": ("运行中（重力已开）", "running (gravity on)"),
+    "算法.冻结按钮": ("冻结##phys_off", "freeze##phys_off"),
+    "算法.冻结中": ("  物理已冻结 —— 机械臂**不会动**",
+               "  Physics FROZEN - the robot will NOT move"),
+    "算法.跑物理按钮": ("开始推进物理##phys_on", "run physics##phys_on"),
+    "算法.挂了但冻结": ("    → 算法挂上了，但物理是冻结的：",
+                 "    -> an algorithm is loaded but physics is frozen:"),
+    "算法.去勾重力": ("       勾上左上角的「加载重力」，或点上面那个按钮",
+                "       check 'Load gravity' (top-left) or click the button above"),
+    "算法.覆盖数": ("（覆盖了 {n} 个）", "(masking {n})"),
+    "算法.没人控": ("  控制量：没有算法在写 ctrl", "  Controls: (none - no algorithm writes ctrl)"),
+    "算法.被覆盖标头": ("  被覆盖（挂上了，但输出被后面那个盖掉）：",
+                  "  Masked (loaded but output is overwritten):"),
+    "算法.被覆盖行": ("    - {名}", "    - {名}"),
+    "算法.挪到底部": ("    → 想让谁说了算，就把它挪到列表**最底下**",
+                "    -> move the one you want to the BOTTOM of the list"),
+    "算法.空库": ("算法库里没有找到算法。", "No algorithms found in the library."),
+    "算法.空库提示": ("  把一个控制算法的 .py 放进算法库目录。",
+                "  Put a control algorithm .py into the algorithms library."),
+    "算法.库标头": ("算法库（{n} 个可选）", "Library ({n} available)"),
+    "算法.不兼容": ("（不兼容）", "(incompatible)"),
+    "算法.已选标头": ("已勾选（{n}）—— **列表最后一项说了算**",
+                "Selected ({n}) - last one wins"),
+    "算法.谁控盘": ("← 它在控机器人", "<- controls the robot"),
+    "算法.没勾": ("  （一个都没勾 —— 至少勾一个）", "  (nothing selected - pick at least one)"),
+    "算法.应用": ("应用（临时）", "Apply (temporary)"),
+    "算法.保存": ("保存到项目文件", "Save to project file"),
+    "算法.还原": ("还原", "Revert"),
+    "算法.重置姿态": ("换算法时把机器人重置回 home 姿态", "Reset robot pose to home"),
+    "算法.不重置提示": ("（不勾 = 接着当前姿态继续）", "(uncheck to continue from the current pose)"),
+    "算法.说明一": ("**列表最后一项**在写 ctrl[] —— 它在控机器人。",
+               "The LAST one in the list writes ctrl[] - it controls the robot."),
+    "算法.说明二": ("应用 = 立刻试一下（不落盘）；保存 = 写进项目文件。",
+               "Apply = try now (not saved).  Save = write into the project file."),
+    "算法.说明三": ("换算法会先把姿态重置回 home（看上面那个勾选框）。",
+               "Switching algorithms resets the pose first (see the checkbox above)."),
+    "算法.改选提示": ("勾选变了 —— 按「应用」或「保存」才生效。",
+                "Selection changed - press Apply or Save."),
+    "算法.跳过数": ("{n} 个算法被跳过（与这个模型不兼容）",
+               "{n} skipped (incompatible with this model)"),
+    "算法.跳过详情": ("  详情打在终端", "  details printed in the terminal"),
+    "算法.统计": ("重绘 {帧} 帧｜提交 {提交} 次", "frames={帧}  submits={提交}"),
+
+    # ---- 外观（完整面板；日常换风格走顶栏 Appearance 菜单） ----
+    "外观.标题": ("外观（完整）", "Appearance"),
+    "外观.无风格表": ("找不到风格表", "style table not found"),
+    "外观.风格表位置": ("  应该和 皮肤桥.py 放在一起（完整路径打在终端）",
+                  "  expected next to the skin bridge (exact path printed in terminal)"),
+    "外观.当前": ("当前", "Current"),
+    "外观.选一个": ("挑一套（点一下即应用，* = 当前那套）。F10 轮换。",
+                "Pick one (click to apply, * = current).  F10 cycles."),
+    "外观.色卡": ("色卡（点色块只是查看；在这里改不会保存）",
+               "Palette (click a swatch to inspect; editing here does not save)"),
+    "外观.预览详情": ("  基底 {基底} ｜ 圆角 {圆角} ｜ 窗口边框 {边框} ｜ 颜色 {颜色} 项 ｜ 样式变量 {样式} 项",
+                "  base theme {基底} | rounding {圆角} | window border {边框} | "
+                "colors {颜色} | style vars {样式}"),
+    "外观.预览按钮": ("按钮", "Button"),
+    "外观.预览说明": ("← 按钮 / 边框 / 背景都跟着这套风格走（同一份 ImGui 代码）",
+                "<- button / border / background follow the style (same ImGui code)"),
+    "外观.皮肤关": ("皮肤已关：现在就是官方主题的原样。",
+               "Skin is OFF: this is the stock official theme."),
+    "外观.皮肤好": ("[ok] 官方 + 自研面板都已换肤", "[ok] official + custom panels are skinned"),
+    "外观.皮肤查": ("[..] 正在核对换肤覆盖", "[..] checking skin coverage"),
+    "外观.见证": ("  自研前={自研}  官方后={官方}  见证按钮={实测}（期望 {期望}）",
+               "  custom-before={自研}  official-after={官方}  "
+               "witness button={实测} (expect {期望})"),
+    "外观.指标": ("  FPS {帧率:.1f}（验收线 55）｜切换 {切换} 次｜重绘 {重绘} 次",
+               "  FPS {帧率:.1f} (acceptance line 55) | switches {切换} | draws {重绘}"),
+    "外观.坏键": ("[警告] 风格表跳过了 {n} 个坏键 —— 见终端",
+               "[warn] style table skipped {n} bad key(s) - see terminal"),
+    "外观.命令行": ("命令行：--style <名字>（同 --风格）｜选择会被记住",
+                "CLI: --style <name> (same as --风格) | your choice is remembered"),
+
+    # ---- 尾款：关于 / 参数 / 录制 / 曲线 / 辨识 ----
+    "关于.无算法": ("  （无）", "  (none)"),
+    "关于.声明一": ("本软件是独立项目，与 Google DeepMind 无隶属、无背书、无赞助关系。",
+               "This software is an independent project. It is NOT affiliated with, "
+               "endorsed by, or sponsored by Google DeepMind."),
+    "关于.声明二": ("基于 MuJoCo（Apache-2.0）。MuJoCo 是其所有者的商标；本项目不把它当作自己名字的一部分。",
+               "Built on MuJoCo (Apache-2.0). MuJoCo is a trademark of its owner; "
+               "this project does not use that name as part of its own name."),
+    "关于.声明三": ("机器人模型来自 mujoco_menagerie 仓库（BSD 类许可证）。",
+               "Robot models come from the mujoco_menagerie repository (BSD-style licence)."),
+    "参数.示例代码": ("    def <可调参数方法>(self): return {...}",
+                "    def <tunable-params method>(self): return {...}"),
+    "参数.统计行": ("重绘 {帧} 帧｜已发改动 {改动}", "frames={帧}  changes sent={改动}"),
+    "录制.末行": ("最后命令={命令}   已发 {次数}", "last command={命令}   sent={次数}"),
+    "曲线.峰值": ("= {值:+.3f}（峰值 {峰:.3f}）", "= {值:+.3f}  (peak {峰:.3f})"),
+    "辨识.统计行": ("重绘 {帧} 帧｜命令 {命令} 次｜画 {画} 次",
+               "frames={帧}  cmds={命令}  draw={画}"),
+
+    "辨识.隐藏日志": ("  （另有 {n} 行非 ASCII 日志，见终端）",
+                "  (+{n} non-ASCII log line(s) - shown in terminal)"),
+    "辨识.拟合行": ("拟合残差：{前:.6f} → {后:.6f}", "Fit residual:  {前:.6f} -> {后:.6f}"),
+    "辨识.改善": ("（好了 {倍:.1f} 倍）", "({倍:.1f}x better)"),
+    "面板窗.标题行": ("面板　（已展开 {开}/{总}）", "Panels  ({开}/{总} open)"),
+    "面板窗.出错": ("  [出错] {类型}", "  [fail] {类型}"),
+    "面板窗.出错详情": ("  （详情打在终端；其余面板照常工作）",
+                 "  (details in the terminal; the rest keeps working)"),
+    "顶栏.皮肤行": ("  皮肤（我们自己的）　F10 轮换", "  skin (ours)      F10 cycles"),
+    "顶栏.基底主题行": ("  基底主题（皮肤关掉时用）", "  base theme       (used when the skin is off)"),
     "模型库.手动路径提示": ("路径不在模型库里时，直接粘进来",
                     "paste a path here when it is not in the library"),
 }
@@ -216,6 +324,41 @@ _包根 = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
     "小软件",              # 应用名（产品名，不翻）
     "驭臂",
 }
+
+
+# 面板显示名：中文名 ↔ 英文名（内部键名**永远是中文那个**，状态文件/名册都用它）
+面板名表 = {
+    "模型库": ("模型库", "Model library"),
+    "算法": ("算法", "Algorithms"),
+    "控制器参数": ("控制器参数", "Controller params"),
+    "参数辨识": ("参数辨识", "System identification"),
+    "实时监控": ("实时监控", "Monitor"),
+    "数据录制": ("数据录制", "Recorder"),
+    "关于": ("关于", "About"),
+    "展示": ("展示", "Display"),
+    "外观": ("外观", "Appearance"),
+    "面板窗": ("面板", "Panels"),
+}
+
+
+def 面板名(名: str) -> str:
+    """把内部面板名翻成当前语言该显示的名字（认不出就原样返回）。"""
+    对 = 面板名表.get(str(名))
+    if 对 is None:
+        return str(名)
+    return 对[0] if 当前语言 == 中文 else 对[1]
+
+
+def 字体有汉字(量宽) -> bool:
+    """用 `CalcTextSize` 量一下：'中' 和 '?' 宽度相同 = 字体里没有汉字字形（走回退字形）。
+
+    `量宽` 由调用方传进来（`lambda 文: imgui.CalcTextSize(文).x`）——
+    这样本模块不用 import imgui，仍然能在"不开窗"的自检里被导入。
+    """
+    try:
+        return abs(float(量宽("中")) - float(量宽("?"))) > 1e-6
+    except Exception:                                                    # noqa: BLE001
+        return True                      # 量不出来就当有（不乱回退）
 
 
 def 取(键: str, 默认: str = "") -> str:

@@ -38,6 +38,7 @@ if _面板目录 not in _sys.path:
 from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E402
 from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
 
+import 文案
 import 面板注册表                                                     # noqa: E402
 import 菜单栏                                                         # noqa: E402
 import 皮肤桥                                                         # noqa: E402
@@ -295,6 +296,7 @@ class 面板窗:
                     print(f"【面板窗】置顶第 {self._置顶次数} 次（帧 {self._帧}）", flush=True)
             if not self._报过位置:
                 self._报过位置 = True
+                self._查字体()
                 说 = "【面板窗】位置（我们算的／窗口自己量的）："
                 print(说 + f"页签条 算={tuple(round(v) for v in 算页签条矩形(三D, 窗口宽))}"
                           f" 实={实测}", flush=True)
@@ -326,6 +328,22 @@ class 面板窗:
             if self.错误次数 <= 2:
                 print(f"⚠ 面板窗绘制出错：{type(异常).__name__}: {异常}")
         return False
+
+    def _查字体(self) -> None:
+        """第一帧检查字体里有没有汉字；没有就自动回退英文并提示。
+
+        ★ 为什么必须有这一条：中文字形是靠 `工具/打补丁_中文字体.py` 补进官方字体的，
+          而 `.venv` 是"可重建、不进 git"的 —— 哪天重建环境忘了打补丁，中文会全变成 `?`。
+          自动回退至少让界面还是能用的英文，并且在终端说清怎么修。
+        """
+        if 文案.当前语言 != 文案.中文:
+            return
+        if 文案.字体有汉字(lambda 文: imgui.CalcTextSize(文).x):
+            return
+        文案.设语言(文案.英文, 记住=False)
+        print("【语言】字体里没有汉字字形（多半是没打中文补丁）→ 已自动回退英文。\n"
+              "        要中文请先打补丁：.venv/bin/python 工具/打补丁_中文字体.py\n"
+              "        （判定：工具/打补丁_中文字体.py --状态）", flush=True)
 
     # -- 假页签 --------------------------------------------------------
     @staticmethod
@@ -423,7 +441,7 @@ class 面板窗:
             for i, 名 in enumerate(名单):
                 打开 = 面板注册表.段展开(名)
                 标记 = "v" if 打开 else ">"
-                if imgui.Selectable(f"{标记} {名}##段{i}", 打开):
+                if imgui.Selectable(f"{标记} {文案.面板名(名)}##段{i}", 打开):
                     面板注册表.设段展开(名, not 打开)
                 if self._要滚到 == 名:
                     try:
@@ -435,7 +453,7 @@ class 面板窗:
                     continue
                 面板 = self._实例.get(名)
                 if 面板 is None:
-                    imgui.TextDisabled("  (this panel is not loaded)")
+                    imgui.TextDisabled(文案.取("面板窗.未加载"))
                     continue
                 imgui.Indent()
                 try:
@@ -444,8 +462,8 @@ class 面板窗:
                     面板.错误次数 = int(getattr(面板, "错误次数", 0)) + 1
                     if 面板.错误次数 <= 2:
                         print(f"⚠ 面板【{名}】在面板窗里绘制出错：{type(异常).__name__}: {异常}")
-                    imgui.TextDisabled(f"  [fail] {type(异常).__name__}")
-                    imgui.TextDisabled("  (details in the terminal; the rest keeps working)")
+                    imgui.TextDisabled(文案.格式化("面板窗.出错", "  [fail] {类型}", 类型=type(异常).__name__))
+                    imgui.TextDisabled(文案.取("面板窗.出错详情"))
                 imgui.Unindent()
                 imgui.Separator()
         finally:
@@ -454,7 +472,8 @@ class 面板窗:
 
     def _画标题行(self, 名单) -> None:
         开数 = sum(1 for 名 in 名单 if 面板注册表.段展开(名))
-        imgui.TextDisabled(f"Panels  ({开数}/{len(名单)} open)")
+        imgui.TextDisabled(文案.格式化("面板窗.标题行", "Panels  ({开}/{总} open)",
+                                            开=开数, 总=len(名单)))
         imgui.SameLine()
         if imgui.SmallButton("all##面板窗全开"):
             面板注册表.全部段(True)
@@ -465,7 +484,7 @@ class 面板窗:
         if imgui.SmallButton("x##面板窗关闭"):
             面板注册表.设面板窗可见(False)
         imgui.SameLine()
-        imgui.TextDisabled("Ctrl+1..7 jumps | Esc closes")
+        imgui.TextDisabled(文案.取("面板窗.提示"))
 
 
 # 启动器约定：模块里叫"面板类"的就是要实例化的面板

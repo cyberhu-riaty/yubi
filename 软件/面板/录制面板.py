@@ -104,9 +104,12 @@ class 录制面板(曲线面板基类):
     def _画内容(self) -> None:
         super()._画内容()
         imgui.Separator()
-        imgui.TextDisabled(文案.格式化("录制.状态", "state={值}", 值=文案.状态(self.本地状态)) + "   "
-                           f"last command={界面文字.英文(self.已发命令) or '-'}   "
-                           f"sent={self.命令次数}")
+        imgui.TextDisabled(文案.格式化("录制.状态", "state={值}", 值=文案.状态(self.本地状态))
+                           + "   "
+                           + 文案.格式化("录制.末行",
+                                         "last command={命令}   sent={次数}",
+                                         命令=文案.状态(self.已发命令) or "-",
+                                         次数=self.命令次数))
         imgui.TextDisabled(文案.取("录制.产物说明"))
 
     # ------------------------------------------------------------------

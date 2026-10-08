@@ -170,7 +170,10 @@ class 曲线面板基类:
             imgui.SameLine()
             imgui.TextColored(转颜色(线["颜色"]), str(线.get("界面名") or 名))
             imgui.SameLine()
-            imgui.TextDisabled(f"= {self.最新值.get(名, float('nan')):+.3f}  (peak {线['峰值']:.3f})")
+            imgui.TextDisabled(文案.格式化("曲线.峰值",
+                                                  "= {值:+.3f}  (peak {峰:.3f})",
+                                                  值=self.最新值.get(名, float("nan")),
+                                                  峰=线["峰值"]))
 
         # 曲线图
         imgui.Separator()

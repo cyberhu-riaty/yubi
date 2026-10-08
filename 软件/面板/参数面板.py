@@ -129,7 +129,7 @@ class 参数面板:
             #   而"可调参数 / 值 / 范围"这些**键名本身就是中文**，所以完整的示例
             #   放到终端打印（终端用系统字体，中文正常），面板只给一句英文提示。
             imgui.TextDisabled(文案.取("参数.无可调"))
-            imgui.TextDisabled("    def <tunable-params method>(self): return {...}")
+            imgui.TextDisabled(文案.取("参数.示例代码"))
             imgui.TextDisabled("    " + 文案.取("参数.说明"))
             if not self._已提醒示例:
                 self._已提醒示例 = True
@@ -175,7 +175,8 @@ class 参数面板:
                 self.参数[全名]["值"] = v
             self._发送(self.待发送)
         imgui.SameLine()
-        imgui.TextDisabled(f"frames={self.收帧}  changes sent={self.发出改动}")
+        imgui.TextDisabled(文案.格式化("参数.统计行", "frames={帧}  changes sent={改动}",
+                                           帧=self.收帧, 改动=self.发出改动))
 
     def _发送(self, 改动: dict) -> None:
         if self.viewer is None or not 改动:

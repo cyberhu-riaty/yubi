@@ -39,6 +39,7 @@ if _外壳目录 not in _sys.path:
 from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E402
 from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
 
+import 文案
 import 面板注册表                                                      # noqa: E402
 import 皮肤桥                                                          # noqa: E402
 import 菜单栏                                                          # noqa: E402
@@ -185,21 +186,21 @@ class 外观面板:
         #   中文留给终端与文档。校验：./.venv/bin/python 优化（软件优化的报告都放这里面来）/验证/字体覆盖.py
         风格表 = 皮肤桥.读取风格表()
         if not 风格表.get("风格"):
-            imgui.TextColored(imgui.Vec4(0.95, 0.45, 0.30, 1.0), "style table not found")
-            imgui.TextDisabled("  expected next to the skin bridge (exact path printed in terminal)")
+            imgui.TextColored(imgui.Vec4(0.95, 0.45, 0.30, 1.0), 文案.取("外观.无风格表"))
+            imgui.TextDisabled(文案.取("外观.风格表位置"))
             imgui.Separator()
             imgui.TextDisabled(皮肤桥.界面状态行())
             return
 
         # ---- 当前风格 ----
-        imgui.Text("Current")
+        imgui.Text(文案.取("外观.当前"))
         imgui.SameLine()
         imgui.TextColored(imgui.Vec4(0.30, 0.85, 0.40, 1.0), 皮肤桥.界面名(皮肤桥.当前风格))
         imgui.TextDisabled("  " + 皮肤桥.界面说明(皮肤桥.当前风格))
         imgui.Separator()
 
         # ---- 选择列表 ----
-        imgui.TextDisabled("Pick one (click to apply, * = current).  F10 cycles.")
+        imgui.TextDisabled(文案.取("外观.选一个"))
         for 名 in 皮肤桥.选择项():
             选中 = (名 == 皮肤桥.当前风格)
             标记 = "*" if 选中 else " "
@@ -212,7 +213,7 @@ class 外观面板:
         # ---- 这套风格的色卡（ColorButton 是现成的色块控件，不需要画布接口）----
         条目 = (风格表.get("风格") or {}).get(皮肤桥.当前风格) or {}
         颜色 = 条目.get("颜色") or {}
-        imgui.TextDisabled("Palette (click a swatch to inspect; editing here does not save)")
+        imgui.TextDisabled(文案.取("外观.色卡"))
         预览键 = ("WindowBg", "TitleBgActive", "Button", "ButtonHovered", "FrameBg",
                   "Border", "Text", "TextDisabled", "Separator", "CheckMark")
         for i, 键 in enumerate(预览键):
@@ -235,11 +236,14 @@ class 外观面板:
             基底 = str(条目.get("基底主题", "?")).upper()
             圆角 = 样式.get("WindowRounding", 0)
             边框 = 样式.get("WindowBorderSize", 0)
-            imgui.TextDisabled(f"  base theme {基底} | rounding {圆角} | window border {边框} | "
-                               f"colors {len(颜色)} | style vars {len(样式)}")
-        imgui.Button("Button")
+            imgui.TextDisabled(文案.格式化("外观.预览详情",
+                                           "  base theme {基底} | rounding {圆角} | "
+                                           "window border {边框} | colors {颜色} | style vars {样式}",
+                                           基底=基底, 圆角=圆角, 边框=边框,
+                                           颜色=len(颜色), 样式=len(样式)))
+        imgui.Button(文案.取("外观.预览按钮"))
         imgui.SameLine()
-        imgui.TextDisabled("<- button / border / background follow the style (same ImGui code)")
+        imgui.TextDisabled(文案.取("外观.预览说明"))
         imgui.Separator()
 
         # ---- 验收指标 ----
@@ -254,22 +258,29 @@ class 外观面板:
         官方生效 = 官方.get("生效")
         自研生效 = 自研.get("生效")
         if 皮肤桥.当前风格 == 皮肤桥.关闭:
-            imgui.TextDisabled("Skin is OFF: this is the stock official theme.")
+            imgui.TextDisabled(文案.取("外观.皮肤关"))
         else:
             好 = (官方生效 is True and 自研生效 is True)
             色 = imgui.Vec4(0.30, 0.85, 0.40, 1.0) if 好 else imgui.Vec4(0.95, 0.80, 0.25, 1.0)
-            字 = "[ok] official + custom panels are skinned" if 好 else "[..] checking skin coverage"
+            字 = 文案.取("外观.皮肤好") if 好 else 文案.取("外观.皮肤查")
             imgui.TextColored(色, 字)
-            imgui.TextDisabled(f"  custom-before={自研生效}  official-after={官方生效}  "
-                               f"witness button={官方.get('实测')} (expect {官方.get('期望')})")
-        imgui.TextDisabled(f"  FPS {fps:.1f} (acceptance line 55) | switches {self.切换次数} | "
-                           f"draws {self.绘制次数}")
+            imgui.TextDisabled(文案.格式化("外观.见证",
+                                           "  custom-before={自研}  official-after={官方}  "
+                                           "witness button={实测} (expect {期望})",
+                                           自研=自研生效, 官方=官方生效,
+                                           实测=官方.get("实测"), 期望=官方.get("期望")))
+        imgui.TextDisabled(文案.格式化("外观.指标",
+                                           "  FPS {帧率:.1f} (acceptance line 55) | switches {切换} | "
+                                           "draws {重绘}",
+                                           帧率=fps, 切换=self.切换次数, 重绘=self.绘制次数))
         imgui.Separator()
         imgui.TextDisabled(皮肤桥.界面状态行())
         if 皮肤桥.界面警告数():
             imgui.TextColored(imgui.Vec4(0.95, 0.45, 0.30, 1.0),
-                              f"[warn] style table skipped {皮肤桥.界面警告数()} bad key(s) - see terminal")
-        imgui.TextDisabled("CLI: --style <name> (same as --\u98ce\u683c) | your choice is remembered")
+                              文案.格式化("外观.坏键",
+                                              "[warn] style table skipped {n} bad key(s) - see terminal",
+                                              n=皮肤桥.界面警告数()))
+        imgui.TextDisabled(文案.取("外观.命令行"))
 
 
 # 启动器约定：模块里叫"面板类"的就是要实例化的面板
