@@ -184,12 +184,27 @@ def _画面板菜单() -> None:
     imgui.EndMenu()
 
 
+_语言按钮报过 = False
+
+
 def _画语言按钮() -> None:
     """顶栏那一行里的**一键切换**：中文模式显示 `EN`，英文模式显示 `中文`，点一下即切。"""
+    global _语言按钮报过
     if imgui.Button(文案.取("顶栏.切到英文" if 文案.当前语言 == 文案.中文 else "顶栏.切到中文")):
         文案.切换()
     if imgui.IsItemHovered():
         imgui.SetTooltip(文案.取("顶栏.语言提示"))
+    if not _语言按钮报过:
+        # ★ 一次取证：按钮真的被画进那一行了（量它自己的矩形，和验菜单同一招）
+        try:
+            尺寸 = imgui.GetItemRectSize()
+            位置 = imgui.GetItemRectMin()
+            if float(尺寸.x) > 0:
+                _语言按钮报过 = True
+                print(f"【菜单栏】语言按钮已画进顶栏：位置=({位置.x:.0f},{位置.y:.0f}) "
+                      f"尺寸={尺寸.x:.0f}×{尺寸.y:.0f}｜当前语言={文案.语言显示名()}", flush=True)
+        except Exception:                                                # noqa: BLE001
+            pass
 
 
 def 画菜单() -> None:
