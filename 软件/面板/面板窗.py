@@ -185,7 +185,9 @@ class 面板窗:
         self._要滚到 = ""                 # 菜单跳转：下一帧把这一段滚进视野
         self._实例: dict[str, object] = {}
         self._报过位置 = False
-        self._调试 = bool(_os.environ.get("面板窗_调试"))
+        self._调试 = bool(_os.environ.get("PANELS_DEBUG"))   # ASCII 名：中文环境变量 bash 传不进来
+        self._我们有焦点 = True          # 上一帧我们的窗口有没有焦点（决定要不要置顶）
+        self._上次置顶 = -999.0          # 上次抢焦点的时刻（限流用）
         面板注册表.确保状态文件()
         菜单栏.安装包装()
         安装版面探针()
@@ -228,6 +230,29 @@ class 面板窗:
         return False
 
     # ------------------------------------------------------------------
+    # 置顶：★ 这一小段是"整个区域看得见却点不动"的根因修复，改之前先读懂
+    #
+    #   ImGui 的显示层级 = "最后被聚焦的窗口在最前"，所以要让我们的窗口盖住官方 Inspector，
+    #   就得让自己靠前。但**每帧无脑 SetNextWindowFocus 会把点击取消掉**：
+    #   `FocusWindow(别的窗口)` 内部会 ClearActiveID()，于是
+    #     帧 N：用户点我们的【模型库】→ ActiveID 落到那一行
+    #     帧 N+1：我们给"另一个自己的窗口"（页签条/内容窗）抢焦点 → ActiveID 被清 → 点击作废
+    #   实测症状就是用户报的"inspector 点不了，panels 下面的模型库等等也点不了"。
+    #
+    #   所以规则是：**只在"焦点已经不在我们这边、鼠标没有按住、且距上次抢超过 0.5 秒"时**
+    #   才把置顶要回来；而且一帧只给一个窗口要。平时完全不动焦点，点击就不会被打断。
+    # ------------------------------------------------------------------
+    def _要置顶(self) -> bool:
+        try:
+            if self._我们有焦点:
+                return False
+            if imgui.IsAnyMouseDown():       # 有人正按着鼠标 → 绝不抢，免得取消他的操作
+                return False
+            return (float(imgui.GetTime()) - self._上次置顶) > 0.5
+        except Exception:                                                # noqa: BLE001
+            return False
+
+    # ------------------------------------------------------------------
     # 绘制（★ priority=0：排在官方 INTERNAL 之后，才能盖在官方 Inspector 内容上）
     # ------------------------------------------------------------------
     @messages.handler(priority=0)
@@ -245,11 +270,21 @@ class 面板窗:
             return False                    # 首帧还没有几何：只登记，不画
         try:
             self._实例 = {面板注册表._名字(p): p for p in 面板注册表.全部面板()}
-            实测 = self._画页签条(三D, 窗口宽)
-            if 面板注册表.面板窗可见():
-                实测内容 = self._画内容窗(三D, 窗口宽)
+            要置顶 = self._要置顶()
+            可见 = 面板注册表.面板窗可见()
+            # 一帧只给一个窗口要焦点：可见时给内容窗（它盖着官方面板），否则给页签条
+            焦点给页签条 = 要置顶 and not 可见
+            焦点给内容窗 = 要置顶 and 可见
+            实测 = self._画页签条(三D, 窗口宽, 焦点给页签条)
+            if 可见:
+                实测内容 = self._画内容窗(三D, 窗口宽, 焦点给内容窗)
             else:
                 实测内容 = None
+            if 要置顶:
+                self._上次置顶 = float(imgui.GetTime())
+                self._置顶次数 = getattr(self, "_置顶次数", 0) + 1
+                if self._调试:
+                    print(f"【面板窗】置顶第 {self._置顶次数} 次（帧 {self._帧}）", flush=True)
             if not self._报过位置:
                 self._报过位置 = True
                 说 = "【面板窗】位置（我们算的／窗口自己量的）："
@@ -265,7 +300,7 @@ class 面板窗:
         return False
 
     # -- 假页签 --------------------------------------------------------
-    def _画页签条(self, 三D, 窗口宽: float):
+    def _画页签条(self, 三D, 窗口宽: float, 要焦点: bool = False):
         """整条页签栏：`Inspector`（官方内容） + `Panels`（我们的），点哪个切哪个。"""
         x, y, w, h = 算页签条矩形(三D, 窗口宽)
         if w <= 0:
@@ -283,13 +318,16 @@ class 面板窗:
         try:
             imgui.SetNextWindowPos(imgui.Vec2(x, y), imgui.Cond.Always.value)
             imgui.SetNextWindowSize(imgui.Vec2(w, h), imgui.Cond.Always.value)
-            imgui.SetNextWindowFocus()          # ★ 顶到最前（否则会被官方页签栏盖住）
+            if 要焦点:
+                imgui.SetNextWindowFocus()      # 只在必要时（见 _要置顶）
             展开, _ = imgui.Begin("##面板窗页签条", None, int(面板窗.窗口标志))
             实测 = None
             try:
                 if 展开:
                     p = imgui.GetWindowPos()
-                    实测 = (round(p.x), round(p.y), 可见, bool(imgui.IsWindowFocused()))
+                    焦点 = bool(imgui.IsWindowFocused())
+                    self._我们有焦点 = 焦点
+                    实测 = (round(p.x), round(p.y), 可见, 焦点)
                     # 格 0：官方 Inspector —— 选中态 = 我们的窗口关着
                     if imgui.Selectable("Inspector##官方页签格", not 可见, 0,
                                         imgui.Vec2(max(8.0, 格0[2] - 2.0), max(8.0, h - 4.0))):
@@ -307,22 +345,24 @@ class 面板窗:
         return 实测
 
     # -- 内容窗 --------------------------------------------------------
-    def _画内容窗(self, 三D, 窗口宽: float):
+    def _画内容窗(self, 三D, 窗口宽: float, 要焦点: bool = False):
         x, y, w, h = 算面板窗矩形(三D, 窗口宽)
         if w <= 0 or h <= 0:
             return None
         名单 = 面板注册表.面板顺序()
         imgui.SetNextWindowPos(imgui.Vec2(x, y), imgui.Cond.Always.value)
         imgui.SetNextWindowSize(imgui.Vec2(w, h), imgui.Cond.Always.value)
-        imgui.SetNextWindowFocus()              # ★ 顶到最前（盖住官方 Inspector 内容）
+        if 要焦点:
+            imgui.SetNextWindowFocus()          # 只在必要时（见 _要置顶）
         实测 = None
         展开, _ = imgui.Begin("##面板窗", None, int(面板窗.窗口标志))
         try:
             if 展开:
                 p = imgui.GetWindowPos()
                 s = imgui.GetWindowSize()
-                实测 = (round(p.x), round(p.y), round(s.x), round(s.y),
-                        bool(imgui.IsWindowFocused()))
+                焦点 = bool(imgui.IsWindowFocused())
+                self._我们有焦点 = self._我们有焦点 or 焦点
+                实测 = (round(p.x), round(p.y), round(s.x), round(s.y), 焦点)
             if not 展开:
                 return 实测
             self._画标题行(名单)
