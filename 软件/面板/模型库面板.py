@@ -69,6 +69,7 @@ import 模型桥                                                        # noqa: 
 from 模型桥 import (换模型命令, 模型状态, 项目状态, 读取模型库,      # noqa: E402
                     后台选择器, 空场景路径, 绝对路径, 模型目录)
 
+import 文案
 import 面板注册表                                                      # noqa: E402
 import 界面文字                                                        # noqa: E402
 
@@ -181,7 +182,7 @@ class 模型库面板:
         # ★ 这条只有在【侧栏整个不可用】时才会走到：它自己开一个不可关闭的窗口兜底
         # ★ 不传 p_open（第二项为 None）→ ImGui 不画关闭按钮 → 没有 ×
         #   （这是刻意的：见类文档 ②）
-        展开, _ = imgui.Begin("Model library", None, 0)
+        展开, _ = imgui.Begin(文案.取("模型库.标题"), None, 0)
         try:
             if not 展开:
                 return False
@@ -237,7 +238,7 @@ class 模型库面板:
             imgui.TextColored(绿(), self._界面模型名())
             if self.自由度:
                 imgui.SameLine()
-                imgui.TextDisabled(f"({self.自由度} axes)")
+                imgui.TextDisabled(文案.格式化("模型库.轴数", "({n} axes)", n=self.自由度))
         imgui.TextDisabled("  " + self._界面状态())
         imgui.Separator()
 
@@ -248,33 +249,39 @@ class 模型库面板:
         if self.当前项目:
             imgui.TextColored(绿(), 界面文字.英文(self.当前项目))
         else:
-            imgui.TextColored(灰(), "(none - no algorithms loaded)")
+            imgui.TextColored(灰(), 文案.取("模型库.无算法"))
         # 算法列表：名字 + 版本。用英文名（插件自己声明的 `英文名`），没有就查术语表。
         if self.算法列表:
-            imgui.TextDisabled(f"  Algorithms ({len(self.算法列表)}):")
+            imgui.TextDisabled(文案.格式化("模型库.项目算法", "  Algorithms ({n}):",
+                                                  n=len(self.算法列表)))
             for a in self.算法列表:
                 名 = str(a.get("名称", "?"))
                 英文 = str(a.get("英文名", "") or "") or 界面文字.英文(名)
                 版 = str(a.get("版本", "-"))
                 参数 = a.get("参数") or {}
-                后缀 = f"  ({len(参数)} params)" if 参数 else ""
-                imgui.TextDisabled(f"    · {界面文字.安全(英文)} v{版}{后缀}")
+                后缀 = "  " + 文案.格式化("模型库.参数数", "({n} params)", n=len(参数)) if 参数 else ""
+                imgui.TextDisabled(文案.格式化("模型库.算法行", "    · {名} v{版}{后缀}",
+                                                 名=文案.状态(英文), 版=版, 后缀=后缀))
         else:
-            imgui.TextDisabled("  Algorithms (0): none for this model")
-            imgui.TextDisabled("    -> add a project file (see terminal for the folder name)")
+            imgui.TextDisabled(文案.取("模型库.当前项目无算法"))
+            imgui.TextDisabled(文案.取("模型库.加项目"))
             self._提醒项目说明()
         # 装配报告里如果有"被跳过"的算法，就在面板上提醒一句（细节在终端）
         跳过数 = sum(1 for 行 in self.装配报告 if str(行).startswith("–"))
         if 跳过数:
-            imgui.TextColored(黄(), f"  {跳过数} algorithm(s) skipped (model incompatible)")
-            imgui.TextDisabled("    details printed in the terminal")
+            imgui.TextColored(黄(), 文案.格式化("模型库.跳过算法",
+                                              "  {n} algorithm(s) skipped (model incompatible)",
+                                              n=跳过数))
+            imgui.TextDisabled(文案.取("模型库.跳过详情"))
         imgui.Separator()
 
         # ---- 机械臂列表 ----
-        imgui.TextDisabled(f"Model library ({len(self.模型列表)} arms; click to switch)")
+        imgui.TextDisabled(文案.格式化("模型库.列表标头",
+                                            "Model library ({n} arms; click to switch)",
+                                            n=len(self.模型列表)))
         if not self.模型列表:
-            imgui.TextColored(橙(), "  No usable arms in the library.")
-            imgui.TextDisabled("  Run the model import tool (command printed in terminal).")
+            imgui.TextColored(橙(), 文案.取("模型库.空库"))
+            imgui.TextDisabled(文案.取("模型库.空库提示"))
             self._提醒导入命令()
         for m in self.模型列表:
             路径 = 绝对路径(m.get("扭矩模型", ""))
@@ -289,46 +296,49 @@ class 模型库面板:
                 轴 = int(m.get("自由度", 0) or 0)
             except Exception:                                            # noqa: BLE001
                 轴 = 0
-            imgui.TextDisabled(f"{轴} axes | {界面文字.安全(m.get('许可', '?'))}")
+            imgui.TextDisabled(文案.格式化("模型库.许可行", "{轴} axes | {许可}",
+                                             轴=轴, 许可=文案.状态(m.get("许可", "?"))))
 
         imgui.Separator()
 
         # ---- 操作按钮 ----
         if self.选择器.进行中:
             imgui.BeginDisabled()
-        if imgui.Button("Import model file..."):
+        if imgui.Button(文案.取("模型库.导入")):
             self.选择器.开始(起始目录=模型目录)
         if self.选择器.进行中:
             imgui.EndDisabled()
             imgui.SameLine()
-            imgui.TextColored(黄(), "(pick a file in the system dialog...)")
+            imgui.TextColored(黄(), 文案.取("模型库.导入中"))
         else:
             imgui.SameLine()
-        if imgui.Button("Empty scene"):
+        if imgui.Button(文案.取("模型库.空场景")):
             self._发命令(空场景路径, "空场景（无机械臂）")
         imgui.SameLine()
-        if imgui.Button("Reload current"):
+        if imgui.Button(文案.取("模型库.重载")):
             if self.当前路径:
                 self._发命令(self.当前路径, self.当前显示名)
         imgui.SameLine()
-        if imgui.Button("Refresh list"):
+        if imgui.Button(文案.取("模型库.刷新")):
             self._刷新列表()
 
         # ---- 手输路径（兜底）----
         imgui.SetNextItemWidth(340.0)
         变了, self.手动路径 = imgui.InputText("##manual path", self.手动路径)
         imgui.SameLine()
-        if imgui.Button("Load this path"):
+        if imgui.Button(文案.取("模型库.走这个路径")):
             if self.手动路径.strip():
                 self._发命令(self.手动路径.strip(), _os.path.basename(self.手动路径.strip()))
         if 变了 and self.手动路径 and not _os.path.exists(self.手动路径.strip()):
-            imgui.TextColored(橙(), "  path not found")
+            imgui.TextColored(橙(), 文案.取("模型库.路径不存在"))
 
         imgui.Separator()
-        imgui.TextDisabled("You can also drag an .xml / .mjb / .mjz FILE into the window (built in)")
-        imgui.TextDisabled("Note: dropping a FOLDER does not work - the loader only accepts files")
-        imgui.TextDisabled(f"frames={self.收帧}  switches={self.切换次数}  "
-                           f"draw={self.绘制次数}  lib={len(self.模型列表)}")
+        imgui.TextDisabled(文案.取("模型库.拖拽提示"))
+        imgui.TextDisabled(文案.取("模型库.拖拽注意"))
+        imgui.TextDisabled(文案.格式化("模型库.统计",
+                                           "frames={帧}  switches={切换}  draw={绘制}  lib={库}",
+                                           帧=self.收帧, 切换=self.切换次数,
+                                           绘制=self.绘制次数, 库=len(self.模型列表)))
 
     def _提醒项目说明(self) -> None:
         """没挂算法时，在终端说明"算法从哪来"（面板上画不了中文）。"""

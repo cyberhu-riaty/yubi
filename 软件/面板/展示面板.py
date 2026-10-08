@@ -47,6 +47,7 @@ if _外壳目录 not in _sys.path:
 from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E402
 from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
 
+import 文案
 import 面板注册表                                                      # noqa: E402
 import 重力桥                                                          # noqa: E402
 from 重力桥 import 发布器, 重力状态                                     # noqa: E402
@@ -122,7 +123,7 @@ class 展示面板:
             imgui.SetNextWindowSize(imgui.Vec2(*初始大小), imgui.Cond.FirstUseEver.value)
         # NoCollapse：这个窗口小，被折叠起来就只剩标题栏（用户会以为坏了）
         # 不传 p_open（第二项 None）→ 没有 ×（刻意的，见类文档）
-        展开, _ = imgui.Begin("Display", None, imgui.WindowFlags.NoCollapse)
+        展开, _ = imgui.Begin(文案.取("展示.标题"), None, imgui.WindowFlags.NoCollapse)
         面板注册表.记录(self)
         try:
             if not 展开:
@@ -140,7 +141,7 @@ class 展示面板:
     def _画内容(self) -> None:
         # 面板上只能 ASCII（见文件头）。中文对照：
         #   "Load gravity" = 加载重力
-        变了, 新值 = imgui.Checkbox("Load gravity", self.加载重力)
+        变了, 新值 = imgui.Checkbox(文案.取("展示.加载重力"), self.加载重力)
         if 变了:
             self.加载重力 = bool(新值)
             重力桥.设界面重力(self.加载重力)      # ★ 先改共享状态（别的面板读它）
@@ -150,12 +151,12 @@ class 展示面板:
                 self._发布.也许发布(self.加载重力, _time.perf_counter() + 1e9)
 
         if self.加载重力:
-            imgui.TextDisabled("gravity acts - the model can move")
-            imgui.TextDisabled("(no algorithm? it just falls)")
+            imgui.TextDisabled(文案.取("展示.重力生效"))
+            imgui.TextDisabled(文案.取("展示.没算法"))
         else:
-            imgui.TextDisabled("frozen at the default pose")
-            imgui.TextDisabled("(no physics, no gravity)")
-        imgui.TextDisabled("check it to let gravity act")
+            imgui.TextDisabled(文案.取("展示.冻结中"))
+            imgui.TextDisabled(文案.取("展示.无物理"))
+        imgui.TextDisabled(文案.取("展示.勾选提示"))
 
 
 # 启动器约定：模块里叫“面板类”的就是要实例化的面板

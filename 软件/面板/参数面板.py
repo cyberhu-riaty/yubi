@@ -36,6 +36,7 @@ from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E40
 from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
 from 参数桥 import 参数消息, 参数表消息, 采集可调参数                  # noqa: E402
 
+import 文案
 import 面板注册表                                                      # noqa: E402
 import 界面文字                                                        # noqa: E402
 
@@ -104,7 +105,7 @@ class 参数面板:
         self.绘制次数 += 1
         # ★ 第二项传 self.可见（= ImGui 的 p_open）：传了它右上角才有 × 关闭按钮。
         #   原来传 None → ImGui 不画关闭按钮 → 窗口关不掉。
-        展开, self.可见 = imgui.Begin("Controller params", self.可见, 0)
+        展开, self.可见 = imgui.Begin(文案.取("参数.标题"), self.可见, 0)
         面板注册表.记录(self)
         try:
             if not 展开:
@@ -127,9 +128,9 @@ class 参数面板:
             # ★ 面板上只画 ASCII：官方 UI 字体没有中文字形（画中文会变成 ?）。
             #   而"可调参数 / 值 / 范围"这些**键名本身就是中文**，所以完整的示例
             #   放到终端打印（终端用系统字体，中文正常），面板只给一句英文提示。
-            imgui.TextDisabled("No tunable parameters. Add to your plugin:")
+            imgui.TextDisabled(文案.取("参数.无可调"))
             imgui.TextDisabled("    def <tunable-params method>(self): return {...}")
-            imgui.TextDisabled("    (the method/key names are non-ASCII; full example printed in terminal)")
+            imgui.TextDisabled("    " + 文案.取("参数.说明"))
             if not self._已提醒示例:
                 self._已提醒示例 = True
                 print("【参数】插件要出现滑杆，就在插件里加这个方法（面板上画不了中文，故在此显示）：\n"
@@ -137,7 +138,7 @@ class 参数面板:
                       '            return {"KP": {"值": self.KP, "范围": (10.0, 20000.0)},\n'
                       '                    "KD": {"值": self.KD, "范围": (0.0, 500.0)}}', flush=True)
             imgui.Separator()
-            imgui.TextDisabled(f"frames={self.收帧}  changes sent={self.发出改动}")
+            imgui.TextDisabled(文案.格式化("参数.统计", "frames={帧}  changes sent={改动}", 帧=self.收帧, 改动=self.发出改动))
             return
 
         改过 = False
@@ -168,7 +169,7 @@ class 参数面板:
             self._发送(self.待发送)
 
         imgui.Separator()
-        if imgui.Button("Reset"):
+        if imgui.Button(文案.取("参数.重置")):
             self.待发送 = {全名: v for 全名, v in self.初值.items() if 全名 in self.参数}
             for 全名, v in self.待发送.items():
                 self.参数[全名]["值"] = v

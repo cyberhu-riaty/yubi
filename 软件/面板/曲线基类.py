@@ -20,6 +20,7 @@ from mujoco.experimental.dear_imgui import dear_imgui as imgui
 from mujoco.experimental.implot import implot
 from mujoco.experimental.studio import messages
 
+import 文案
 import 面板注册表          # 统一管理"关闭 / 记忆 / F9 恢复"（见 面板注册表.py）
 import 界面文字            # 面板上只能画 ASCII（官方 UI 字体没有中文字形）
 
@@ -145,13 +146,13 @@ class 曲线面板基类:
             return
         self.绘制次数 += 1
         # 公共控制条
-        if imgui.Button("Clear"):
+        if imgui.Button(文案.取("曲线.清空")):
             self.清空()
         imgui.SameLine()
-        _, self.暂停 = imgui.Checkbox("Pause", self.暂停)
+        _, self.暂停 = imgui.Checkbox(文案.取("曲线.暂停"), self.暂停)
         imgui.SameLine()
         imgui.SetNextItemWidth(120.0)
-        _, self.窗口时长 = imgui.SliderFloat("window (s)", float(self.窗口时长), 2.0, 60.0)
+        _, self.窗口时长 = imgui.SliderFloat(文案.取("曲线.时间窗"), float(self.窗口时长), 2.0, 60.0)
         imgui.SameLine()
 
         # 子类自己的控件
@@ -159,7 +160,7 @@ class 曲线面板基类:
 
         if not self.曲线:
             imgui.Separator()
-            imgui.TextDisabled("No data yet…")
+            imgui.TextDisabled(文案.取("曲线.暂无数据"))
             return
 
         # 曲线开关 + 当前值
@@ -175,7 +176,7 @@ class 曲线面板基类:
         imgui.Separator()
         曲线列表 = [(名, 线) for 名, 线 in self.曲线.items() if 线["显示"] and len(线["t"]) >= 2]
         if not 曲线列表:
-            imgui.TextDisabled("Waiting for data…")
+            imgui.TextDisabled(文案.取("曲线.等待数据"))
             return
         if implot.BeginPlot(f"##{self.标题()}", imgui.Vec2(-1.0, -1.0)):
             implot.SetupAxes("time (s)", "value")

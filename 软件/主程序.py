@@ -33,7 +33,8 @@ sys.path.insert(0, os.path.join(本目录, "plugins"))
 
 import 插件系统 as 插件框架            # noqa: E402  （我们自己的兼容层，唯一碰官方 API 的地方）
 import 启动                            # noqa: E402
-import 皮肤桥                          # noqa: E402  （面板外观换肤：风格表/热切换）
+import 皮肤桥
+import 文案                          # noqa: E402  （面板外观换肤：风格表/热切换）
 
 # ============================================================================
 # 【算法装配】—— 方案 C：算法不再写死在这个文件里，改由「项目」声明
@@ -194,6 +195,8 @@ def main() -> int:
     ap.add_argument("--模型", default=None, help="MJCF/XML 模型路径（默认：上次用过的，首次为空场景）")
     ap.add_argument("--空场景", action="store_true",
                     help="强制从空白界面启动（不加载任何机械臂，并覆盖'上次的模型'记忆）")
+    ap.add_argument("--语言", "--language", default="", dest="语言",
+                    help="界面语言：zh（中文，默认）/ en（English）。也可以随时点顶栏那个切换按钮")
     ap.add_argument("--标题", default="小软件 · 机器人仿真（基于 MuJoCo）", help="窗口标题")
     ap.add_argument("--宽", type=int, default=1200)
     ap.add_argument("--高", type=int, default=800)
@@ -315,6 +318,10 @@ def main() -> int:
         return 2
     print(f"【模型】{args.模型}")
     print(f"        （{原因}）")
+    语言, 语言来源 = 文案.决定启动语言(getattr(args, "语言", "") or "")
+    print(f"【语言】{文案.语言显示名(语言)}（{语言来源}）"
+          f"　切语言：顶栏那个 {文案.取('顶栏.切到英文') if 语言 == 文案.中文 else 文案.取('顶栏.切到中文')} 按钮，"
+          f"或菜单 Appearance → {文案.取('顶栏.语言')}，或 --语言 zh|en")
     print(f"【外观】{皮肤桥.显示名(风格)}（{风格来源}）")
     print(f"        {皮肤桥.一句话(风格) if 风格 != 皮肤桥.关闭 else '界面就是官方主题的原样'}")
     print(f"        换风格：顶部菜单【Appearance】点一下，或按 F10 轮换，或 --风格 xxx")

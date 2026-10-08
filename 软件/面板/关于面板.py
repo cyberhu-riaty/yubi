@@ -27,6 +27,7 @@ if _外壳目录 not in _sys.path:
 from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E402
 from mujoco.experimental.studio import messages                       # noqa: E402
 
+import 文案
 import 面板注册表                                                      # noqa: E402
 import 界面文字                                                        # noqa: E402
 
@@ -77,7 +78,7 @@ class 关于面板:
         self.绘制次数 += 1
         # ★ 第二项传 self.可见（= ImGui 的 p_open）：传了它右上角才有 × 关闭按钮。
         #   原来传 None → ImGui 不画关闭按钮 → 窗口关不掉。
-        展开, self.可见 = imgui.Begin("About", self.可见, 0)
+        展开, self.可见 = imgui.Begin(文案.取("关于.标题"), self.可见, 0)
         面板注册表.记录(self)
         try:
             if not 展开:
@@ -107,13 +108,13 @@ class 关于面板:
         ig.TextDisabled(f"version {版本}   built {构建日期}")
         ig.Separator()
 
-        ig.Text("Runtime")
+        ig.Text(文案.取("关于.运行环境"))
         ig.BulletText(f"MuJoCo {getattr(mujoco, '__version__', '?')}")
         ig.BulletText(f"Python {platform.python_version()} ({platform.machine()})")
-        ig.BulletText(f"physics backend: MuJoCo (CPU), renderer: Filament")
+        ig.BulletText(f文案.取("关于.后端"))
         ig.Separator()
 
-        ig.Text("Loaded control plugins")
+        ig.Text(文案.取("关于.已加载算法"))
         if self.插件清单:
             for 名, 版 in self.插件清单:
                 ig.BulletText(f"{名}  v{版}")
@@ -121,15 +122,15 @@ class 关于面板:
             ig.TextDisabled("  (none)")
         ig.Separator()
 
-        ig.Text("Panels")
+        ig.Text(文案.取("关于.面板"))
         ig.TextDisabled("  " + (", ".join(self.面板清单) if self.面板清单 else "(none)"))
         ig.Separator()
 
-        ig.Text("Model")
+        ig.Text(文案.取("关于.模型"))
         ig.TextDisabled(f"  {_os.path.basename(self.模型) if self.模型 else '?'}")
 
         ig.Separator()
-        ig.TextColored(暗, "Notices")
+        ig.TextColored(暗, 文案.取("关于.声明"))
         ig.TextWrapped(
             "This software is an independent project. It is NOT affiliated with, "
             "endorsed by, or sponsored by Google DeepMind."

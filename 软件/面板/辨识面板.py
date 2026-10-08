@@ -30,6 +30,7 @@ from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E40
 from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
 from 辨识桥 import 辨识命令, 辨识状态                                  # noqa: E402
 
+import 文案
 import 面板注册表
 import 界面文字                                                      # noqa: E402
 
@@ -106,7 +107,7 @@ class 辨识面板:
         self.绘制次数 += 1
         # ★ 第二项传 self.可见（= ImGui 的 p_open）：传了它右上角才有 × 关闭按钮。
         #   原来传 None → ImGui 不画关闭按钮 → 窗口关不掉。
-        展开, self.可见 = imgui.Begin("System identification", self.可见, 0)
+        展开, self.可见 = imgui.Begin(文案.取("辨识.标题"), self.可见, 0)
         面板注册表.记录(self)
         try:
             if not 展开:
@@ -130,16 +131,16 @@ class 辨识面板:
         # ---- 按钮行 ----
         if 忙:
             imgui.BeginDisabled()
-        if imgui.Button("1. Excitation sample"):
+        if imgui.Button(文案.取("辨识.第一步")):
             self._发命令("采样")
         imgui.SameLine()
-        if imgui.Button("2. Identify"):
+        if imgui.Button(文案.取("辨识.第二步")):
             self._发命令("辨识")
         if 忙:
             imgui.EndDisabled()
         imgui.SameLine()
         imgui.SetNextItemWidth(90.0)
-        _, self.采样时长 = imgui.SliderFloat("sample (s)", float(self.采样时长), 0.5, 3.0)
+        _, self.采样时长 = imgui.SliderFloat(文案.取("辨识.采样时长"), float(self.采样时长), 0.5, 3.0)
 
         # ---- 状态行 ----
         if 忙:
@@ -153,7 +154,7 @@ class 辨识面板:
         # ---- 结果表 ----
         if self.状态.结果:
             imgui.Separator()
-            imgui.Text("Result (name / nominal / estimated / change)")
+            imgui.Text(文案.取("辨识.结果表头"))
             for 名, 标称, 估, 误 in self.状态.结果:
                 imgui.BulletText(f"{名}:  {标称:.4g} -> {估:.4g}   ({误:+.1f}%)")
 
@@ -167,13 +168,13 @@ class 辨识面板:
             imgui.TextColored(imgui.Vec4(0.30, 0.85, 0.40, 1.0) if 改善 > 1.5
                               else imgui.Vec4(0.95, 0.45, 0.30, 1.0),
                               f"({改善:.1f}x better)")
-            imgui.TextDisabled("residual down = params fit THIS data better")
-            imgui.TextDisabled("(it does NOT prove they equal the real robot)")
+            imgui.TextDisabled(文案.取("辨识.残差说明一"))
+            imgui.TextDisabled(文案.取("辨识.残差说明二"))
 
         # ---- 日志 ----
         if self.状态.日志:
             imgui.Separator()
-            imgui.TextDisabled("log (latest first)")
+            imgui.TextDisabled(文案.取("辨识.日志"))
             self._画日志()
 
         imgui.Separator()

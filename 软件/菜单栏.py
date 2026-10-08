@@ -31,13 +31,66 @@ from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E40
 
 import 皮肤桥                                                         # noqa: E402
 import 面板注册表                                                     # noqa: E402
+import 文案                                                           # noqa: E402
 
 # 官方三套基底主题（皮肤关掉时用它兜底）。键名与 皮肤桥._主题表 一致。
 基底主题表 = (("LIGHT", "Light"), ("DARK", "Dark"), ("CLASSIC", "Classic"))
 
+# ★ 官方**用 Python 画**的顶栏字符串 → 文案键。只有这 11 条能翻（其余在 C++ 里，翻不了）。
+#   做法：包装 imgui.BeginMenu / MenuItem 查这张表，**不复制官方代码** —— 官方升级也不怕。
+官方顶栏词表 = {
+    "File": "官方.File", "Simulation": "官方.Simulation", "View": "官方.View", "Help": "官方.Help",
+    "Quit": "官方.Quit", "Save Config": "官方.Save Config", "Reset Config": "官方.Reset Config",
+    "Hide Toolbar": "官方.Hide Toolbar", "Show Toolbar": "官方.Show Toolbar",
+    "Info": "官方.Info", "Profiler": "官方.Profiler",
+}
+
 已安装 = False
 _原结束菜单栏 = None
 _出错次数 = 0
+_翻译已装 = False
+
+
+def 安装官方顶栏翻译() -> None:
+    """包装 `imgui.BeginMenu` / `imgui.MenuItem`：把官方顶栏那 11 条换成当前语言。
+
+    ★ 为什么用包装而不是改官方文件：官方在 site-packages 里（`.venv` 是"可重建、不进 git"的），
+      改它等于每次重建环境都要重来；包装只在我们进程里生效，官方升级也不受影响。
+    ★ 只翻译 `官方顶栏词表` 里列出的字符串 —— 我们自己菜单传的是中文/自定义标签，不会误伤。
+      字符串里的 `##`（ImGui 的隐藏 ID）要原样保留。
+    """
+    global _翻译已装
+    if _翻译已装:
+        return
+
+    def 拆(标签: str) -> tuple[str, str]:
+        i = 标签.find("##")
+        return (标签, "") if i < 0 else (标签[:i], 标签[i:])
+
+    def 翻译(标签: str) -> str:
+        正文, 尾巴 = 拆(str(标签))
+        键 = 官方顶栏词表.get(正文)
+        if 键 is None:
+            return 标签
+        return 文案.取(键, 正文) + 尾巴
+
+    try:
+        原BeginMenu = imgui.BeginMenu
+
+        def 包BeginMenu(标签, *a, **k):
+            return 原BeginMenu(翻译(标签), *a, **k)
+
+        imgui.BeginMenu = 包BeginMenu
+
+        原MenuItem = imgui.MenuItem
+
+        def 包MenuItem(标签, *a, **k):
+            return 原MenuItem(翻译(标签), *a, **k)
+
+        imgui.MenuItem = 包MenuItem
+        _翻译已装 = True
+    except Exception as 异常:                                            # noqa: BLE001
+        print(f"⚠ 菜单栏：无法包装 BeginMenu/MenuItem（官方顶栏保持英文）：{异常}")
 
 
 def _有界面上下文() -> bool:
@@ -92,6 +145,12 @@ def _画外观菜单() -> None:
             if not 选中:
                 皮肤桥.设风格(键)
     imgui.Separator()
+    if imgui.BeginMenu(f"  {文案.取('顶栏.语言')}"):
+        for 语 in (文案.中文, 文案.英文):
+            if imgui.MenuItem(f"    {文案.语言名[语]}", "", 文案.当前语言 == 语):
+                文案.设语言(语)
+        imgui.EndMenu()
+    imgui.Separator()
     imgui.TextDisabled("  base theme       (used when the skin is off)")
     for 键, 显示, 选中 in 数据["基底"]:
         if imgui.MenuItem(f"    {显示}", "", 选中):
@@ -125,9 +184,23 @@ def _画面板菜单() -> None:
     imgui.EndMenu()
 
 
+def _画语言按钮() -> None:
+    """顶栏那一行里的**一键切换**：中文模式显示 `EN`，英文模式显示 `中文`，点一下即切。"""
+    if imgui.Button(文案.取("顶栏.切到英文" if 文案.当前语言 == 文案.中文 else "顶栏.切到中文")):
+        文案.切换()
+    if imgui.IsItemHovered():
+        imgui.SetTooltip(文案.取("顶栏.语言提示"))
+
+
 def 画菜单() -> None:
-    """把两个菜单追加到官方菜单栏右侧（内部函数；由 安装包装 的包装体调用）。"""
+    """把菜单追加到官方菜单栏右侧（内部函数；由 安装包装 的包装体调用）。"""
     global _出错次数
+    try:
+        _画语言按钮()          # ★ 一键切换：就在 File/Help/Appearance 那一行
+    except Exception as 异常:                                            # noqa: BLE001
+        _出错次数 += 1
+        if _出错次数 <= 2:
+            print(f"⚠ 菜单栏：语言按钮绘制出错（已隔离）：{type(异常).__name__}: {异常}")
     try:
         _画外观菜单()
     except Exception as 异常:                                            # noqa: BLE001
@@ -168,6 +241,7 @@ def 安装包装() -> None:
 
     try:
         imgui.EndMainMenuBar = 包装
+        安装官方顶栏翻译()
         已安装 = True
         print("【菜单栏】Appearance / Panels 已挂进官方菜单栏（与 File / Help 同一行）", flush=True)
     except Exception as 异常:                                            # noqa: BLE001

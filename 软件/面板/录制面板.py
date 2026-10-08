@@ -40,6 +40,7 @@ from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E4
 #   → 按 Start / Stop / Replay **毫无反应，而且不报任何错**
 #     （实测证据：快照确实到了仿真侧，但终端状态一直"空闲"、连"出错隔离"警告都没有）。
 #   修法：统一用 `plugins.数据录制` 这个规范名字 import —— 和外壳完全一致，类才是同一个。
+import 文案                                                          # noqa: E402
 from 录制桥 import 录制命令                                          # noqa: E402
 from 曲线基类 import 曲线面板基类                                       # noqa: E402
 from 指标桥 import 指标消息                                             # noqa: E402
@@ -83,30 +84,30 @@ class 录制面板(曲线面板基类):
 
     # ------------------------------------------------------------------
     def 顶部控件(self) -> None:
-        if imgui.Button("Start"):
+        if imgui.Button(文案.取("录制.开始")):
             self.本地状态 = "录制中"
             self._发命令("开始")
         imgui.SameLine()
-        if imgui.Button("Stop and save"):
+        if imgui.Button(文案.取("录制.停止保存")):
             self.本地状态 = "空闲"
             self._发命令("停止")
         imgui.SameLine()
-        if imgui.Button("Replay"):
+        if imgui.Button(文案.取("录制.回放")):
             self._发命令("回放")
         imgui.SameLine()
         imgui.SetNextItemWidth(90.0)
-        _, self.频率 = imgui.SliderFloat("Hz", float(self.频率), 10.0, 500.0)
+        _, self.频率 = imgui.SliderFloat(文案.取("录制.频率"), float(self.频率), 10.0, 500.0)
         imgui.SameLine()
         imgui.SetNextItemWidth(160.0)
-        _, self.备注 = imgui.InputText("note", self.备注)
+        _, self.备注 = imgui.InputText(文案.取("录制.备注"), self.备注)
 
     def _画内容(self) -> None:
         super()._画内容()
         imgui.Separator()
-        imgui.TextDisabled(f"state={界面文字.英文(self.本地状态)}   "
+        imgui.TextDisabled(文案.格式化("录制.状态", "state={值}", 值=文案.状态(self.本地状态)) + "   "
                            f"last command={界面文字.英文(self.已发命令) or '-'}   "
                            f"sent={self.命令次数}")
-        imgui.TextDisabled("files -> CSV + .meta.json (exact path printed in terminal)")
+        imgui.TextDisabled(文案.取("录制.产物说明"))
 
     # ------------------------------------------------------------------
     # 录制插件把状态当指标上报（"已录行数"），这里接住画成曲线
