@@ -68,7 +68,8 @@ from mujoco.experimental.dear_imgui import dear_imgui as imgui
 名册 = ("模型库", "算法", "控制器参数", "参数辨识", "实时监控", "数据录制", "关于")
 
 # 状态文件：<包根>/输出/面板.json（版本 3）
-#   ★ 只记"面板窗开没开 / 哪些段展开着 / 上次跳到哪一段"，**不记"面板被关掉"**（坑 ②）。
+#   ★ 只记"哪些段展开着 / 上次跳到哪一段"；**窗口开没开、面板有没有被关掉，一律不落盘**
+#     （坑 ②：一旦落盘，用户下次启动就会看到"面板全不见了"）。
 _面板目录 = os.path.dirname(os.path.abspath(__file__))
 _包根 = os.path.dirname(os.path.dirname(_面板目录))
 状态文件 = os.path.join(_包根, "输出", "面板.json")
@@ -160,11 +161,12 @@ def _读取() -> None:
         return
     if not isinstance(数据, dict):
         return
-    # 窗口开关：v3 用「面板窗可见」；v2 的「标签条可见」、v1 的「容器可见」都是同义的旧名
-    for 键 in ("面板窗可见", "标签条可见", "容器可见"):
-        if 键 in 数据:
-            _面板窗可见 = bool(数据.get(键, True))
-            break
+    # ★ 窗口开关**故意不读**：启动一律"显示面板窗"。
+    #   理由就是文件头【坑 ②】那条教训 —— 一旦把"面板被关掉"持久化，用户下次开软件
+    #   就会看到"面板全不见了、按 F9 也没反应"（2026-10-06 实测又踩了一次：
+    #   取证脚本把它设成关，用户重启后红框位置空空如也）。
+    #   所以 `面板窗可见` 只是**本次运行**的开关，不落盘。
+    _面板窗可见 = True
     # 展开的段：v3 用「展开的段」；v2 的「钉住」语义相同（常驻展开），照收
     段 = 数据.get("展开的段")
     if not isinstance(段, dict):
@@ -201,7 +203,6 @@ def _保存() -> None:
         os.makedirs(os.path.dirname(状态文件), exist_ok=True)
         with open(状态文件, "w", encoding="utf-8") as f:
             json.dump({"版本": 状态文件版本,
-                       "面板窗可见": _面板窗可见,
                        "展开的段": _展开的段,
                        "上次展开": _上次展开},
                       f, ensure_ascii=False, indent=2, sort_keys=True)

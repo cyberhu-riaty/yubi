@@ -150,10 +150,12 @@ class 面板窗:
     # ★ 它不进自己的名册（名册里是那 7 个面板），也不受"窗口开关"连坐（它就是被开关的那个）
     独立窗口 = True
 
+    # ★ 这里**故意不加** NoBringToFrontOnFocus：我们的窗口必须盖在官方 Inspector 内容之上，
+    #   而 ImGui 的显示层级 = "最后被聚焦的窗口在最前"。所以每帧 Begin 之前显式
+    #   `SetNextWindowFocus()` 把它顶到最前（加了 NoBringToFrontOnFocus 反而会阻止这件事）。
     窗口标志 = (int(imgui.WindowFlags.NoTitleBar) | int(imgui.WindowFlags.NoResize)
               | int(imgui.WindowFlags.NoMove) | int(imgui.WindowFlags.NoCollapse)
-              | int(imgui.WindowFlags.NoSavedSettings)
-              | int(imgui.WindowFlags.NoBringToFrontOnFocus) | int(imgui.WindowFlags.NoNavFocus))
+              | int(imgui.WindowFlags.NoSavedSettings) | int(imgui.WindowFlags.NoNavFocus))
 
     悬停标志 = imgui.HoveredFlags.RootAndChildWindows.value
 
@@ -166,6 +168,8 @@ class 面板窗:
         self._上一快捷键帧 = -1
         self._要滚到 = ""                 # 菜单跳转：下一帧把这一段滚进视野
         self._实例: dict[str, object] = {}
+        self._报过位置 = False
+        self._调试 = bool(_os.environ.get("面板窗_调试"))
         面板注册表.确保状态文件()
         菜单栏.安装包装()
         安装版面探针()
@@ -225,9 +229,19 @@ class 面板窗:
             return False                    # 首帧还没有几何：只登记，不画
         try:
             self._实例 = {面板注册表._名字(p): p for p in 面板注册表.全部面板()}
-            self._画页签(三D, 窗口宽)
+            实测 = self._画页签(三D, 窗口宽)
             if 面板注册表.面板窗可见():
-                self._画内容窗(三D, 窗口宽)
+                实测内容 = self._画内容窗(三D, 窗口宽)
+            else:
+                实测内容 = None
+            if not self._报过位置:
+                self._报过位置 = True
+                说 = "【面板窗】位置（我们算的／窗口自己量的）："
+                print(说 + f"页签 算={tuple(round(v) for v in 算页签矩形(三D, 窗口宽, 46.0))}"
+                          f" 实={实测}", flush=True)
+                print(" " * len(说) + f"内容 算={tuple(round(v) for v in 算面板窗矩形(三D, 窗口宽))}"
+                                      f" 实={实测内容}｜3D={tuple(round(v) for v in 三D)}"
+                                      f"｜窗口宽={窗口宽:.0f}", flush=True)
         except Exception as 异常:                                        # noqa: BLE001
             self.错误次数 += 1
             if self.错误次数 <= 2:
@@ -235,12 +249,12 @@ class 面板窗:
         return False
 
     # -- 假页签 --------------------------------------------------------
-    def _画页签(self, 三D, 窗口宽: float) -> None:
+    def _画页签(self, 三D, 窗口宽: float):
         文字 = "Panels"
         宽 = float(imgui.CalcTextSize(文字).x) if 面板注册表.有界面上下文() else 46.0
         x, y, w, h = 算页签矩形(三D, 窗口宽, 宽)
         if w <= 0:
-            return
+            return None
         可见 = 面板注册表.面板窗可见()
         # 点官方 `Inspector` 页签那一小块 → 让位（两个页签像真的一样互斥）
         官x, 官y, 官w, 官h = 官方页签矩形(三D, 窗口宽)
@@ -262,30 +276,41 @@ class 面板窗:
         try:
             imgui.SetNextWindowPos(imgui.Vec2(x, y), imgui.Cond.Always.value)
             imgui.SetNextWindowSize(imgui.Vec2(w, h), imgui.Cond.Always.value)
+            imgui.SetNextWindowFocus()          # ★ 顶到最前（否则会被官方页签栏盖住）
             展开, _ = imgui.Begin("##面板窗页签", None, int(面板窗.窗口标志))
+            实测 = None
             try:
-                if not 展开:
-                    return
-                if imgui.Selectable(f"{文字}##面板窗开关", 可见, 0,
-                                    imgui.Vec2(max(8.0, w - 4.0), max(8.0, h - 4.0))):
-                    面板注册表.设面板窗可见(not 可见)
+                if 展开:
+                    p = imgui.GetWindowPos()
+                    实测 = (round(p.x), round(p.y), 可见, bool(imgui.IsWindowFocused()))
+                    if imgui.Selectable(f"{文字}##面板窗开关", 可见, 0,
+                                        imgui.Vec2(max(8.0, w - 4.0), max(8.0, h - 4.0))):
+                        面板注册表.设面板窗可见(not 可见)
             finally:
                 imgui.End()
         finally:
             imgui.PopStyleColor()
+        return 实测
 
     # -- 内容窗 --------------------------------------------------------
-    def _画内容窗(self, 三D, 窗口宽: float) -> None:
+    def _画内容窗(self, 三D, 窗口宽: float):
         x, y, w, h = 算面板窗矩形(三D, 窗口宽)
         if w <= 0 or h <= 0:
-            return
+            return None
         名单 = 面板注册表.面板顺序()
         imgui.SetNextWindowPos(imgui.Vec2(x, y), imgui.Cond.Always.value)
         imgui.SetNextWindowSize(imgui.Vec2(w, h), imgui.Cond.Always.value)
+        imgui.SetNextWindowFocus()              # ★ 顶到最前（盖住官方 Inspector 内容）
+        实测 = None
         展开, _ = imgui.Begin("##面板窗", None, int(面板窗.窗口标志))
         try:
+            if 展开:
+                p = imgui.GetWindowPos()
+                s = imgui.GetWindowSize()
+                实测 = (round(p.x), round(p.y), round(s.x), round(s.y),
+                        bool(imgui.IsWindowFocused()))
             if not 展开:
-                return
+                return 实测
             self._画标题行(名单)
             imgui.Separator()
             for i, 名 in enumerate(名单):
@@ -318,6 +343,7 @@ class 面板窗:
                 imgui.Separator()
         finally:
             imgui.End()
+        return 实测
 
     def _画标题行(self, 名单) -> None:
         开数 = sum(1 for 名 in 名单 if 面板注册表.段展开(名))
