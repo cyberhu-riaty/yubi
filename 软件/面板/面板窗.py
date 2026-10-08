@@ -248,6 +248,13 @@ class 面板窗:
                 return False
             if imgui.IsAnyMouseDown():       # 有人正按着鼠标 → 绝不抢，免得取消他的操作
                 return False
+            # ★ 有弹层开着（菜单 / 下拉 / 弹窗）→ 绝不抢：抢焦点会 ClosePopups，
+            #   用户看到的就是"顶部 Appearance / Panels 点一下就消失、选不了里面的条目"。
+            if imgui.IsPopupOpen("", int(imgui.PopupFlags.AnyPopup)):
+                return False
+            # ★ 鼠标停在菜单栏那一行时也不抢（用户正在点菜单）
+            if float(imgui.GetMousePos().y) < 页签条高:
+                return False
             return (float(imgui.GetTime()) - self._上次置顶) > 0.5
         except Exception:                                                # noqa: BLE001
             return False
@@ -300,6 +307,34 @@ class 面板窗:
         return False
 
     # -- 假页签 --------------------------------------------------------
+    @staticmethod
+    def _画一格(文字: str, 选中: bool, 宽: float, 高: float, 身份: str) -> bool:
+        """画一个"页签格"。
+
+        ★ 关键：`Selectable` 选中/悬停时的填充色取自 `Col.Header*`，而那套颜色属于
+          "列表行高亮"，在有些皮肤里是浅灰 —— 直接用就会出现用户报的"Inspector 变灰白"。
+          所以这里把 `Col.Header*` 临时替换成**官方页签的颜色**（TabSelected / TabHovered），
+          看起来才跟旁边那行的页签一致。
+          （官方那条"选中页签顶部的青色细线"画不了：这个绑定没暴露 GetWindowDrawList。
+            可接受：底色一致之后，它已经像页签了。）
+        """
+        压 = 0
+        try:
+            底色 = imgui.GetStyleColorVec4(int(imgui.Col.TabSelected if 选中 else imgui.Col.TabDimmed))
+            悬停 = imgui.GetStyleColorVec4(int(imgui.Col.TabHovered))
+            imgui.PushStyleColor(int(imgui.Col.Header), 底色)
+            imgui.PushStyleColor(int(imgui.Col.HeaderHovered), 悬停)
+            imgui.PushStyleColor(int(imgui.Col.HeaderActive), 悬停)
+            压 = 3
+        except Exception:                                                # noqa: BLE001
+            压 = 0
+        try:
+            return bool(imgui.Selectable(f"{文字}##{身份}", 选中, 0,
+                                         imgui.Vec2(max(8.0, 宽), max(8.0, 高))))
+        finally:
+            if 压:
+                imgui.PopStyleColor(压)
+
     def _画页签条(self, 三D, 窗口宽: float, 要焦点: bool = False):
         """整条页签栏：`Inspector`（官方内容） + `Panels`（我们的），点哪个切哪个。"""
         x, y, w, h = 算页签条矩形(三D, 窗口宽)
@@ -329,14 +364,11 @@ class 面板窗:
                     self._我们有焦点 = 焦点
                     实测 = (round(p.x), round(p.y), 可见, 焦点)
                     # 格 0：官方 Inspector —— 选中态 = 我们的窗口关着
-                    if imgui.Selectable("Inspector##官方页签格", not 可见, 0,
-                                        imgui.Vec2(max(8.0, 格0[2] - 2.0), max(8.0, h - 4.0))):
+                    if 面板窗._画一格("Inspector", not 可见, 格0[2] - 2.0, h - 4.0, "官方页签格"):
                         面板注册表.设面板窗可见(False)
                     imgui.SameLine(0.0, 2.0)
                     # 格 1：我们的 Panels —— 选中态 = 窗口开着
-                    if 格1[2] > 0 and imgui.Selectable("Panels##面板窗页签格", 可见, 0,
-                                                       imgui.Vec2(max(8.0, 格1[2] - 2.0),
-                                                                  max(8.0, h - 4.0))):
+                    if 格1[2] > 0 and 面板窗._画一格("Panels", 可见, 格1[2] - 2.0, h - 4.0, "面板窗页签格"):
                         面板注册表.设面板窗可见(True)
             finally:
                 imgui.End()
