@@ -40,6 +40,7 @@ from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E4
 
 import 面板注册表                                                     # noqa: E402
 import 菜单栏                                                         # noqa: E402
+import 皮肤桥                                                         # noqa: E402
 
 # ---------------------------------------------------------------------------
 # 常量（与 验证/面板窗自检.py 同步；这些是"看起来对不对"的量，改前先量一下）
@@ -300,6 +301,26 @@ class 面板窗:
                 print(" " * len(说) + f"内容 算={tuple(round(v) for v in 算面板窗矩形(三D, 窗口宽))}"
                                       f" 实={实测内容}｜3D={tuple(round(v) for v in 三D)}"
                                       f"｜窗口宽={窗口宽:.0f}", flush=True)
+                # ★ 页签色自证：读到的颜色必须等于**皮肤表里那套风格**的颜色。
+                #   不等就说明"皮肤已经被弹出、我们读到的是官方主题色"（用户报过的那条）。
+                try:
+                    风格 = 皮肤桥.当前风格
+                    条目 = (皮肤桥.读取风格表().get("风格") or {}).get(风格) or {}
+                    十六 = (条目.get("颜色") or {}).get("TabSelected")
+                    实际 = imgui.GetStyleColorVec4(int(imgui.Col.TabSelected))
+                    if 十六:
+                        期望 = 皮肤桥.十六进制转Vec4(十六)
+                        一致 = (abs(实际.x - 期望.x) < 0.02 and abs(实际.y - 期望.y) < 0.02
+                                and abs(实际.z - 期望.z) < 0.02)
+                        print(f"【面板窗】页签色自证：皮肤「{风格}」表里是 {十六}，"
+                              f"实际读到 ({实际.x:.3f},{实际.y:.3f},{实际.z:.3f}) → "
+                              f"{'一致 ✓' if 一致 else '不一致 ✗（皮肤被提前弹出了）'}", flush=True)
+                    else:
+                        print(f"【面板窗】页签色自证：皮肤「{风格}」表里没有 TabSelected（用官方色）",
+                              flush=True)
+                except Exception as _异常:                                    # noqa: BLE001
+                    print(f"【面板窗】页签色自证失败（不影响使用）：{type(_异常).__name__}: {_异常}",
+                          flush=True)
         except Exception as 异常:                                        # noqa: BLE001
             self.错误次数 += 1
             if self.错误次数 <= 2:
