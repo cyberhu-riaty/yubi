@@ -13,7 +13,7 @@
     ② **无 ImGui 上下文时什么都不做**：那个绑定在没有上下文时调用任何 imgui 函数会
        **直接段错误**（实测），而本模块会被"不开窗"的自检脚本导入并调用。
 
-★ 安装时机：必须在**第一帧之前**。由 `面板/侧栏.py` 的 `__init__` 调用（它在窗口起来之前执行）。
+★ 安装时机：必须在**第一帧之前**。由 `面板/面板窗.py` 的 `__init__` 调用（它在窗口起来之前执行）。
 """
 from __future__ import annotations
 
@@ -103,30 +103,25 @@ def _画外观菜单() -> None:
 def _画面板菜单() -> None:
     if not imgui.BeginMenu("Panels"):
         return
+    可见 = 面板注册表.面板窗可见()
+    if imgui.MenuItem("Show panels window", "", 可见):
+        面板注册表.设面板窗可见(not 可见)
     if imgui.MenuItem("Reveal all (F9)"):
         面板注册表.全部显示()
     if imgui.MenuItem("Reset panel layout (Shift+F9)"):
         面板注册表.重置版面()
-    # ★ 每个面板的「展开 / 钉住」条目由侧栏提供（见 面板注册表.侧栏顺序 / 设展开 / 设钉住）
-    侧栏顺序 = getattr(面板注册表, "侧栏顺序", None)
-    是钉住 = getattr(面板注册表, "是钉住", None)
-    设钉住 = getattr(面板注册表, "设钉住", None)
-    设展开 = getattr(面板注册表, "设展开", None)
-    if callable(侧栏顺序) and callable(设展开):
-        名单 = 侧栏顺序()
-        if 名单:
-            imgui.Separator()
-            imgui.TextDisabled("  panels           (Ctrl+1 .. Ctrl+7)")
-            for i, 名 in enumerate(名单):
-                快捷键 = f"Ctrl+{i + 1}" if i < 9 else ""
-                钉 = bool(是钉住(名)) if callable(是钉住) else False
-                if imgui.MenuItem(f"    {名}##菜单展开{i}", 快捷键, 钉):
-                    设展开(名)
-                if callable(设钉住):
-                    挂 = f"pin##菜单钉住{i}"
-                    if imgui.MenuItem(f"    {挂}", "", 钉):
-                        设钉住(名, not 钉)
-    imgui.TextDisabled("  F9 = reveal all   Shift+F9 = reset layout")
+    imgui.Separator()
+    imgui.TextDisabled("  panels       (Ctrl+1 .. Ctrl+7)")
+    名单函 = getattr(面板注册表, "面板顺序", None)
+    段展开 = getattr(面板注册表, "段展开", None)
+    跳到段 = getattr(面板注册表, "跳到段", None)
+    if callable(名单函) and callable(跳到段):
+        for i, 名 in enumerate(名单函()):
+            快捷键 = f"Ctrl+{i + 1}" if i < 9 else ""
+            打开 = bool(段展开(名)) if callable(段展开) else False
+            if imgui.MenuItem(f"    {名}", 快捷键, 打开):
+                跳到段(名)
+    imgui.TextDisabled("  Esc = close panels window")
     imgui.EndMenu()
 
 

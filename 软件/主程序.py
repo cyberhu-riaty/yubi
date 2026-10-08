@@ -345,18 +345,17 @@ def main() -> int:
         return 0
 
     print("\n【操作提示】")
-    print("  · 【侧栏】：自研面板分列 3D 视口两侧 —— 左条 Model library / Algorithms / "
-          "Controller params / SysID，右条 Monitor / Recorder / About")
-    print("    点标签即从边上抽出，鼠标移开 0.8 秒自动收回；点面板上的 [pin] 可让它常驻")
+    print("  · 【Panels 窗】：自研 7 个面板装在右栏，紧挨官方 Inspector 的第二个页签")
+    print("    点那个页签开/关；每行是一段，点标题展开（可同时展开多段），Ctrl+1..7 跳段")
     print("  · 【Display】左上角小方框：勾上 = 加载重力（物理推进）；取消 = 回默认姿态并冻结")
-    print("  · 【Model library】格：点一下就换机械臂；也可以把 .xml 直接拖进窗口，或点【从本地导入模型…】")
-    print("  · 顶部菜单【Panels】：展开/钉住某个面板、全部恢复（F9）、重置版面（Shift+F9）")
+    print("  · 【Panels】→ 模型库：点一下就换机械臂；也可以把 .xml 直接拖进窗口，或点【从本地导入模型…】")
+    print("  · 顶部菜单【Panels】：开关面板窗、跳到某一段、全部恢复（F9）、重置版面（Shift+F9）")
     print("  · 左侧工具栏可以开关官方那 19 个面板；把【Controls】面板打开，拖滑杆能实时改目标")
     print("  · 【Simulation】面板：暂停 / 单步 / 倍速 / 倒带")
     print("  · 鼠标左键拖动转视角，右键拖动平移，滚轮缩放；按住 Ctrl 拖机械臂可以拉扯它")
     print(f"  · 顶部菜单【Appearance】：{len(皮肤桥.全部风格())} 套外观风格"
           f"（{' / '.join(皮肤桥.全部风格())}）点一下即换，也可以按 F10 轮换")
-    print("  · 找不到面板就按 F9：显示标签条 + 收起临时展开（钉住的保留）")
+    print("  · 找不到面板就按 F9：打开【Panels】窗（一段都没展开时自动展开第一段）")
     print("  · 窗口被拖到屏幕外/版面乱了：Shift+F9 重置版面（或 --恢复默认界面），然后重开软件")
     print(f"  · 界面主题：当前基底 {皮肤桥.基底主题(风格).lower()}（改基底：菜单 Appearance → base theme，"
           f"或 --主题 dark/light/classic；换风格会自动带配套基底）")

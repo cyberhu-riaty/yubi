@@ -58,7 +58,7 @@ cd "$HOME/Desktop/驭臂"
 |---|---|
 | 3D 视图 | 机械臂；左键拖动转视角、右键平移、滚轮缩放、Ctrl+拖动可以"抓住"机械臂拉 |
 | 左侧/右侧面板 | 官方那 19 个现成面板（Simulation / Physics / Rendering / Joints / **Controls** / Sensors / Watch / State / Counts / Convergence …） |
-| **侧栏**（两条 26px 标签条） | **我们自研的 7 个面板分列 3D 视口两侧**：左＝Model library / Algorithms / Controller params / System identification，右＝Monitor / Recorder / About。点标签即从边上抽出（300 宽），鼠标移开 0.8 秒自动收回，标题行的 `pin` 可钉住常驻；**Esc** 收起，**F9** 找回全部，顶部菜单 **Panels** 是永远都在的入口。★ 收起态只占两侧各 26px，**3D 视口一格不占** |
+| **Panels 窗**（右栏，紧挨官方 `Inspector`） | **我们自研的 7 个面板竖排成可折叠的段**：模型库 / 算法 / 控制器参数 / 参数辨识 / 实时监控 / 数据录制 / 关于。它长得就是官方页签栏里的第二个页签（点 `Inspector` 会自动让位），内容窗摆在右栏、页签栏正下方；**可以同时展开多个段**，`Ctrl+1..7` 跳段、**Esc** 关窗、**F9** 一键恢复，顶部菜单 **Panels** 是永远都在的入口。★ 关掉它 = 官方 Inspector 原样露出 |
 | **Simulation** 面板 | 暂停 / 继续 / 单步 / 倍速 / 倒带 |
 | **Controls** 面板 | 6 个关节的目标值滑杆 —— **拖它就能实时改关节 PD 的目标**（插件会自动跟着走） |
 | **Appearance** 菜单（与 `File`/`Help` 同一行） | 直接切基底主题与 5 套皮肤；`Open Appearance panel` 打开完整外观面板（色卡/预览/FPS） |
@@ -114,9 +114,9 @@ git checkout -- <文件>   # 改坏了回退
 ├── 风格表.json      ← 5 套外观风格的全部参数（改它就能加/调风格）
 ├── 骨架/            ← 24 项官方接口自检（官方升级了会在这里报警）
 ├── 菜单栏.py        ← 把 Appearance / Panels 挂进官方菜单栏那一行（包装 EndMainMenuBar）
-├── 面板/            ← 自研面板：侧栏.py 把 7 个面板分到 3D 两侧的标签条里
+├── 面板/            ← 自研面板：面板窗.py 把 7 个面板装进右栏的【Panels】窗
 │   ├── 算法面板.py       ★ 【Algorithms】勾选/调序/Apply/Save
-│   ├── 侧栏.py           ★ 两条 26px 标签条 + 抽出式面板（左4/右3）+ 钉住/自动收起
+│   ├── 面板窗.py         ★ 紧挨 Inspector 的假页签 + 竖排折叠列表（可同时展开多段）
 │   └── 面板注册表.py       登记 / F9 恢复 / 弹出收回 / 重置版面（页面板的公共机制）
 └── README.md        ← 本文件
 
@@ -164,7 +164,7 @@ cp 算法库/通用/我的控制律_模板.py 算法库/通用/我的算法.py
 
 ### 在界面上换算法（【Algorithms】面板）
 
-选完机械臂之后要改算法，不用碰文件：左栏 `Algorithms` 格 →
+选完机械臂之后要改算法，不用碰文件：面板窗里的【算法】段 →
 勾选 / 用 `^` `v` 调序 → `Apply (temporary)` 立即生效，或 `Save to project file` 写回项目文件。
 
 实现要点（改这块代码时先看这三条）：
