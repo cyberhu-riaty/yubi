@@ -65,19 +65,35 @@ def 右栏矩形(三D: tuple[float, float, float, float],
     return (x + 宽, y, max(0.0, float(窗口宽) - (x + 宽)), 高)
 
 
-def 官方页签矩形(三D, 窗口宽) -> tuple[float, float, float, float]:
-    """官方 `Inspector` 页签占的那一小块（点它 = 让位给官方内容）。"""
-    x, y, _, _ = 右栏矩形(三D, 窗口宽)
-    return (x, y, 官方页签宽, 页签条高)
+def 算页签条矩形(三D, 窗口宽) -> tuple[float, float, float, float]:
+    """整条页签栏（右栏那一行）—— **由我们接管**，所以点击一定落在我们手上。
 
-
-def 算页签矩形(三D, 窗口宽, 文字宽: float = 46.0) -> tuple[float, float, float, float]:
-    """我们那个"假页签"的矩形：紧挨官方页签右侧，同一行。"""
+    ★ 为什么接管整条而不是只放一个小页签：只放小页签时，"点官方 Inspector 切回去"
+      要靠"鼠标坐标是否落在官方页签上"来猜 —— 实测点不动（用户反馈"inspector 怎么点不了了"）。
+      接管整条之后，`Inspector` / `Panels` 两个格都由我们画、都由我们收点击，切换必定生效。
+    """
     x, y, 宽, _ = 右栏矩形(三D, 窗口宽)
     if 宽 <= 0:
         return (0.0, 0.0, 0.0, 0.0)
-    页宽 = max(页签最小宽, min(float(文字宽) + 24.0, 宽 - 官方页签宽 - 4.0))
-    return (x + 官方页签宽 + 2.0, y, 页宽, 页签条高)
+    return (x, y, 宽, 页签条高)
+
+
+def 算页签格矩形(三D, 窗口宽, 序号: int, 文字宽: float = 46.0) -> tuple[float, float, float, float]:
+    """页签栏里的第 N 格：0 = 官方 `Inspector`，1 = 我们的 `Panels`。"""
+    x, y, 宽, 高 = 算页签条矩形(三D, 窗口宽)
+    if 宽 <= 0:
+        return (0.0, 0.0, 0.0, 0.0)
+    官方宽 = min(官方页签宽, max(页签最小宽, 宽 - 页签最小宽 - 6.0))
+    if 序号 == 0:
+        return (x, y, 官方宽, 高)
+    余 = max(0.0, 宽 - 官方宽 - 2.0)
+    页宽 = max(页签最小宽, min(float(文字宽) + 24.0, 余)) if 余 > 0 else 0.0
+    return (x + 官方宽 + 2.0, y, 页宽, 高)
+
+
+def 官方页签矩形(三D, 窗口宽) -> tuple[float, float, float, float]:
+    """官方 `Inspector` 那一格（保留旧名，自检与说明都还在用）。"""
+    return 算页签格矩形(三D, 窗口宽, 0)
 
 
 def 算面板窗矩形(三D, 窗口宽) -> tuple[float, float, float, float]:
@@ -229,7 +245,7 @@ class 面板窗:
             return False                    # 首帧还没有几何：只登记，不画
         try:
             self._实例 = {面板注册表._名字(p): p for p in 面板注册表.全部面板()}
-            实测 = self._画页签(三D, 窗口宽)
+            实测 = self._画页签条(三D, 窗口宽)
             if 面板注册表.面板窗可见():
                 实测内容 = self._画内容窗(三D, 窗口宽)
             else:
@@ -237,7 +253,7 @@ class 面板窗:
             if not self._报过位置:
                 self._报过位置 = True
                 说 = "【面板窗】位置（我们算的／窗口自己量的）："
-                print(说 + f"页签 算={tuple(round(v) for v in 算页签矩形(三D, 窗口宽, 46.0))}"
+                print(说 + f"页签条 算={tuple(round(v) for v in 算页签条矩形(三D, 窗口宽))}"
                           f" 实={实测}", flush=True)
                 print(" " * len(说) + f"内容 算={tuple(round(v) for v in 算面板窗矩形(三D, 窗口宽))}"
                                       f" 实={实测内容}｜3D={tuple(round(v) for v in 三D)}"
@@ -249,27 +265,18 @@ class 面板窗:
         return False
 
     # -- 假页签 --------------------------------------------------------
-    def _画页签(self, 三D, 窗口宽: float):
-        文字 = "Panels"
-        宽 = float(imgui.CalcTextSize(文字).x) if 面板注册表.有界面上下文() else 46.0
-        x, y, w, h = 算页签矩形(三D, 窗口宽, 宽)
+    def _画页签条(self, 三D, 窗口宽: float):
+        """整条页签栏：`Inspector`（官方内容） + `Panels`（我们的），点哪个切哪个。"""
+        x, y, w, h = 算页签条矩形(三D, 窗口宽)
         if w <= 0:
             return None
         可见 = 面板注册表.面板窗可见()
-        # 点官方 `Inspector` 页签那一小块 → 让位（两个页签像真的一样互斥）
-        官x, 官y, 官w, 官h = 官方页签矩形(三D, 窗口宽)
+        文字宽 = float(imgui.CalcTextSize("Panels").x) if 面板注册表.有界面上下文() else 46.0
+        格0 = 算页签格矩形(三D, 窗口宽, 0, 文字宽)
+        格1 = 算页签格矩形(三D, 窗口宽, 1, 文字宽)
+        # ★ 背景取官方页签栏的配色（那一行原本就比面板底色暗一点）
         try:
-            if (可见 and imgui.IsMouseClicked(0)
-                    and imgui.IsMouseHoveringRect(imgui.Vec2(官x, 官y),
-                                                  imgui.Vec2(官x + 官w, 官y + 官h))):
-                面板注册表.设面板窗可见(False)
-                可见 = False
-        except Exception:                                                # noqa: BLE001
-            pass
-        # ★ 背景取官方页签栏的配色（开=Tab，关=TabDimmed），这样它看起来就是那一行的页签，
-        #   而不是一个浮在页签栏上的按钮。
-        try:
-            底色 = imgui.GetStyleColorVec4(int(imgui.Col.Tab if 可见 else imgui.Col.TabDimmed))
+            底色 = imgui.GetStyleColorVec4(int(imgui.Col.TabDimmed))
         except Exception:                                                # noqa: BLE001
             底色 = imgui.Vec4(0.16, 0.16, 0.18, 1.0)
         imgui.PushStyleColor(int(imgui.Col.WindowBg), 底色)
@@ -277,15 +284,22 @@ class 面板窗:
             imgui.SetNextWindowPos(imgui.Vec2(x, y), imgui.Cond.Always.value)
             imgui.SetNextWindowSize(imgui.Vec2(w, h), imgui.Cond.Always.value)
             imgui.SetNextWindowFocus()          # ★ 顶到最前（否则会被官方页签栏盖住）
-            展开, _ = imgui.Begin("##面板窗页签", None, int(面板窗.窗口标志))
+            展开, _ = imgui.Begin("##面板窗页签条", None, int(面板窗.窗口标志))
             实测 = None
             try:
                 if 展开:
                     p = imgui.GetWindowPos()
                     实测 = (round(p.x), round(p.y), 可见, bool(imgui.IsWindowFocused()))
-                    if imgui.Selectable(f"{文字}##面板窗开关", 可见, 0,
-                                        imgui.Vec2(max(8.0, w - 4.0), max(8.0, h - 4.0))):
-                        面板注册表.设面板窗可见(not 可见)
+                    # 格 0：官方 Inspector —— 选中态 = 我们的窗口关着
+                    if imgui.Selectable("Inspector##官方页签格", not 可见, 0,
+                                        imgui.Vec2(max(8.0, 格0[2] - 2.0), max(8.0, h - 4.0))):
+                        面板注册表.设面板窗可见(False)
+                    imgui.SameLine(0.0, 2.0)
+                    # 格 1：我们的 Panels —— 选中态 = 窗口开着
+                    if 格1[2] > 0 and imgui.Selectable("Panels##面板窗页签格", 可见, 0,
+                                                       imgui.Vec2(max(8.0, 格1[2] - 2.0),
+                                                                  max(8.0, h - 4.0))):
+                        面板注册表.设面板窗可见(True)
             finally:
                 imgui.End()
         finally:
