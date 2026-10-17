@@ -41,9 +41,9 @@ import json
 import os
 import re
 
-from mujoco.experimental.dear_imgui import dear_imgui as imgui
-from mujoco.experimental.implot import implot
-from mujoco.experimental.studio import ux
+from 官方层 import dear_imgui as imgui   # 全部走适配层
+from 官方层 import implot            # 全部走适配层
+from 官方层 import ux          # 全部走适配层，见 软件/官方层.py
 
 import 界面文字
 
@@ -128,7 +128,7 @@ def 界面名(风格: str) -> str:
     ★ 为什么单开一个函数：官方 UI 字体（Atkinson Hyperlegible）没有中文字形，
       面板上画中文会变成一串 `?`（ImGui 的缺字形回退）。所以面板用英文名，
       中文的 显示名/一句话 只给终端和文档用（终端用系统字体，中文正常）。
-      详见 软件/界面文字.py 与 优化（软件优化的报告都放这里面来）/验证/字体覆盖_实测.txt。
+      详见 软件/界面文字.py 与 工具/验证/字体覆盖_实测.txt。
     """
     if 风格 == 关闭:
         return "Official (no skin)"
@@ -213,7 +213,7 @@ def _编译一套(风格: str) -> dict:
         曲线颜色.append((int(枚举), 十六进制转Vec4(值)))
 
     # ★ 刻意**不**解析 implot 的 StyleVar（曲线图框形状）：本机绑定里
-    #   20 项有 9 项会段错误（见 _推入一套 的说明与 优化（软件优化的报告都放这里面来）/验证/implot样式项安全矩阵.txt）。
+    #   20 项有 9 项会段错误（见 _推入一套 的说明与 工具/验证/implot样式项安全矩阵.txt）。
     #   曲线只换颜色。将来官方修好了再按那张矩阵逐个放开。
 
     if 坏键:
@@ -503,7 +503,7 @@ def _推入一套() -> None:
          MajorTickLen / MajorTickSize / MinorTickLen / MinorTickSize / MinorGridSize /
          DigitalPadding / DigitalSpacing），崩溃与传 float 还是 Vec2 无关 ——
          说明绑定里的枚举值和实际 .so 的 ImPlotStyleVar 枚举对不上，越界索引算出野指针。
-         证据：`优化（软件优化的报告都放这里面来）/验证/implot样式项安全矩阵.txt`。
+         证据：`工具/验证/implot样式项安全矩阵.txt`。
          → 所以曲线**只换颜色**，图框形状保持 implot 默认。
            （想重新启用：先用那个探针把 20 项全测一遍，只推退出码为 0 的那些。）
     """

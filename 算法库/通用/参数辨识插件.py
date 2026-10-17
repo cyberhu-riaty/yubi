@@ -26,7 +26,7 @@ import time
 
 import numpy as np
 
-from mujoco.experimental.studio import messages
+from 官方层 import messages
 
 # ★ 本文件在 `算法库/通用/` 下，但它要 import 外壳侧的 `参数辨识`、`辨识桥`、`项目`
 #   —— 那三个在 `软件/` 里。所以先保证 `软件/` 在 sys.path 上。

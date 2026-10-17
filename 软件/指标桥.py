@@ -26,7 +26,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Callable
 
-from mujoco.experimental.studio import messages
+from 官方层 import messages          # 全部走适配层，见 软件/官方层.py
 
 # 发布频率上限：物理是 500 Hz，但曲线不需要那么密（30 Hz 足够顺滑），
 # 而且能避免把通道塞满、避免面板画图成为瓶颈。想改就改这个数。

@@ -37,7 +37,7 @@
   本面板内部一律用**插件名**做键，显示时才翻成面板名 —— 这样换模型、改项目都不会串。
 
 ★ 面板上的文字**只能是 ASCII**：官方 UI 字体没有中文字形，画中文会变成 `?`。
-  中文原名与细节留在终端。校验：`.venv/bin/python "优化（软件优化的报告都放这里面来）/验证/字体覆盖.py"`
+  中文原名与细节留在终端。校验：`.venv/bin/python "工具/验证/字体覆盖.py"`
 """
 from __future__ import annotations
 
@@ -48,8 +48,8 @@ _外壳目录 = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _外壳目录 not in _sys.path:
     _sys.path.insert(0, _外壳目录)
 
-from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E402
-from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
+from 官方层 import dear_imgui as imgui       # noqa: E402
+from 官方层 import messages, viewer_protocol      # noqa: E402
 
 from 模型桥 import 应用算法命令, 项目状态                             # noqa: E402
 

@@ -36,8 +36,8 @@ _外壳目录 = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _外壳目录 not in _sys.path:
     _sys.path.insert(0, _外壳目录)
 
-from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E402
-from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
+from 官方层 import dear_imgui as imgui       # noqa: E402
+from 官方层 import messages, viewer_protocol      # noqa: E402
 
 import 文案
 import 面板注册表                                                      # noqa: E402
@@ -183,7 +183,7 @@ class 外观面板:
         self.绘制次数 += 1
         # ★ 这个面板里**只写 ASCII**：官方 UI 字体（Atkinson Hyperlegible）没有中文字形，
         #   面板上画中文会被 ImGui 回退成 `?`（"弹窗里很多问号"就是这个）。
-        #   中文留给终端与文档。校验：./.venv/bin/python 优化（软件优化的报告都放这里面来）/验证/字体覆盖.py
+        #   中文留给终端与文档。校验：./.venv/bin/python 工具/验证/字体覆盖.py
         风格表 = 皮肤桥.读取风格表()
         if not 风格表.get("风格"):
             imgui.TextColored(imgui.Vec4(0.95, 0.45, 0.30, 1.0), 文案.取("外观.无风格表"))

@@ -27,7 +27,7 @@ _外壳目录 = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _外壳目录 not in _sys.path:
     _sys.path.insert(0, _外壳目录)
 
-from mujoco.experimental.studio import messages          # noqa: E402
+from 官方层 import messages          # noqa: E402
 from 指标桥 import 指标消息                                # noqa: E402
 import 文案                                                          # noqa: E402
 from 曲线基类 import 曲线面板基类                          # noqa: E402
@@ -71,7 +71,7 @@ class 监控面板(曲线面板基类):
     def _画内容(self) -> None:
         super()._画内容()
         # 在窗口底部补一行状态（父类画完曲线后）
-        from mujoco.experimental.dear_imgui import dear_imgui as imgui
+        from 官方层 import dear_imgui as imgui
         imgui.Separator()
         imgui.TextDisabled(文案.格式化("监控.收帧", "metric frames received = {n}", n=self.收到帧数))
 

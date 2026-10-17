@@ -17,7 +17,7 @@ from __future__ import annotations
 import dataclasses
 import os
 
-from mujoco.experimental.studio import messages, viewer_protocol
+from 官方层 import messages, viewer_protocol    # 全部走适配层，见 软件/官方层.py
 
 
 @dataclasses.dataclass(frozen=True)
@@ -58,7 +58,7 @@ class 界面桥:
         return False
 
     def _应用主题(self) -> None:
-        from mujoco.experimental.studio import ux
+        from 官方层 import ux          # 全部走适配层，见 软件/官方层.py
 
         名字 = (os.environ.get("MUJOCO_STUDIO_THEME") or "").strip().upper()
         if not 名字:
@@ -97,6 +97,17 @@ class 界面桥:
         viewer = self.viewer
         if viewer is None:
             return False
+
+        # ★ Web 上行命令的接缝（P1）：这里**已经**满足三个条件 ——
+        #   每帧、在 viewer 线程、手里有 viewer（= 能 send_to_sim）。
+        #   所以 Web 来的命令不必新起线程，也不必改仿真循环，在这里顺手清空队列即可。
+        #   `命令桥` 内部只在队列非空时才做事，空队列的代价是一次加锁取空表。
+        try:
+            import 命令桥 as _命令桥
+            _命令桥.转发待发命令(viewer)
+        except Exception:                      # noqa: BLE001 —— 命令通道绝不能拖垮绘制
+            pass
+
         ux_state = getattr(viewer, "ux_state", None)
         目标 = getattr(ux_state, "ctrl_target", None) if ux_state is not None else None
         if 目标 is None:
@@ -118,7 +129,7 @@ def 制作窗口类(官方窗口基类):
       之后 `界面桥._应用主题()` 会把主题同时写进：官方 App 的 theme（菜单显示）、
       ImGui 样式（实际外观）、ini 文件（下次启动的值），三者保持一致。
     """
-    from mujoco.experimental.studio import ux
+    from 官方层 import ux          # 全部走适配层，见 软件/官方层.py
 
     class 我们的窗口(官方窗口基类):
         主题名 = (os.environ.get("MUJOCO_STUDIO_THEME") or "").strip().upper()

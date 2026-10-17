@@ -16,9 +16,9 @@ from __future__ import annotations
 import time
 from collections import deque
 
-from mujoco.experimental.dear_imgui import dear_imgui as imgui
-from mujoco.experimental.implot import implot
-from mujoco.experimental.studio import messages
+from 官方层 import dear_imgui as imgui
+from 官方层 import implot
+from 官方层 import messages
 
 import 文案
 import 面板注册表          # 统一管理"关闭 / 记忆 / F9 恢复"（见 面板注册表.py）

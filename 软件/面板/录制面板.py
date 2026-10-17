@@ -24,8 +24,8 @@ _外壳目录 = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _外壳目录 not in _sys.path:
     _sys.path.insert(0, _外壳目录)
 
-from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E402
-from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
+from 官方层 import dear_imgui as imgui       # noqa: E402
+from 官方层 import messages, viewer_protocol      # noqa: E402
 
 # 录制命令消息：和仿真侧共用同一个定义（避免两边各自定义导致类型不匹配）
 #

@@ -31,7 +31,7 @@ import time
 
 import numpy as np
 
-from mujoco.experimental.studio import messages
+from 官方层 import messages
 
 # ★ 录制命令的定义**不在本文件里**，在 `软件/录制桥.py` —— 界面和仿真侧都从那里
 #   import，才能保证是同一个类对象。原因见 录制桥.py 的文件头（这个坑踩过两次：

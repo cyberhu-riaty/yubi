@@ -24,8 +24,8 @@ _外壳目录 = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _外壳目录 not in _sys.path:
     _sys.path.insert(0, _外壳目录)
 
-from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E402
-from mujoco.experimental.studio import messages                       # noqa: E402
+from 官方层 import dear_imgui as imgui       # noqa: E402
+from 官方层 import messages                       # noqa: E402
 
 import 文案
 import 面板注册表                                                      # noqa: E402
@@ -96,7 +96,7 @@ class 关于面板:
         if not self.可见:
             return
         self.绘制次数 += 1
-        from mujoco.experimental.dear_imgui import dear_imgui as ig
+        from 官方层 import dear_imgui as ig      # 走适配层
         import mujoco
         import platform
 
@@ -111,7 +111,7 @@ class 关于面板:
         ig.Text(文案.取("关于.运行环境"))
         ig.BulletText(f"MuJoCo {getattr(mujoco, '__version__', '?')}")
         ig.BulletText(f"Python {platform.python_version()} ({platform.machine()})")
-        ig.BulletText(f文案.取("关于.后端"))
+        ig.BulletText(文案.取("关于.后端"))
         ig.Separator()
 
         ig.Text(文案.取("关于.已加载算法"))

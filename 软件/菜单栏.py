@@ -27,7 +27,7 @@ _面板目录 = _os.path.join(_外壳目录, "面板")
 if _面板目录 not in _sys.path:
     _sys.path.insert(0, _面板目录)
 
-from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E402
+from 官方层 import dear_imgui as imgui      # noqa: E402  走适配层
 
 import 皮肤桥                                                         # noqa: E402
 import 面板注册表                                                     # noqa: E402

@@ -28,7 +28,7 @@
     `0x06`/`0x08`、整套 `RemoveNode→AddNode→切片→Finish` 重建：结论一致，
     **`DockId` 记得住，但 ImGui 永不真的启用停靠**；手写 ini 造出的空节点会被剪掉；
     整套重建的版面**下一帧就被官方抢回去**（终局树只剩官方自己的 1/2/3/4）。
-    完整实验记录：`优化（软件优化的报告都放这里面来）/报告/界面侧栏改造_设计规格.md` §1.2。
+    完整实验记录：`报告/04_界面与外观优化/界面侧栏改造_设计规格.md` §1.2。
     所以现在是【侧栏】：纯窗口定位，收起态只占两侧各 26px、3D 视口一格不占。
 
 界面上有什么：
@@ -51,7 +51,7 @@
   也没装 ● ○ ✓ ✗ （） 这些符号，ImGui 遇到缺字形会回退画 `?`（就是"弹窗里很多问号"）。
   所以这里：按钮/标签用英文，状态用 [ok]/[fail]/[..] 这类 ASCII 标记，
   中文的状态原文与路径留给终端（终端用系统字体，中文正常）。
-  校验：./.venv/bin/python 优化（软件优化的报告都放这里面来）/验证/字体覆盖.py
+  校验：./.venv/bin/python 工具/验证/字体覆盖.py
 """
 from __future__ import annotations
 
@@ -62,8 +62,8 @@ _外壳目录 = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _外壳目录 not in _sys.path:
     _sys.path.insert(0, _外壳目录)
 
-from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E402
-from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
+from 官方层 import dear_imgui as imgui       # noqa: E402
+from 官方层 import messages, viewer_protocol      # noqa: E402
 
 import 模型桥                                                        # noqa: E402
 from 模型桥 import (换模型命令, 模型状态, 项目状态, 读取模型库,      # noqa: E402
@@ -127,7 +127,7 @@ class 模型库面板:
     # ★ 这里原来有一段"先试着停靠进官方 Options / Inspector，做不到就固定在左上角"的代码。
     #   2026-10-06 已经用 9 组实验证明**停靠这条路走不通**（DockId 记得住，但 ImGui
     #   永不真的启用停靠；手写 ini 造的节点会被剪掉；整套重建的版面下一帧被官方抢回去）。
-    #   证据见 优化（软件优化的报告都放这里面来）/报告/界面侧栏改造_设计规格.md §1.2。
+    #   证据见 报告/04_界面与外观优化/界面侧栏改造_设计规格.md §1.2。
     #   现在本面板住在【侧栏】左栏第一格（面板/侧栏.py），位置由侧栏统一算，不再自己摆放。
     # ------------------------------------------------------------------
 

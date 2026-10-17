@@ -9,7 +9,7 @@
     用户要的位置是"紧挨着官方 Inspector 页签的空位"，那属于**官方 Dockspace 的页签栏**。
     而我们已经用 9 组现场实验证明：**自研窗口停靠不进官方 Dockspace**
     （`DockId` 记得住但 ImGui 永不启用；手写 ini 造的节点会被剪掉；整套重建的版面下一帧被官方抢回去）。
-    证据：`优化（软件优化的报告都放这里面来）/报告/界面侧栏改造_设计规格.md` §1.2。
+    证据：`报告/04_界面与外观优化/界面侧栏改造_设计规格.md` §1.2。
     所以这里换一条路：**画一个跟官方页签长得一样的按钮**，位置紧挨着 `Inspector`，
     内容窗摆在页签栏正下方（右栏内）——
         · 点我们的页签 → 开/关面板窗
@@ -35,8 +35,8 @@ _面板目录 = _os.path.dirname(_os.path.abspath(__file__))
 if _面板目录 not in _sys.path:
     _sys.path.insert(0, _面板目录)
 
-from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E402
-from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
+from 官方层 import dear_imgui as imgui       # noqa: E402
+from 官方层 import messages, viewer_protocol      # noqa: E402
 
 import 文案
 import 面板注册表                                                     # noqa: E402
@@ -129,7 +129,7 @@ def 安装版面探针() -> None:
     if _探针已装:
         return
     try:
-        from mujoco.experimental.studio import ux
+        from 官方层 import ux
         原版 = ux.configure_docking_layout
     except Exception as 异常:                                            # noqa: BLE001
         print(f"⚠ 面板窗：拿不到官方版面接口，面板窗不会出现（{type(异常).__name__}: {异常}）")

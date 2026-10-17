@@ -32,7 +32,7 @@
         · 用官方暂停的好处：官方【Simulation】面板的暂停按钮会同步显示"已暂停"
 
 ★ 面板上的文字**只能是 ASCII**：官方 UI 字体没有中文字形，中文会画成 `?`
-  （中文说明在终端与文档里）。校验：`./.venv/bin/python 优化（软件优化的报告都放这里面来）/验证/字体覆盖.py`
+  （中文说明在终端与文档里）。校验：`./.venv/bin/python 工具/验证/字体覆盖.py`
 """
 from __future__ import annotations
 
@@ -44,8 +44,8 @@ _外壳目录 = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _外壳目录 not in _sys.path:
     _sys.path.insert(0, _外壳目录)
 
-from mujoco.experimental.dear_imgui import dear_imgui as imgui       # noqa: E402
-from mujoco.experimental.studio import messages, viewer_protocol      # noqa: E402
+from 官方层 import dear_imgui as imgui       # noqa: E402
+from 官方层 import messages, viewer_protocol      # noqa: E402
 
 import 文案
 import 面板注册表                                                      # noqa: E402

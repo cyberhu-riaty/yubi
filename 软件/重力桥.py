@@ -52,7 +52,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Callable
 
-from mujoco.experimental.studio import messages, sim
+from 官方层 import messages, sim     # 全部走适配层，见 软件/官方层.py
 
 
 # ---------------------------------------------------------------------------

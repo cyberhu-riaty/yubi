@@ -10,7 +10,7 @@
     用代码画的好处是**可重现**：改几行参数就能换配色/换造型，不用找设计师。
 
 用法：
-    .venv/bin/python 工具/生成图标.py                      # 默认输出到 包根/图标.icns
+    .venv/bin/python 工具/生成图标.py                      # 默认输出到 工具/图标.icns
     .venv/bin/python 工具/生成图标.py --输出 某处/我的.icns
     .venv/bin/python 工具/生成图标.py --底色 "#1b2a41" --主色 "#4cc2ff"
 
@@ -136,7 +136,7 @@ def main(argv: list[str]) -> int:
         输出 = args.输出
     else:
         这里 = os.path.dirname(os.path.abspath(__file__))
-        输出 = os.path.normpath(os.path.join(这里, "..", "图标.icns"))
+        输出 = os.path.join(这里, "图标.icns")
 
     os.makedirs(os.path.dirname(os.path.abspath(输出)), exist_ok=True)
     print("=" * 66)

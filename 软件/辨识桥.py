@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from mujoco.experimental.studio import messages
+from 官方层 import messages          # 全部走适配层，见 软件/官方层.py
 
 
 @dataclasses.dataclass(frozen=True)

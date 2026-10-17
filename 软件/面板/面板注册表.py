@@ -22,7 +22,7 @@
      `DockBuilderFinish` 调/不调、往 ini 里写 `DockId`、直接塞官方已有节点 `0x06`/`0x08`、
      整套 `RemoveNode→AddNode→切片→Finish` 重建）结论一致：**`DockId` 记得住，
      但 ImGui 永不真的启用停靠**；手写 ini 造出的空节点会被剪掉；整套重建的版面
-     **下一帧就被官方抢回去**。证据：`优化（软件优化的报告都放这里面来）/报告/界面侧栏改造_设计规格.md` §1.2。
+     **下一帧就被官方抢回去**。证据：`报告/04_界面与外观优化/界面侧栏改造_设计规格.md` §1.2。
      → 所以现在是【面板窗】（`面板/面板窗.py`）：一个**假页签**紧挨官方 `Inspector`，
        内容窗摆在右栏、页签栏正下方。**不要再尝试 Dockspace 停靠。**
 
@@ -58,7 +58,7 @@ import json
 import os
 import re
 
-from mujoco.experimental.dear_imgui import dear_imgui as imgui
+from 官方层 import dear_imgui as imgui
 
 # ---------------------------------------------------------------------------
 # 名册：谁进面板窗、按什么顺序（顺序 = 从上到下的段顺序）
