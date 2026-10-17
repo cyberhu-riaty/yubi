@@ -117,6 +117,28 @@ const 表 = {
   "步骤.验证.一句话": ["实时曲线与参数表", "Live curves and parameter table"],
   "步骤.辨识": ["辨识", "Identify"],
   "步骤.辨识.一句话": ["参数辨识进度与结果", "System identification progress and results"],
+  "步骤.插件": ["插件", "Plugins"],
+  "步骤.插件.一句话": [
+    "本机算法库里有什么插件、什么版本、被谁用到 —— 不是商店",
+    "What plugins exist in the local library, their versions, and who uses them — not a store",
+  ],
+  "插件.说明": [
+    "清单来自本机 算法库/ 目录，元信息（版本/说明/作者）由后端从真文件里读出。点「启用」会在**当前项目**里挂上它（走命令通道，有回执）。",
+    "The list comes from the local 算法库/ folder; metadata is read from the real files. Enable adds it to the current project via the command channel (with an ack).",
+  ],
+  "插件.没有远端": [
+    "注意：这里没有远端市场 —— 不能下载、不能装新插件。当前只列出本机已有的。",
+    "Note: there is no remote marketplace here — nothing can be downloaded or installed. Only local plugins are listed.",
+  ],
+  "插件.已启用": ["已启用", "enabled"],
+  "插件.启用": ["启用", "Enable"],
+  "插件.停用": ["停用", "Disable"],
+  "插件.作者": ["作者", "Author"],
+  "插件.被使用": ["被这些项目用到", "Used by"],
+  "插件.没人用": ["还没有项目用到它", "No project uses it yet"],
+  "插件.未标注": ["版本未标注", "version not declared"],
+  "插件.无说明": ["（这个插件没写说明）", "(no description in the plugin)"],
+  "插件.空": ["算法库里没有插件", "No plugins in the library"],
   "步骤.诊断": ["诊断", "Diagnose"],
   "步骤.诊断.一句话": [
     "把终端里那些断言搬进界面：点一下真跑一遍，逐条报过没过",

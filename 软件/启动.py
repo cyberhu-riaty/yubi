@@ -397,6 +397,20 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             def _发布出口(消息) -> None:
                 发送出口.发送(消息)
 
+            # ★ 插件桥必须在 `_装配项目` **之前**备好。
+            #   原因：`_装配项目` 里要用 `_插件桥`，它是**闭包自由变量** ——
+            #   如果赋值语句写在后面，那么在 `_装配项目` 被调用时它还没绑定，
+            #   直接 `NameError: free variable '_插件桥' referenced before assignment`。
+            #
+            #   这个坑我在本项目栽了**三次**（`发送`、`_Web桥`、`_插件桥`），
+            #   共同点都是"赋值/import 写在使用点之后"。所以这里的规矩是：
+            #   **凡是被嵌套函数用到的模块级/闭包名，都放到最前面统一备好。**
+            try:
+                import 插件桥 as _插件桥
+            except Exception as _异常:                                    # noqa: BLE001
+                print(f"⚠ 插件目录不可用（插件视图将没有数据）：{_异常}")
+                _插件桥 = None
+
             def _装配项目(新项目名: str, 新模型, 新数据, 新模型路径: str,
                           算法覆盖: list | None = None, 落盘: bool = False,
                           重置姿态: bool = False) -> list[str]:
@@ -533,6 +547,20 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                         被覆盖=被覆盖,
                         重力开=bool(重力应用器.重力开) if 重力应用器 is not None else False,
                     ))
+                    # 同一时刻把插件目录也发一份：「当前启用」是根据这组装好的算法算的，
+                    # 所以它必须跟 项目状态 在同一个时机更新，否则界面上的勾会落后一拍。
+                    if _插件桥 is not None:
+                        try:
+                            _目录 = _插件桥.取插件目录(
+                                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                [str(getattr(p, "名称", "")) for p in 新实例])
+                            _发布出口(_插件桥.插件目录(
+                                数量=_目录["数量"],
+                                插件=tuple(_目录["插件"]),
+                                说明=_目录.get("说明", "")))
+                        except Exception as _e:                               # noqa: BLE001
+                            print(f"⚠ 插件目录发布失败（不影响控制）："
+                                  f"{type(_e).__name__}: {_e}")
                 return 报告
 
             _模型事件 = messages.ModelEvent(model=model, path=模型路径)

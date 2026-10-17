@@ -425,7 +425,23 @@ class 算法选择器:
 
     @messages.handler
     def 收命令(self, 命令: 应用算法命令) -> bool:
-        算法 = [str(x) for x in (getattr(命令, "算法", None) or [])]
+        # ★ 契约里 `算法` 是 **object[]**（每项 `{插件: "名字"}`），不是字符串数组。
+        #   原来这里写 `[str(x) for x in ...]`，把整条 dict 变成了字符串
+        #   `"{'插件': '关节pd控制'}"` —— 于是装配器按这个名字找不到插件，
+        #   报"已装配 0 个算法；1 个失败"。
+        #
+        #   为什么这个 bug 能活很久：官方 ImGui 的算法面板是**在自己进程里直接调回调**的
+        #   （根本不走这条消息），所以那条路一直"看起来正常"；
+        #   而 Web 界面走的是消息 → 这里是唯一入口 → 一碰就露。
+        #   教训：`str(x)` 这种"兜底转换"会把**形状错误**藏成**内容错误**，排查时最难找。
+        算法: list[str] = []
+        for x in (getattr(命令, "算法", None) or []):
+            if isinstance(x, dict):
+                名 = str(x.get("插件") or x.get("名称") or "").strip()
+            else:
+                名 = str(x).strip()
+            if 名:
+                算法.append(名)
         落盘 = bool(getattr(命令, "落盘", False))
         重置 = bool(getattr(命令, "重置姿态", True))
         成功, 说明 = self._换(算法, 落盘, 重置)
