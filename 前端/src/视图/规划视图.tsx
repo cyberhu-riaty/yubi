@@ -39,6 +39,18 @@ export function 规划视图() {
   };
 
   const 成功 = 规划?.状态 === "✓ 完成";
+  const 执行中 = 规划?.执行状态 === "执行中";
+
+  /** 执行/停止轨迹：走同一条命令通道，因此也有回执 */
+  const 执行 = async (开始: boolean) => {
+    设忙(true);
+    try {
+      const 起于 = 记命令发出();
+      命令收尾("命令.规划", 开始 ? await 命令.执行轨迹() : await 命令.停止轨迹(), 起于);
+    } finally {
+      设忙(false);
+    }
+  };
   const 失败 = 规划?.状态 === "✗ 失败";
 
    /** 余量 → 标签语气：负数（超限）就是警示 */
@@ -91,6 +103,17 @@ export function 规划视图() {
           <按钮 种类="次" 尺寸="小" disabled={忙} on按下={() => void 跑("清空航点")}>
             {t("规划.清空")}
           </按钮>
+          {成功 ? (
+            执行中 ? (
+              <按钮 种类="次" 尺寸="小" disabled={忙} on按下={() => void 执行(false)}>
+                {t("规划.停止")}
+              </按钮>
+            ) : (
+              <按钮 种类="次" 尺寸="小" disabled={忙} on按下={() => void 执行(true)}>
+                {t("规划.执行")}
+              </按钮>
+            )
+          ) : null}
           {规划?.航点数 ? (
             <span className="text-[0.85em] text-dim">{`${t("规划.已记录")}: ${规划.航点数}`}</span>
           ) : null}
@@ -113,6 +136,18 @@ export function 规划视图() {
               <标签 语气={余量语气(规划.加速度余量)}>{`加速度 ${((规划.加速度余量 ?? 0) * 100).toFixed(0)}%`}</标签>
               <标签 语气={余量语气(规划.加加速度余量)}>{`加加速度 ${((规划.加加速度余量 ?? 0) * 100).toFixed(0)}%`}</标签>
             </div>
+            {规划.存盘路径 ? (
+              <div className="mt-1 text-[0.82em]">
+                <span className="text-dim">{t("规划.存盘")}：</span>
+                <span className="等宽 break-all">{规划.存盘路径}</span>
+              </div>
+            ) : null}
+            {执行中 ? (
+              <div className="mt-1 flex items-center gap-2 text-[0.82em]">
+                <span className="text-dim">{t("规划.执行进度")}</span>
+                <span className="等宽">{`${((规划.执行进度 ?? 0) * 100).toFixed(0)}%`}</span>
+              </div>
+            ) : null}
             {规划.限位来源 ? (
               <div className="mt-1 text-[0.82em]" style={{ color: "var(--warning)" }}>
                 {`${t("规划.限位来源")}: ${规划.限位来源}`}

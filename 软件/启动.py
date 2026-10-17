@@ -414,7 +414,9 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             #   ★ 必须在 `_装配项目` 之前建好（它是闭包变量，见上面的规矩）
             try:
                 import 规划桥 as _规划桥
-                _规划器 = _规划桥.规划器(_发布出口)
+                _规划器 = _规划桥.规划器(
+                    _发布出口,
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
                 注册表.加插件(_规划器)
                 print("【规划】就绪（记录航点 → 规划 → 看校验数字）", flush=True)
             except Exception as _异常:                                    # noqa: BLE001

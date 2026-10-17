@@ -23,6 +23,8 @@
 from __future__ import annotations
 
 import dataclasses
+import json
+import os
 import time
 from typing import Any, Callable
 
@@ -36,7 +38,7 @@ from 官方层 import messages          # 全部走适配层，见 软件/官方
 # ---------------------------------------------------------------------------
 @dataclasses.dataclass(frozen=True)
 class 规划命令(messages.Snapshot):
-    动作: str = "规划"           # "规划" / "记录航点" / "清空航点" / "载入航点"
+    动作: str = "规划"           # "规划" / "记录航点" / "清空航点" / "载入航点" / "执行" / "停止执行"
     # 直接给航点（每项是一组关节角）。给了就用它，不给就用已记录的。
     #   ★ 这条不是"为了方便测试"才加的：规格里"关节航点"本来就是一种**显式输入**，
     #     用户应该有办法直接贴一组航点进来，而不是只能靠"摆姿势 → 记录"。
@@ -79,6 +81,10 @@ class 规划结果(messages.Snapshot):
     限位来源: str = ""           # 显式 / 估算
     时间: str = ""
     原因: str = ""
+    # ---- 离线产物与执行 ----
+    存盘路径: str = ""           # 规划成功后写出的 CSV/元信息目录（空 = 没存）
+    执行状态: str = "空闲"       # 空闲 / 执行中 / ✓ 完成 / ✗ 中断
+    执行进度: float = 0.0        # 0..1
     # ---- 曲线（给界面画速度包络与 s(t)）----
     包络: tuple = ()             # v_s_max(s)
     s轴: tuple = ()              # 对应的 s
@@ -101,6 +107,72 @@ def _解析航点(原始) -> list[list[float]]:
         if 组:
             出.append(组)
     return 出
+
+
+# ---------------------------------------------------------------------------
+# 离线产物
+# ---------------------------------------------------------------------------
+def _轨迹目录(包根: str) -> str:
+    return os.path.join(包根, "输出", "05_轨迹")
+
+
+def _保存轨迹(报, 包根: str, 项目名: str = "") -> str:
+    """把规划结果写成**离线产物**：`轨迹.csv` + `轨迹.meta.json`。
+
+    ★ 为什么必须落盘（规格里"完整实现"明确要求"把这条轨迹作为离线产物存下来"）：
+      规划出来的东西只在内存里 = 用户拿不走、下次打开就没了，
+      这一项就永远停在"能算"而不是"能用"。
+    ★ 为什么 CSV + 元信息分开：
+      CSV 要能被 numpy/pandas/Excel 直接读（时间-位置-速度-加速度）；
+      而约束、限位来源、校验数字是**给人看的上下文**，塞进 CSV 表头会把表弄脏。
+    """
+    import time as _t
+    目录 = os.path.join(_轨迹目录(包根),
+                       f"{项目名 or '未命名'}_{_t.strftime('%Y%m%d_%H%M%S')}")
+    os.makedirs(目录, exist_ok=True)
+    t_ = np.asarray(报.t, dtype=float)
+    q = np.asarray(报.q, dtype=float)
+    qd = np.asarray(报.qd, dtype=float)
+    qdd = np.asarray(报.qdd, dtype=float)
+    n = q.shape[1] if q.ndim == 2 else 0
+    列 = ["t", "s", "sd"]
+    表 = [t_, np.asarray(报.s, dtype=float), np.asarray(报.sd, dtype=float)]
+    for i in range(n):
+        列.append(f"q{i}")
+        表.append(q[:, i])
+    for i in range(n):
+        列.append(f"qd{i}")
+        表.append(qd[:, i])
+    for i in range(n):
+        列.append(f"qdd{i}")
+        表.append(qdd[:, i])
+    矩阵 = np.column_stack(表)
+    np.savetxt(os.path.join(目录, "轨迹.csv"), 矩阵, delimiter=",",
+               header=",".join(列), comments="", fmt="%.9g")
+
+    元 = {
+        "生成时间": _t.strftime("%Y-%m-%d %H:%M:%S"),
+        "来源": "驭臂 · 轨迹规划",
+        "采样": {"点数": int(t_.size), "总时长": float(报.总时长), "网格数": int(报.网格数)},
+        "路径": {"弧长": float(报.路径长度), "航点数": int(报.航点数)},
+        "校验": {
+            "最大关节速度": float(报.最大关节速度),
+            "最大关节加速度": float(报.最大关节加速度),
+            "最大关节加加速度": float(报.最大关节加加速度),
+            "速度余量": float(报.速度余量),
+            "加速度余量": float(报.加速度余量),
+            "加加速度余量": float(报.加加速度余量),
+            "终端速度": float(报.终端速度),
+            "平滑偏差": float(报.平滑偏差),
+            "瓶颈": {"类型": str(报.瓶颈类型), "关节": int(报.瓶颈关节),
+                     "位置s": float(报.瓶颈位置)},
+        },
+        "说明": ("加加速度本版只校验不整形：峰值出现在前后向扫描的切换点，"
+                 "要做 S 曲线整形才能真限住。"),
+    }
+    with open(os.path.join(目录, "轨迹.meta.json"), "w", encoding="utf-8") as f:
+        json.dump(元, f, ensure_ascii=False, indent=2)
+    return 目录
 
 
 # ---------------------------------------------------------------------------
@@ -139,8 +211,10 @@ class 规划器:
     名称 = "轨迹规划"
     版本 = "0.1"
 
-    def __init__(self, 发送函数: Callable[[Any], None]):
+    def __init__(self, 发送函数: Callable[[Any], None], 包根: str = ""):
         self._发送 = 发送函数
+        # 包根只用来决定"离线产物写哪儿"（输出/05_轨迹/），不参与算法
+        self._包根 = 包根 or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.模型 = None
         self.航点: list[list[float]] = []
         self.最近: 规划结果 | None = None
@@ -148,6 +222,16 @@ class 规划器:
         self._上次命令 = 规划命令()
         self.错误 = ""
         self.待记录 = False        # 由仿真循环消费（见 `收命令`）
+        # 离线产物：规划成功就写一份，路径记在这里（界面显示的就是它）
+        self.存盘目录 = ""
+        # 执行态：轨迹存下来之后，由 `执行` 命令驱动
+        self.执行中 = False
+        self.执行起点 = 0.0
+        self.执行进度 = 0.0
+        self._轨迹t: np.ndarray | None = None
+        self._轨迹q: np.ndarray | None = None
+        self.执行时长 = 0.0
+        self._下次播报 = 0.0
 
     # ---- 拿模型 ----
     # ★ 方法名必须是 `收到模型`、而且**不能**加 @messages.handler：
@@ -188,6 +272,10 @@ class 规划器:
                 self.发航点数()
             except Exception as 异常:                                     # noqa: BLE001
                 print(f"⚠ 载入航点失败：{异常}", flush=True)
+        elif 动作 == "执行":
+            self.开始执行()
+        elif 动作 == "停止执行":
+            self.停止执行("手动停止")
         elif 动作 == "记录航点":
             # ★ 本插件拿不到 `data.qpos`（那是外壳的局部变量），所以这里只**挂个标记**，
             #   由仿真循环在下一圈消费。这样"记录当前姿态"这个动作仍然只有一条路径。
@@ -276,6 +364,16 @@ class 规划器:
                     值["sd轴"] = tuple(float(x) for x in np.asarray(报.sd)[取])
             if 报.成功:
                 self.规划次数 += 1
+                try:
+                    import 模型桥 as _模型桥
+                    _项目名 = str(_模型桥.读取设置("上次项目", "") or "")
+                except Exception:                                         # noqa: BLE001
+                    _项目名 = ""
+                self.存盘目录 = _保存轨迹(报, self._包根, _项目名)
+                # 执行用的时间序列（与 CSV 同源，不另存一份"执行用"数据）
+                self._轨迹t = np.asarray(报.t, dtype=float)
+                self._轨迹q = np.asarray(报.q, dtype=float)
+                值["存盘路径"] = self.存盘目录 or ""
         except Exception as 异常:                                         # noqa: BLE001
             值["状态"] = "✗ 失败"
             值["原因"] = f"{type(异常).__name__}: {异常}"
@@ -287,6 +385,77 @@ class 规划器:
             self._发送(结果)
         except Exception as 异常:                                         # noqa: BLE001
             print(f"⚠ 规划结果发送失败：{type(异常).__name__}: {异常}", flush=True)
+
+    # ------------------------------------------------------------------
+    # 执行：把轨迹当成"会动的目标"喂给现成的跟踪控制器
+    # ------------------------------------------------------------------
+    def 开始执行(self) -> None:
+        """开始按轨迹走。
+
+        ★ 为什么不在这里直接写 `data.ctrl`：
+          规格要求"由一个**独立的跟踪控制器**在仿真里忠实执行"。
+          本项目里那个控制器**已经存在**（`算法库/通用/关节pd控制.py`），
+          它的职责就是"跟一个目标走"。我们只要每步把"此刻该在哪"发过去，
+          跟踪质量（超调、稳态误差）就由它负责 —— 这是**真实的解耦**，
+          而不是在规划器里塞一段 PID 假装有控制器。
+        ★ 走的还是 `面板目标消息` 这条既有通道（和界面滑杆同一条），
+          所以不需要给规划器开特例通道。
+        """
+        if self._轨迹t is None or self._轨迹q is None:
+            print("⚠ 执行失败：还没有成功规划过（先点「规划」）", flush=True)
+            return
+        self.执行中 = True
+        self.执行起点 = time.time()
+        self.执行进度 = 0.0
+        self.执行时长 = float(self._轨迹t[-1])
+        self._播报执行("执行中")
+        print(f"▶ 开始执行轨迹：{self.执行时长:.2f} 秒、"
+              f"{self._轨迹q.shape[1]} 轴", flush=True)
+
+    def 停止执行(self, 原因: str = "") -> None:
+        if not self.执行中:
+            return
+        self.执行中 = False
+        print(f"⏹ 轨迹执行结束：{原因}（进度 {self.执行进度 * 100:.0f}%）", flush=True)
+        self._播报执行("✓ 完成" if self.执行进度 >= 0.999 else "✗ 中断")
+
+    @messages.handler
+    def 每步执行(self, event: messages.StepEvent) -> bool:
+        """每一步把"当前时刻该在的目标"发给跟踪控制器。"""
+        if not self.执行中 or self._轨迹t is None:
+            return False
+        try:
+            已过 = time.time() - self.执行起点
+            if 已过 >= self.执行时长:
+                # 最后一帧保持在终点，让控制器收敛，而不是"到点就撒手"
+                self.执行进度 = 1.0
+                目标 = self._轨迹q[-1]
+            else:
+                self.执行进度 = 已过 / max(self.执行时长, 1e-9)
+                目标 = np.array([np.interp(已过, self._轨迹t, self._轨迹q[:, i])
+                                for i in range(self._轨迹q.shape[1])])
+            from 界面桥 import 面板目标消息
+            self._发送(面板目标消息(ctrl_target=目标))
+            # 2 Hz 播报进度（界面只需看到"走到哪了"，不需要每步一条）
+            现在 = time.time()
+            if 现在 >= self._下次播报:
+                self._下次播报 = 现在 + 0.5
+                self._播报执行("执行中")
+            if 已过 >= self.执行时长 + 1.0:      # 到点后再多喂 1 秒让控制器收住
+                self.停止执行("到达终点")
+        except Exception as 异常:                                     # noqa: BLE001
+            self.停止执行(f"出错 {type(异常).__name__}: {异常}")
+        return False
+
+    def _播报执行(self, 状态: str) -> None:
+        """把执行状态发出去（复用最近一次规划结果的其余字段）。"""
+        if self.最近 is None:
+            return
+        try:
+            self._发送(dataclasses.replace(
+                self.最近, 执行状态=状态, 执行进度=float(self.执行进度)))
+        except Exception:                                             # noqa: BLE001
+            pass
 
     def 发航点数(self) -> None:
         """航点变化时让界面知道（用户想知道"记了几个点"）。"""
