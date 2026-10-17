@@ -1,73 +1,160 @@
 /**
- * 规划视图.tsx —— 任务流第 2 步：轨迹规划。
+ * 规划视图.tsx —— 「规划」：关节航点 → 时间参数化轨迹。
  *
- * 这一格是**故意空着的**，而且要把"为什么空着"写在脸上：
- *   · 契约（`生成/契约.ts`）里没有任何规划主题 —— 上行没有规划请求，
- *     下行没有规划结果。没有数据源，画出来的路点 / 曲线 / 包络必然是编的。
- *   · 规格里判定"真规划器 vs 原型"的判据是**能不能回答约束满足率与贴合误差**。
- *     答不出来的原型画得再漂亮也是假的 —— 所以这里不画。
+ * 这一格显示的全是**真数字**，来自后端 `规划桥` 对内核输出的回算：
+ *   · 终端速度（必须是 0 —— 不是事后置零，是后向扫描天然收住的）
+ *   · 三项余量（1 − max(实际/限位)）：负数 = 超限，后端会直接判失败
+ *   · 瓶颈（哪个关节、什么类型、在 s 的哪里）
+ *   · 限位来源：**显式**还是**估算** —— 估算时必须让用户看见，否则"规划通过"没有意义
  *
- * 于是这一格的唯一内容就是：未实现 + 将来会包含什么 + 要什么才能做。
- * 唯一的"数字"是 `上行元.length`（现在真有几条上行命令），它是从生成的契约里数出来的。
+ * ★ 关于 jerk：本版**只校验不整形**。收紧 jerk 限会让它判失败而不是变慢，
+ *   界面上这句话必须写出来，不能让用户以为它做了 S 曲线。
  */
+import { useState } from "react";
 import { 可折叠区块 } from "../组件/可折叠区块";
 import { 标签 } from "../组件/标签";
+import { 按钮 } from "../组件/按钮";
 import { 数值表, type 数值行 } from "../组件/数值表";
-import { 上行元 } from "@生成/契约";
+import { 命令, 用仓库 } from "../数据/仓库";
+import { 命令收尾, 记命令发出 } from "../数据/日志";
 import { use取 } from "./文案";
-
-const 将包含键 = [
-  "规划.路点",
-  "规划.关节约束",
-  "规划.MVC",
-  "规划.剖面",
-  "规划.约束满足率",
-] as const;
 
 export function 规划视图() {
   const t = use取();
+  const 规划 = 用仓库((s) => s.规划.数据);
+  const [忙, 设忙] = useState(false);
 
-  const 现况行: 数值行[] = [
-    {
-      键: t("规划.上行现有"),
-      值: <span className="等宽">{上行元.length}</span>,
-      纯文本: 上行元.map((m) => m.名).join("  "),
-    },
-    {
-      键: t("关于.下行"),
-      值: <span className="等宽">{t("规划.结果主题")}</span>,
-      弱: true,
-    },
-  ];
+  const 跑 = async (动作: "记录航点" | "清空航点" | "规划") => {
+    设忙(true);
+    try {
+      const 起于 = 记命令发出();
+      const r =
+        动作 === "记录航点" ? await 命令.记录航点()
+        : 动作 === "清空航点" ? await 命令.清空航点()
+        : await 命令.跑规划();
+      命令收尾("命令.规划", r, 起于);
+    } finally {
+      设忙(false);
+    }
+  };
+
+  const 成功 = 规划?.状态 === "✓ 完成";
+  const 失败 = 规划?.状态 === "✗ 失败";
+
+   /** 余量 → 标签语气：负数（超限）就是警示 */
+  const 余量语气 = (v?: number) => (v === undefined ? "中性" : v < 0 ? "警示" : v < 0.05 ? "强调" : "中性");
+
+  const 行: 数值行[] = 规划
+    ? [
+        { 键: t("规划.航点数"), 值: <span className="等宽">{规划.航点数 ?? "--"}</span> },
+        { 键: t("规划.自由度"), 值: <span className="等宽">{规划.自由度 ?? "--"}</span> },
+        { 键: t("规划.总时长"), 值: <span className="等宽">{规划.总时长 === undefined ? "--" : `${规划.总时长.toFixed(3)} s`}</span> },
+        { 键: t("规划.路径长度"), 值: <span className="等宽">{规划.路径长度 === undefined ? "--" : `${规划.路径长度.toFixed(3)} rad`}</span> },
+        { 键: t("规划.终端速度"), 值: <span className="等宽">{(规划.终端速度 ?? 0).toExponential(1)}</span> },
+        { 键: t("规划.最大速度"), 值: <span className="等宽">{(规划.最大关节速度 ?? 0).toFixed(3)}</span> },
+        { 键: t("规划.最大加速度"), 值: <span className="等宽">{(规划.最大关节加速度 ?? 0).toFixed(2)}</span> },
+        { 键: t("规划.最大加加速度"), 值: <span className="等宽">{(规划.最大关节加加速度 ?? 0).toFixed(2)}</span> },
+        {
+          键: t("规划.瓶颈"),
+          值: (
+            <span className="等宽">
+              {规划.瓶颈类型 ? `${规划.瓶颈类型} @ J${规划.瓶颈关节} (s=${(规划.瓶颈位置 ?? 0).toFixed(2)})` : "--"}
+            </span>
+          ),
+        },
+        {
+          键: t("规划.实际比下界"),
+          值: <span className="等宽">{(规划.实际比下界 ?? 0).toFixed(2)}<span className="ml-1 text-dim">×</span></span>,
+        },
+      ]
+    : [];
 
   return (
-    <div>
-      <可折叠区块 标题={t("规划.未实现标题")} 徽标={<标签 语气="警示">{t("通用.未实现")}</标签>}>
-        <div className="未接入">
-          <p>{t("规划.未实现说明")}</p>
-          <div className="mt-2">
-            <数值表 行={现况行} />
-          </div>
-          <p className="mt-2 text-[0.9em]">{t("规划.要什么")}</p>
+    <div className="space-y-2">
+      <可折叠区块
+        标题={t("步骤.规划")}
+        徽标={
+          成功 ? <标签 语气="强调">{`${规划?.总时长?.toFixed(2) ?? "?"}s`}</标签>
+          : 失败 ? <标签 语气="警示">{t("规划.失败")}</标签>
+          : <标签 语气="警示">{t("通用.未实现")}</标签>
+        }
+      >
+        <p className="text-dim">{t("规划.说明")}</p>
+
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <按钮 种类="次" 尺寸="小" disabled={忙} on按下={() => void 跑("记录航点")}>
+            {t("规划.记录")}
+          </按钮>
+          <按钮 种类="主" 尺寸="小" disabled={忙} on按下={() => void 跑("规划")}>
+            {规划?.状态 === "规划中" ? t("规划.规划中") : t("规划.规划")}
+          </按钮>
+          <按钮 种类="次" 尺寸="小" disabled={忙} on按下={() => void 跑("清空航点")}>
+            {t("规划.清空")}
+          </按钮>
+          {规划?.航点数 ? (
+            <span className="text-[0.85em] text-dim">{`${t("规划.已记录")}: ${规划.航点数}`}</span>
+          ) : null}
         </div>
-      </可折叠区块>
 
-      <可折叠区块 标题={t("规划.将包含")} 徽标={<span className="等宽">{将包含键.length}</span>}>
-        <ul className="space-y-1">
-          {将包含键.map((k) => (
-            <li key={k} className="flex gap-1.5">
-              <span aria-hidden="true" className="等宽 text-dim">
-                ·
-              </span>
-              <span>{t(k)}</span>
-            </li>
-          ))}
-        </ul>
-      </可折叠区块>
+        {失败 && 规划?.原因 ? (
+          <div className="mt-2 text-[0.85em]" style={{ color: "var(--warning)" }}>
+            {规划.原因}
+          </div>
+        ) : null}
 
-      <可折叠区块 标题={t("规划.为什么空着")} 默认开={false}>
-        <p className="text-dim">{t("规划.为什么这样")}</p>
+        {成功 ? (
+          <>
+            <div className="mt-2">
+              <数值表 行={行} />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[0.82em]">
+              <span className="text-dim">{t("规划.余量")}</span>
+              <标签 语气={余量语气(规划.速度余量)}>{`速度 ${((规划.速度余量 ?? 0) * 100).toFixed(0)}%`}</标签>
+              <标签 语气={余量语气(规划.加速度余量)}>{`加速度 ${((规划.加速度余量 ?? 0) * 100).toFixed(0)}%`}</标签>
+              <标签 语气={余量语气(规划.加加速度余量)}>{`加加速度 ${((规划.加加速度余量 ?? 0) * 100).toFixed(0)}%`}</标签>
+            </div>
+            {规划.限位来源 ? (
+              <div className="mt-1 text-[0.82em]" style={{ color: "var(--warning)" }}>
+                {`${t("规划.限位来源")}: ${规划.限位来源}`}
+              </div>
+            ) : null}
+          </>
+        ) : null}
+
+        {规划?.包络?.length ? (
+          <div className="mt-2">
+            <div className="text-[0.85em] text-dim">{t("规划.包络")}</div>
+            <包络图 包络={规划.包络} sd={规划.sd轴 ?? []} />
+          </div>
+        ) : null}
       </可折叠区块>
     </div>
+  );
+}
+
+/**
+ * 包络图 —— 手写 SVG（项目里没有图表库，也不打算为一张图引一个）。
+ * 灰线 = 速度上界 `v_s_max(s)`；蓝线 = 实际 `sd(s)`。
+ * 两条线之间的空隙就是"没用满的部分"，比看数字直观。
+ */
+function 包络图({ 包络, sd }: { 包络: number[]; sd: number[] }) {
+  const 宽 = 100;
+  const 高 = 42;
+  const 全 = [...包络, ...sd].filter((x) => Number.isFinite(x) && x > 0);
+  if (!全.length) return null;
+  const 顶 = Math.max(...全) || 1;
+  const 折 = (组: number[]) =>
+    组
+      .map((v, i) => {
+        const x = (i / Math.max(组.length - 1, 1)) * 宽;
+        const y = 高 - (Math.max(0, Math.min(v, 顶)) / 顶) * 高;
+        return `${i ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
+      })
+      .join(" ");
+  return (
+    <svg viewBox={`0 0 ${宽} ${高}`} className="mt-1 w-full" style={{ height: 90 }} aria-hidden="true">
+      <path d={折(包络)} fill="none" stroke="var(--border)" strokeWidth="0.6" />
+      {sd.length ? <path d={折(sd)} fill="none" stroke="var(--palette-1)" strokeWidth="0.9" /> : null}
+    </svg>
   );
 }

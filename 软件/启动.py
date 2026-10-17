@@ -410,6 +410,17 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             except Exception as _异常:                                    # noqa: BLE001
                 print(f"⚠ 插件目录不可用（插件视图将没有数据）：{_异常}")
                 _插件桥 = None
+            # 轨迹规划器：记录航点 → 调内核 → 发结果
+            #   ★ 必须在 `_装配项目` 之前建好（它是闭包变量，见上面的规矩）
+            try:
+                import 规划桥 as _规划桥
+                _规划器 = _规划桥.规划器(_发布出口)
+                注册表.加插件(_规划器)
+                print("【规划】就绪（记录航点 → 规划 → 看校验数字）", flush=True)
+            except Exception as _异常:                                    # noqa: BLE001
+                print(f"⚠ 轨迹规划不可用（规划视图将不能规划）：{_异常}")
+                _规划器 = None
+
             # 部署器：导出可带走的包（**不连真机** —— 这个软件没有传输层）
             try:
                 import 部署桥 as _部署桥
@@ -886,6 +897,20 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
 
                 # 派发 StepEvent：StepControl（内置）推进物理 + 你的插件写控制量
                 注册表.处理消息(messages.StepEvent(model=model, data=data))
+
+                # 「记录航点」需要 `data.qpos`，只有这里拿得到 —— 所以由循环消费。
+                #   ★ 插件自己拿不到 data（那是外壳的局部变量），这是刻意的分层：
+                #     需要仿真数据的动作都在外壳里做，插件只描述"想做什么"。
+                if _规划器 is not None and getattr(_规划器, "待记录", False):
+                    _规划器.待记录 = False
+                    try:
+                        # ★ 本文件里 numpy 的别名是 `_np`（不是 `np`）—— 写错会 NameError，
+                        #   而它只在使用时才暴露（这里），启动日志里表现为"记录航点失败"。
+                        _个数 = _规划器.记录航点(_np.asarray(data.qpos, dtype=float).ravel())
+                        print(f"【规划】已记录第 {_个数} 个航点", flush=True)
+                        _规划器.发航点数()
+                    except Exception as _e:                               # noqa: BLE001
+                        print(f"⚠ 记录航点失败：{type(_e).__name__}: {_e}", flush=True)
 
                 # 送一帧指标给界面（内部按 30 Hz 限频，不会每圈都发）
                 if 指标发布 is not None:
