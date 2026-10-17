@@ -9,7 +9,7 @@
  * 快捷键 1..5 在这里只显示提示，真正绑在 `App.tsx`（避免两处各绑一次）。
  */
 import type { ReactNode } from "react";
-import { 底部步骤, 任务步骤, type 步骤id } from "./任务流";
+import { 底部步骤, 任务步骤, 运行步骤, type 步骤id } from "./任务流";
 import { use取 } from "../视图/文案";
 
 export interface 活动栏参数 {
@@ -74,6 +74,15 @@ function 图标({ 名 }: { 名: 步骤id }) {
           <path d="M5 2v4M11 2v4" />
           <path d="M3 6h10v2.5a5 5 0 0 1-5 5 5 5 0 0 1-5-5V6z" />
           <path d="M8 13.5V15" />
+        </svg>
+      );
+    case "监控": // 仪表盘：底槽 + 指针
+      return (
+        <svg {...公共}>
+          <path d="M2.4 11.2a5.8 5.8 0 0 1 11.2 0" />
+          <path d="M8 11.2 10.6 7.4" />
+          <circle cx="8" cy="11.2" r="0.9" fill="currentColor" stroke="none" />
+          <path d="M2.2 13.4h11.6" />
         </svg>
       );
     case "外观": // 调色盘
@@ -175,6 +184,8 @@ export function 活动栏({ 当前, 侧栏开, on选步 }: 活动栏参数) {
     >
       <div role="toolbar" aria-label={t("活动栏.步骤编组")} aria-orientation="vertical">
         {画组(任务步骤, 1)}
+        <div className="my-1" style={{ borderTop: "1px solid var(--border)" }} />
+        {画组(运行步骤)}
       </div>
       <div role="toolbar" aria-label={t("活动栏.底部编组")} aria-orientation="vertical">
         {画组(底部步骤)}

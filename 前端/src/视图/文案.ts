@@ -117,6 +117,31 @@ const 表 = {
   "步骤.验证.一句话": ["实时曲线与参数表", "Live curves and parameter table"],
   "步骤.辨识": ["辨识", "Identify"],
   "步骤.辨识.一句话": ["参数辨识进度与结果", "System identification progress and results"],
+  "步骤.监控": ["监控", "Monitor"],
+  "步骤.监控.一句话": [
+    "实时率、步频、内存 —— 跑得动跑不动，看这里",
+    "Real-time factor, step rate, memory — whether it keeps up",
+  ],
+  "监控.实时率": ["实时率 RTF", "Real-time factor"],
+  "监控.步频": ["物理步频", "Physics step rate"],
+  "监控.内存": ["进程内存", "Process memory"],
+  "监控.仿真时间": ["仿真时间", "Sim time"],
+  "监控.墙钟": ["已运行", "Elapsed"],
+  "监控.步长": ["物理步长", "Timestep"],
+  "监控.插件数": ["已装插件", "Plugins"],
+  "监控.说明": [
+    "RTF = 仿真时间推进 ÷ 真实耗时。1.00 表示实速；明显小于 1 说明算不过来（算法太重或模型太复杂）。这些数只能由仿真侧算，界面不自己估。",
+    "RTF = sim time advanced ÷ wall clock. 1.00 means real time; well below 1 means it cannot keep up. These can only be measured on the sim side; the UI never estimates them.",
+  ],
+  "监控.没数据": [
+    "还没收到系统指标（1 Hz 发一次，稍等）",
+    "No system metrics yet (sent once a second)",
+  ],
+  "监控.渲染帧率": ["3D 渲染帧率", "3D render rate"],
+  "监控.渲染帧率.说明": [
+    "这一项来自窗口层（3D 视口自己的统计），不是仿真侧算的。",
+    "This one comes from the window layer (the 3D viewport's own stats), not the sim side.",
+  ],
   "步骤.部署": ["部署", "Deploy"],
   "步骤.部署.一句话": ["真机部署（未接入）", "Real-hardware deploy (not connected)"],
   "步骤.外观": ["外观", "Appearance"],
@@ -268,6 +293,16 @@ const 表 = {
   "定义.装配报告": ["上次装配报告", "Last assembly report"],
   "定义.没项目": ["后端没有报项目。", "The backend reports no project."],
   "定义.资产库": ["资产库（模型库）", "Asset library (model library)"],
+  "定义.资产库.说明": [
+    "点一台即可直接加载（走 `命令.换模型`，不搞「点了就算成功」—— 每条命令都有回执）。",
+    "Click a robot to load it right away (via `命令.换模型`; every command gets an ack).",
+  ],
+  "定义.资产库.空": [
+    "后端没有报上来任何资产。可能模型清单还没读出来，或一个模型都没导入。",
+    "The backend reported no assets — the model inventory may not be loaded, or no models are imported.",
+  ],
+  "定义.资产库.带星": ["当前加载", "loaded"],
+  "定义.资产库.点选": ["加载这台：{名}", "Load {名}"],
   "定义.资产库.待接入": [
     "模型库列表**还没进契约**：`软件/契约.py` 里只有「当前模型」，没有可浏览的模型清单。",
     "The model library is **not in the contract yet**: the contract carries only the current model, not a browsable list.",

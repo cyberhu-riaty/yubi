@@ -19,6 +19,7 @@ import { 规划视图 } from "../视图/规划视图";
 import { 验证视图 } from "../视图/验证视图";
 import { 辨识视图 } from "../视图/辨识视图";
 import { 部署视图 } from "../视图/部署视图";
+import { 监控视图 } from "../视图/监控视图";
 import { 外观视图 } from "../视图/外观视图";
 import { 关于视图 } from "../视图/关于视图";
 
@@ -40,6 +41,8 @@ function 画视图(步骤: 步骤id) {
       return <辨识视图 />;
     case "部署":
       return <部署视图 />;
+    case "监控":
+      return <监控视图 />;
     case "外观":
       return <外观视图 />;
     case "关于":

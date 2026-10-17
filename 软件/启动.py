@@ -617,6 +617,13 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 print(f"⚠ 项目装配不可用（本组算法保持 主程序.py 里装好的那一批）："
                       f"{type(异常).__name__}: {异常}")
 
+            # 资产库清单：启动时发一次就够（清单不变；运行期真变了再发）
+            try:
+                _模型桥.资产库发布器(_发布出口).发布()
+            except Exception as 异常:                                      # noqa: BLE001
+                print(f"⚠ 资产库清单发布失败（不影响控制）："
+                      f"{type(异常).__name__}: {异常}")
+
             print("【仿真线程】模型已发送给窗口，开始跑控制回路…", flush=True)
             print("（下面每 2 秒打一行插件状态，可以据此判断算法到底有没有在干活）\n", flush=True)
 
@@ -774,6 +781,16 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             except Exception as 异常:                                     # noqa: BLE001
                 print(f"⚠ 指标桥不可用（监控面板将没有数据）：{异常}")
                 指标发布 = None
+
+            # 系统监视发布器：RTF / 步频 / 内存（1 Hz 够了，看的是趋势不是每一帧）
+            #   ★ 这几项**只能由仿真侧算**：界面拿不到"物理跑了多少步"。
+            #     渲染帧率不在这里 —— 那是窗口层的事（见 宿主窗口.取统计）。
+            try:
+                import 系统桥 as _系统桥
+                系统发布 = _系统桥.发布器(_发布出口)
+            except Exception as 异常:                                     # noqa: BLE001
+                print(f"⚠ 系统桥不可用（监控视图将没有数据）：{异常}")
+                系统发布 = None
             while not 停止.is_set():
                 # 官方 ViewerHandle.sync 做了三件事，我们拆开自己做，好插入出错隔离：
                 #   ① 处理 viewer 发来的事件/快照  ② 派发 StepEvent  ③ 回发状态快照
@@ -824,6 +841,18 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 # 送一帧指标给界面（内部按 30 Hz 限频，不会每圈都发）
                 if 指标发布 is not None:
                     指标发布.也许发布(注册表, float(data.time), _time.perf_counter())
+                # 系统指标（1 Hz）：RTF / 步频 / 内存。
+                #   步数用 `data.time / timestep` 反推不稳，直接用 mujoco 的累计计数；
+                #   拿不到就退回 0（宁可步频显示 0，也不编一个数）。
+                if 系统发布 is not None:
+                    _步数 = 0
+                    try:
+                        _步数 = int(getattr(data, "time", 0.0) / max(model.opt.timestep, 1e-9))
+                    except Exception:                                     # noqa: BLE001
+                        _步数 = 0
+                    系统发布.也许发布(
+                        float(data.time), _步数, float(model.opt.timestep),
+                        len(getattr(注册表, "_目标", [])), _time.perf_counter())
                 # 周期性送"可调参数表"给界面（10 Hz 够了，滑杆不需要更密）
                 if 参数发布 is not None:
                     参数发布.也许发布(注册表, float(data.time), _time.perf_counter())
