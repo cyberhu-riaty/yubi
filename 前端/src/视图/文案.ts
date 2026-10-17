@@ -117,6 +117,20 @@ const 表 = {
   "步骤.验证.一句话": ["实时曲线与参数表", "Live curves and parameter table"],
   "步骤.辨识": ["辨识", "Identify"],
   "步骤.辨识.一句话": ["参数辨识进度与结果", "System identification progress and results"],
+  "部署.说明": [
+    "把**当前项目**打成可带走的包：项目配置 + 算法源码 + 模型清单（含 sha256）。包里的都是真文件，导出后你可以直接打开看。",
+    "Packages the current project into something portable: config + algorithm source + a model manifest with sha256. Everything in it is a real file you can open.",
+  ],
+  "部署.没有连接": [
+    "注意：这里**不连真机** —— 这个软件没有传输层、没有设备抽象、没有安全状态机。所以没有「连接」按钮，也不会显示「已连接」。真机那一层需要你按自己的协议实现。",
+    "Note: this does not connect to hardware — there is no transport layer, no device abstraction, no safety state machine. Hence no Connect button and no connected indicator. The hardware bridge is yours to implement.",
+  ],
+  "部署.导出": ["导出部署包", "Export package"],
+  "部署.导出中": ["导出中…", "Exporting…"],
+  "部署.未导出": ["还没导出", "not exported"],
+  "部署.失败": ["导出失败", "failed"],
+  "部署.目录": ["导出到", "Exported to"],
+  "部署.项目": ["项目", "Project"],
   "步骤.插件": ["插件", "Plugins"],
   "步骤.插件.一句话": [
     "本机算法库里有什么插件、什么版本、被谁用到 —— 不是商店",

@@ -410,6 +410,15 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             except Exception as _异常:                                    # noqa: BLE001
                 print(f"⚠ 插件目录不可用（插件视图将没有数据）：{_异常}")
                 _插件桥 = None
+            # 部署器：导出可带走的包（**不连真机** —— 这个软件没有传输层）
+            try:
+                import 部署桥 as _部署桥
+                _部署器 = _部署桥.部署器(_发布出口,
+                                        os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                注册表.加插件(_部署器)
+                print("【部署】就绪（可导出部署包；真机连接未实现）", flush=True)
+            except Exception as _异常:                                    # noqa: BLE001
+                print(f"⚠ 部署器不可用（部署视图将不能导出）：{_异常}")
 
             def _装配项目(新项目名: str, 新模型, 新数据, 新模型路径: str,
                           算法覆盖: list | None = None, 落盘: bool = False,
