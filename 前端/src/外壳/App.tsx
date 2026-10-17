@@ -284,33 +284,47 @@ export function App() {
       className="flex h-full min-h-0 flex-col overflow-hidden"
       style={{ background: "var(--bg)" }}
     >
+      {/* ★ 结构说明（为了让"控制台横跨整个左面板下方"这件事成立）：
+       *
+       *   外壳行：  [活动栏] [ 外壳列 ....................... ]
+       *   外壳列：            [ 侧栏 | 中区 ]   ← 上半
+       *                       [ 分隔条 ]        ← 可拖
+       *                       [ 控制台 ]        ← 下半（横跨整列宽度）
+       *
+       * 之前控制台被放在"侧栏右边的那一列"里，于是 Web 面板只占窗口 40% 时，
+       * 它只能分到 576-48-300 = 228px —— 挤成一团、文字全糊在一起。
+       * 现在它横跨整个左面板（528px），宽度够了才有可读性。
+       * 宽窗口下（浏览器版）这个结构同样成立，而且比原来更整齐。 */}
       <div className="flex min-h-0 flex-1">
         <活动栏 当前={步骤} 侧栏开={偏好.侧栏开} on选步={选步} />
 
-        {偏好.侧栏开 ? (
-          <>
-            <div
-              className="flex min-h-0 flex-none flex-col overflow-hidden"
-              style={{ width: 偏好.侧栏宽, borderRight: "1px solid var(--border)" }}
-            >
-              <侧栏 步骤={步骤} 开 on收起={切侧栏} />
-            </div>
-            <分隔条
-              方向="横"
-              值={偏好.侧栏宽}
-              界={侧栏界}
-              标题={"侧栏宽度（拖动 / 方向键 / - = 键）"}
-              on改={(值) => 设偏好((旧) => ({ ...旧, 侧栏宽: 值 }))}
-              on双击={() => 设偏好((旧) => ({ ...旧, 侧栏宽: 默认偏好.侧栏宽 }))}
-            />
-          </>
-        ) : null}
-
-        {/* 中区 + 控制台：上下两格，中间一条横向分隔条 */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1">
-            <中区 />
+          <div className="flex min-h-0 flex-1">
+            {偏好.侧栏开 ? (
+              <>
+                <div
+                  className="侧栏格 flex min-h-0 flex-none flex-col overflow-hidden"
+                  style={{ width: 偏好.侧栏宽, borderRight: "1px solid var(--border)" }}
+                >
+                  <侧栏 步骤={步骤} 开 on收起={切侧栏} />
+                </div>
+                <分隔条
+                  方向="横"
+                  值={偏好.侧栏宽}
+                  界={侧栏界}
+                  标题={"侧栏宽度（拖动 / 方向键 / - = 键）"}
+                  on改={(值) => 设偏好((旧) => ({ ...旧, 侧栏宽: 值 }))}
+                  on双击={() => 设偏好((旧) => ({ ...旧, 侧栏宽: 默认偏好.侧栏宽 }))}
+                />
+              </>
+            ) : null}
+
+            <div className="中区格 min-h-0 min-w-0 flex-1">
+              <中区 />
+            </div>
           </div>
+
+          {/* 控制台（横跨整个左面板下方） */}
           {控制台开 ? (
             <>
               <分隔条
