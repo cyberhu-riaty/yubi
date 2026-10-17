@@ -72,16 +72,21 @@ def 查文件(路径: Path) -> list[str]:
         # 函数内所有 import 别名 → 行号
         局部导入: dict[str, int] = {}
         局部赋值: dict[str, int] = {}
+        # ★ 取**最小行号**，不能用 setdefault：
+        #   `ast.walk` 是广度优先、**不按行号顺序**，同一个名字 import 两次时
+        #   setdefault 可能记下后面那次 → "首次绑定"被算晚 → 报假错（实测踩过）。
+        def 记绑定(表: dict[str, int], 名: str, 行: int) -> None:
+            表[名] = min(表.get(名, 行), 行)
+
         for 子 in ast.walk(函数):
             if isinstance(子, ast.Import):
                 for a in 子.names:
-                    局部导入.setdefault(a.asname or a.name.split(".")[0], 子.lineno)
+                    记绑定(局部导入, a.asname or a.name.split(".")[0], 子.lineno)
             elif isinstance(子, ast.ImportFrom):
                 for a in 子.names:
-                    局部导入.setdefault(a.asname or a.name, 子.lineno)
+                    记绑定(局部导入, a.asname or a.name, 子.lineno)
             elif isinstance(子, ast.Name) and isinstance(子.ctx, ast.Store):
-                if 子.id not in 局部赋值:
-                    局部赋值[子.id] = 子.lineno
+                记绑定(局部赋值, 子.id, 子.lineno)
 
         for 名, 导入行 in 局部导入.items():
             # ① 模块级同名 + 函数里更早引用 → UnboundLocalError
@@ -96,11 +101,26 @@ def 查文件(路径: Path) -> list[str]:
                     f"「{名}」，而第 {最早就用} 行就引用了它 → 会 UnboundLocalError\n"
                     f"      {行们[导入行 - 1].strip()[:90]}\n"
                     f"      修法：删掉函数内的 import，用模块级那份（或改用别的别名）")
-            # ② 同名既 import 又赋值 → 都是局部绑定，极易混
-            if 名 in 局部赋值 and 局部赋值[名] != 导入行:
+            # ② **精确判据**：名字在"第一次被绑定"之前就被**引用**了 → 必然 UnboundLocalError
+            #
+            #    ★ 原来这条写的是"既 import 又赋值就报"，太粗 ——
+            #      `try: import X as Y` / `except: Y = None` 这种**兜底赋值**是正当写法，
+            #      却被误报（实测：插件桥那次）。误报多了，人就会开始无视这个检查。
+            #
+            #    真正会炸的情况只有一种：**先用、后绑**。所以只比这两个行号。
+            首次绑定 = min(导入行, 局部赋值.get(名, 导入行))
+            首次引用 = None
+            for 子 in ast.walk(函数):
+                if isinstance(子, ast.Name) and isinstance(子.ctx, ast.Load) and 子.id == 名:
+                    if 首次引用 is None or 子.lineno < 首次引用:
+                        首次引用 = 子.lineno
+            if 首次引用 is not None and 首次引用 < 首次绑定:
                 问题.append(
-                    f"{路径.relative_to(包根)}:{导入行} — 函数「{函数.name}」内「{名}」"
-                    f"既有 import 又有赋值（第 {局部赋值[名]} 行），容易误读")
+                    f"{路径.relative_to(包根)}:{首次引用} — 函数「{函数.name}」里「{名}」"
+                    f"在第 {首次引用} 行就用了，但到第 {首次绑定} 行才绑定 → "
+                    f"会 UnboundLocalError\n"
+                    f"      {源.splitlines()[首次引用 - 1].strip()[:90]}\n"
+                    f"      修法：把这个名字的 import/赋值挪到**使用之前**（被嵌套函数用到的更要靠前）")
     return 问题
 
 
