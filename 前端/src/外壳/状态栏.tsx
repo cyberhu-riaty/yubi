@@ -46,8 +46,7 @@ export function 状态栏() {
 
   return (
     <footer
-      className="flex flex-none flex-wrap items-center gap-x-3 gap-y-0.5 px-2 py-0.5 text-[0.9em]"
-      style={{ background: "var(--bg-title)", borderTop: "1px solid var(--border)" }}
+      className="状态栏 flex flex-none flex-wrap items-center gap-x-3 gap-y-0.5 px-2.5 py-1 text-[0.9em]"
       aria-label={t("状态栏.连接")}
     >
       <格 标签={t("状态栏.项目")} 提示={t("状态栏.提示.项目")} 值={项目?.项目 || "--"} />

@@ -165,9 +165,17 @@
     border-radius: var(--radius);
   }
 
-  /* 侧栏/控制台里的一"段"（可折叠区块的外框） */
+  /* 侧栏/控制台里的一"段"（可折叠区块的外框）
+   *
+   * ★ 从"一条分隔线"改成"一张卡片"：浅灰桌面上浮一张白卡，边界立刻清楚。
+   *   原来只有一条 1px 分隔线，整屏是"一长条"—— 这是之前看起来平的主因之一。
+   */
   .段 {
-    border-bottom: var(--border-w, 1px) solid var(--border-light);
+    background: var(--bg-panel);
+    border: var(--border-w, 1px) solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px var(--shadow);
+    overflow: hidden;
   }
 
   /* 段落标题条：可折叠区块的按钮就是它 */
@@ -177,7 +185,8 @@
     gap: 6px;
     width: 100%;
     padding: var(--pad-y) var(--pad-x);
-    background: var(--bg-header);
+    /* 卡片内不再铺满底色：白卡 + 灰标题条会显得"两层"，用透明更干净 */
+    background: transparent;
     color: var(--fg);
     border: 0;
     text-align: left;
@@ -185,6 +194,30 @@
   }
   .段头:hover {
     background: var(--bg-header-hover);
+  }
+
+  /* 状态栏：整条压成主色（对应参考项目底部那条蓝），
+   * 上面所有灰字自动转成半透明白 —— 否则灰字压蓝底直接看不清。
+   * 用继承 + 透明度而不是逐处改颜色：状态栏里元素很多，漏一个就花脸。 */
+  .状态栏 {
+    background: var(--bg-nav);
+    color: var(--fg-on-accent);
+  }
+  .状态栏 .text-dim {
+    color: inherit;
+    opacity: 0.72;
+  }
+  .状态栏 .等宽 {
+    color: inherit;
+  }
+  /* 状态栏里的按钮（如"物理"开关）改成"玻璃片"，不跟主色打架 */
+  .状态栏 button {
+    background: #FFFFFF22;
+    border-color: #FFFFFF33;
+    color: inherit;
+  }
+  .状态栏 button:hover {
+    background: #FFFFFF33;
   }
 
   /* 通用可交互控件（按钮 / 开关 / 页签的公共壳） */

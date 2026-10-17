@@ -97,8 +97,8 @@ export function 侧栏({ 步骤, 开, on收起 }: 侧栏参数) {
       style={{ background: "var(--bg-menu)" }}
     >
       <header
-        className="flex flex-none items-center gap-1.5 px-2 py-1.5"
-        style={{ borderBottom: "1px solid var(--border)" }}
+        className="flex flex-none items-center gap-1.5 px-3 py-2"
+        style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-title)" }}
       >
         {/* 应用名：整个单窗口里它只在这里出现一次（`<title>` 在窗口里看不见） */}
         <span className="flex-none text-dim" title={t("应用.副标题")} style={{ fontWeight: 600 }}>
@@ -114,7 +114,11 @@ export function 侧栏({ 步骤, 开, on收起 }: 侧栏参数) {
           ‹
         </按钮>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">{画视图(步骤)}</div>
+      {/* ★ 卡片化之后这里必须有间距：段与段紧贴时，圆角边框会互相"咬"在一起，
+             看起来比不分卡片还乱。8px + 左右内边距 = 图二那种"卡片浮在桌面上的"感觉。 */}
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
+        {画视图(步骤)}
+      </div>
     </aside>
   );
 }

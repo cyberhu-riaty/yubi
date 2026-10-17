@@ -17,7 +17,6 @@
  *     而不是画一排看起来像关节角的数字
  */
 import { useMemo } from "react";
-import { 可折叠区块 } from "../组件/可折叠区块";
 import { 标签 } from "../组件/标签";
 import { 数值表, 数值文本, type 数值行 } from "../组件/数值表";
 import { 用仓库 } from "../数据/仓库";
@@ -68,62 +67,63 @@ export function 中区({ 条数上限 = 12 }: 中区参数) {
         style={{ background: "var(--plot-bg)" }}
         aria-label={t("中区.标题")}
       >
-        <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
-          <div className="max-w-[46ch]">
-            <div className="mb-1" style={{ fontWeight: 600 }}>
-              {t("中区.未接入")}
+        {/* ★ 这里原来是一整屏居中说明文字 —— 窗口 46% 的高度只放了一段话，
+             是"界面很丑"最主要的原因。现在改成：
+               · 一行**极简提示**（3D 在下方，看得到就够，不需要解释一屏）
+               · 其余空间留给**真实数据卡片**（模型 / 指标），让这块有信息量
+             说明文字没有删掉，收进了右上角浮层与「关于」页 —— 需要看的人依然找得到。*/}
+        <div className="flex h-full flex-col gap-2 p-3">
+          <div
+            className="面板 flex flex-none items-center gap-2 px-3 py-2"
+            style={{ background: "var(--bg-panel)" }}
+          >
+            <标签 语气="警示">{t("通用.未接入")}</标签>
+            <span className="truncate text-[0.9em]">{t("中区.未接入")}</span>
+            <span className="flex-1" />
+            <span className="text-[0.82em] text-dim">{t("中区.操作提示")}</span>
+          </div>
+
+          <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-y-auto">
+            <div className="面板 min-w-0 overflow-y-auto p-2">
+              <div className="mb-1 flex items-baseline gap-1.5">
+                <span style={{ fontWeight: 600 }}>{t("中区.浮层")}</span>
+                <span className="flex-1" />
+                {模型 ? <标签>{模型.当前显示名 || "…"}</标签> : <标签 语气="警示">{t("通用.未接入")}</标签>}
+              </div>
+              {模型 ? <数值表 行={模型行} /> : <div className="text-dim">{t("定义.没模型")}</div>}
+              <div className="my-2" style={{ borderTop: "1px solid var(--border-light)" }} />
+              <数值表 行={引擎行} />
             </div>
-            <p className="text-dim">{t("中区.未接入说明")}</p>
-            <p className="mt-2 text-[0.9em] text-dim">{t("中区.不重算")}</p>
-            <p className="mt-2 text-[0.85em] text-dim">{t("中区.操作提示")}</p>
+
+            <div className="面板 min-w-0 overflow-y-auto p-2">
+              <div className="mb-1 flex items-baseline gap-1.5">
+                <span style={{ fontWeight: 600 }}>{t("验证.曲线")}</span>
+                <span className="flex-1" />
+                <span className="text-[0.82em] text-dim 等宽">{名们.length || ""}</span>
+              </div>
+              {显示条.length ? (
+                <ul className="space-y-1">
+                  {显示条.map((名) => (
+                    <li key={名} className="flex items-center gap-1.5">
+                      <span className="min-w-0 flex-1 truncate text-[0.85em] 等宽" title={名}>
+                        {名}
+                      </span>
+                      <迷你走势 点={曲线数[名] ?? []} />
+                      <span className="w-[68px] flex-none text-right text-[0.85em] 等宽">
+                        <数值文本 值={曲线数[名]?.[曲线数[名].length - 1]?.v} 位={3} />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="未接入 text-[0.9em]">
+                  <div>{t("验证.没有指标")}</div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* 右上角浮层：模型/引擎信息 + 指标走势条 */}
-        <div
-          className="面板 absolute right-2 top-2 max-h-[calc(100%-1rem)] w-[264px] overflow-y-auto"
-          style={{ background: "var(--bg-popup)", boxShadow: "0 2px 10px var(--shadow)" }}
-        >
-          <可折叠区块
-            标题={t("中区.浮层")}
-            徽标={模型 ? <标签>{模型.当前显示名 || "…"}</标签> : <标签 语气="警示">{t("通用.未接入")}</标签>}
-          >
-            {模型 ? <数值表 行={模型行} /> : <div className="text-dim">{t("定义.没模型")}</div>}
-            <div className="mt-2" style={{ borderTop: "1px solid var(--border-light)" }} />
-            <div className="mt-2">
-              <数值表 行={引擎行} />
-            </div>
-          </可折叠区块>
-
-          <可折叠区块
-            标题={t("中区.浮层") + " · " + t("验证.曲线")}
-            徽标={<span className="等宽">{名们.length || ""}</span>}
-          >
-            {显示条.length ? (
-              <ul className="space-y-1">
-                {显示条.map((名) => (
-                  <li key={名} className="flex items-center gap-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[0.85em] 等宽" title={名}>
-                      {名}
-                    </span>
-                    <迷你走势 点={曲线数[名] ?? []} />
-                    <span className="w-[68px] flex-none text-right text-[0.85em] 等宽">
-                      <数值文本 值={曲线数[名]?.[曲线数[名].length - 1]?.v} 位={3} />
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="未接入 text-[0.9em]">
-                <div>{t("中区.视口接口未就绪")}</div>
-                <div className="mt-1">{t("验证.没有指标")}</div>
-              </div>
-            )}
-            {名们.length > 显示条.length ? (
-              <div className="mt-1 text-[0.85em] text-dim 等宽">+{名们.length - 显示条.length}</div>
-            ) : null}
-          </可折叠区块>
-        </div>
       </div>
 
       {/* 底部一行：浮层收起时也看得到"3D 在下方" */}

@@ -84,7 +84,9 @@ from Foundation import NSNotificationCenter, NSObject, NSURL, NSURLRequest
 from WebKit import WKWebView, WKWebViewConfiguration
 
 # 布局：下方 3D 视口，上方 Web 界面（与 P2 spike 的验收布局一致）
-默认网页区比 = 0.46
+默认网页区比 = 0.44   # 网页区占比。原来 0.46 —— 那 46% 的高度只放一段说明文字，
+                      # 等于把半个窗口让给了空白。改成 0.40 后 3D 区拿 60%，
+                      # 网页区靠"仪表盘"把信息密度提上来（见 前端/中区.tsx）。
 默认窗口 = (1440.0, 920.0)
 
 # 诊断文件：delegate 里抛异常时 stdout 可能被别的东西占着，所以关键节点写一份文件。
@@ -192,6 +194,8 @@ class Viewport(NSOpenGLView):
         #   760×420 ≈ 7.6 ms/帧，而 1280×464 ≈ 258 ms/帧（实测，约 34 倍）。
         #   视口是"看机器人姿态"用的，760×420 足够；真要更清晰再单独调这里。
         self.画布尺寸 = (760, 420)
+        self._画布目标 = (760, 420)
+        self._画布要重建 = False
         self._拖拽起点 = (0.0, 0.0)
         self._拖拽中 = False
         self._平移中 = False
@@ -207,6 +211,10 @@ class Viewport(NSOpenGLView):
         """装载模型并起渲染线程。**渲染器在渲染线程里建**（见 `_渲染循环`）。"""
         if 画布:
             self.画布尺寸 = (int(画布[0]), int(画布[1]))
+        else:
+            # 用"按视口算出来的目标尺寸"起步，避免第一帧还是默认比例
+            self.画布尺寸 = self._画布目标
+            self._画布要重建 = False
 
         def 装载_干活():
             try:
@@ -222,8 +230,53 @@ class Viewport(NSOpenGLView):
                 相机 = mujoco.MjvCamera()
                 mujoco.mjv_defaultFreeCamera(模型, 相机)
                 # 默认视角要能看清整台机器人（默认视角常在模型外面）
-                相机.distance, 相机.azimuth, 相机.elevation = 3.2, 135.0, -16.0
-                相机.lookat[:] = (0.0, 0.0, 0.45)
+                #
+                # ★ 改成**按模型包围球自动取景**：原来写死 distance=3.2 / lookat z=0.45，
+                #   对 Franka（约 1 m）勉强，换成 UR10e / iiwa14 就不合适了 ——
+                #   小模型会缩成一点，大模型会顶出画面。这才是"模型看着太小"的原因。
+                #   用 `geom_pos` 与 `geom_rbound` 算包围球（MuJoCo 白送的字段）。
+                相机.azimuth, 相机.elevation = 135.0, -16.0
+                try:
+                    import numpy as _np
+                    # ★ 用 MuJoCo 自己算好的 `stat.center` / `stat.extent`。
+                    #   我第一版用 `geom_pos` + `geom_rbound` 自己算包围球，结果是
+                    #   半径 0.359 / 中心 z≈0.01 —— 因为 `geom_pos` 是**相对 body 的局部坐标**，
+                    #   直接取平均会把"一堆挤在底座上的小几何"当成整台机器人，
+                    #   于是相机被拉到 1.17 m，机械臂直接顶出画面。
+                    #   `stat` 是 MuJoCo 在编译模型时按真实几何（含 mesh）算的，直接可用。
+                    # ★ 用**世界坐标**下的几何包围球：`data.geom_xpos` + `geom_rbound`。
+                    #   试过三个来源，只有这个对：
+                    #     · `model.geom_pos` —— 局部坐标，平均后落在底座（半径 0.36，相机贴脸）
+                    #     · `model.stat.extent` —— 1.325，对这条 1.1 m 的臂偏大（画面偏小）
+                    #     · `data.geom_xpos`（本行）—— 世界坐标，实测半径 0.62，画面刚好
+                    位置 = _np.asarray(数据.geom_xpos, dtype=float).reshape(-1, 3)
+                    球径 = _np.asarray(模型.geom_rbound, dtype=float).ravel()
+                    有效 = _np.isfinite(位置).all(axis=1) & _np.isfinite(球径)
+                    if not bool(有效.any()):
+                        raise ValueError("没有可用几何")
+                    位置, 球径 = 位置[有效], 球径[有效]
+                    # 只取"真几何"：半径过大的（贴地平面等）会把包围球撑爆
+                    正常 = 球径 < 0.5
+                    if bool(正常.any()):
+                        位置, 球径 = 位置[正常], 球径[正常]
+                    中心 = 位置.mean(axis=0)
+                    半径 = float(_np.max(_np.linalg.norm(位置 - 中心, axis=1) + 球径))
+                    if not _np.isfinite(中心).all() or 半径 <= 0:
+                        raise ValueError("包围球计算失败")
+                    # 竖直方向要留更多余量：机械臂是"高瘦"的，水平方向几乎不占地方，
+                    # 只按包围球算会让它在竖直方向贴边。
+                    # 取景系数：离屏实测"半径 0.851 + 系数 1.15"只占 54% 画高，偏小；
+                    # 0.92 大约占 65~70%，是"整台机器人都看得清、又不空旷"的比例。
+                    竖直余量 = 0.92
+                    fovy = float(getattr(模型.vis.global_, "fovy", 45.0) or 45.0)
+                    相机.lookat[:] = (float(中心[0]), float(中心[1]), float(中心[2]))
+                    相机.distance = float(半径 * 竖直余量 / _np.tan(_np.radians(fovy) / 2.0))
+                    记诊断(f"自动取景：中心={_np.round(中心, 3).tolist()} 半径={半径:.3f} "
+                           f"fovy={fovy:.0f} 距离={相机.distance:.2f}")
+                except Exception as _取景异常:                            # noqa: BLE001
+                    相机.distance, 相机.elevation = 3.2, -16.0
+                    相机.lookat[:] = (0.0, 0.0, 0.45)
+                    记诊断(f"自动取景失败，退回默认视角：{_取景异常}")
                 选项 = mujoco.MjvOption()
                 mujoco.mjv_defaultOption(选项)
                 # ★ **渲染器不在这里建**：`mujoco.Renderer` 会自建一套 GL 上下文，
@@ -308,6 +361,40 @@ class Viewport(NSOpenGLView):
     # ------------------------------------------------------------------
     # 渲染线程：按需渲染，产出像素放进 self.画面
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # 画布比例
+    # ------------------------------------------------------------------
+    # ---- 让离屏画布的比例跟上视口，否则画面会被"信箱式"留黑边 ----
+    def 按视口重算画布(self) -> None:
+        """按视口宽高比挑一个**像素预算内**的离屏分辨率。
+
+        ★ 为什么必须跟比例走：离屏画布原来是固定 760×420（1.81:1），
+          而视口常常是 2.4:1。上屏时为了不拉伸，只能等比缩放 → 左右各留一条黑边。
+          图看起来"缩小了一圈"，而黑边又是纯黑，非常显眼。
+        ★ 为什么要有像素预算：渲染成本随像素数猛涨（实测 760×420 ≈ 7.6 ms/帧，
+          1280×464 ≈ 258 ms/帧）。所以固定**总像素**上限，按比例分配宽高。
+        """
+        try:
+            尺寸 = self.convertRectToBacking_(self.bounds()).size
+            视宽, 视高 = max(1, int(尺寸.width)), max(1, int(尺寸.height))
+            # ★ 这里原来写了 `if self.窗口 is None:` —— Viewport **没有** `窗口` 属性，
+            #   于是 AttributeError 被下面的 except 吞掉，"画布比例"永远是默认值，
+            #   而外面看不出任何异常（黑边照旧）。教训：宽 except + pass 会把
+            #   "写错属性名"变成"功能静默失效"。
+            if 视宽 <= 1 or 视高 <= 1:
+                视宽, 视高 = 1440, 620
+            预算 = 760 * 420 * 1.25          # 允许略微超过原来的像素数，换掉黑边
+            比 = 视宽 / 视高
+            高 = int((预算 / 比) ** 0.5)
+            宽 = int(高 * 比)
+            宽 = max(320, min(宽, 1600))
+            高 = max(240, min(高, 1200))
+            if (宽, 高) != self._画布目标:
+                self._画布目标 = (宽, 高)
+                self._画布要重建 = True
+        except Exception:                                             # noqa: BLE001
+            pass
+
     def _渲染循环(self) -> None:
         import time as _t
         while not self._该停:
@@ -324,6 +411,19 @@ class Viewport(NSOpenGLView):
                 continue
             self._要渲.clear()
             try:
+                # 视口比例变了就**重建**渲染器（GL 上下文同线程，见教训 ③）。
+                #   mujoco.Renderer 不提供 setSize，只能重建 —— 所以这一步故意做成
+                #   "只在比例变化时"才发生，拖动窗口的过程中最多重建几次。
+                if self._画布要重建 and self.模型 is not None:
+                    self._画布要重建 = False
+                    self.画布尺寸 = self._画布目标
+                    try:
+                        self.渲染器.close()
+                    except Exception:                                 # noqa: BLE001
+                        pass
+                    self.渲染器 = mujoco.Renderer(self.模型, height=self.画布尺寸[1],
+                                                  width=self.画布尺寸[0])
+                    记诊断(f"渲染线程：画布重建为 {self.画布尺寸}")
                 self.渲染器.update_scene(self.数据, camera=self.相机,
                                        scene_option=self.选项)
                 图 = self.渲染器.render()
@@ -533,14 +633,19 @@ class HostApp(NSObject):
         self.窗口 = 窗口
 
         内容 = 窗口.contentView()
-        网页高 = 高 * 默认网页区比
-        视口高 = 高 - 网页高
+        # ★ 整数像素（原因见 `窗口改尺寸_` 里的说明：小数会让两视图在边界重叠 ~1px）
+        视口高 = round(高 - 高 * 默认网页区比)
+        网页高 = round(高) - 视口高
 
         # ① 3D 视口（下方）
         if 参数.无3D:
             self.视口 = None
         else:
             self.视口 = Viewport.alloc().initWithFrame_(NSMakeRect(0, 0, 宽, 视口高))
+            # ★ 建窗口时就要算一次画布比例：`窗口改尺寸_` 只在**真的改尺寸**时触发，
+            #   启动时不会触发 —— 我第一版只在 resize 里算，于是启动永远用默认 760×420，
+            #   画面上就一直是"两边留黑边"的样子（还以为是渲染器的事）。
+            self.视口.按视口重算画布()
             内容.addSubview_(self.视口)
             视口槽["视口"] = self.视口
             模型路径 = os.environ.get("驭臂_当前模型", "")
@@ -585,10 +690,16 @@ class HostApp(NSObject):
         if self.视口 is None:
             self.网页.setFrame_(NSMakeRect(0, 0, 宽, 高))
             return
-        网页高 = 高 * 默认网页区比
-        视口高 = 高 - 网页高
-        self.视口.setFrame_(NSMakeRect(0, 0, 宽, 视口高))
-        self.网页.setFrame_(NSMakeRect(0, 视口高, 宽, 网页高))
+        # ★ 必须取**整数像素**：高 × 0.44 通常是小数，AppKit 按 subpixel 排布时
+        #   两个视图会在边界上重叠 0.5~1 px —— 表现是"网页最底下那行（状态栏）
+        #   被 3D 区盖掉半行"。四舍五入到整数后边界清清楚楚。
+        视口高 = round(高 - 高 * 默认网页区比)
+        网页高 = round(高) - 视口高
+        self.视口.setFrame_(NSMakeRect(0, 0, round(宽), 视口高))
+        self.网页.setFrame_(NSMakeRect(0, 视口高, round(宽), 网页高))
+        self.视口.按视口重算画布()
+        # 首次布局也算一次（否则第一帧仍是默认 760×420，会先闪一下黑边）
+        self.视口.按视口重算画布()
 
     # ---- 主线程每帧：只做"拉状态 + 要求重绘" ----
     def _主线程每帧(self) -> None:

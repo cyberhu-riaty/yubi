@@ -234,6 +234,8 @@ def 生成主题css() -> str:
         "}",
         "",
     ]
+    # 默认皮肤名：来自 `风格表.json` 的 `默认风格` 字段（取不到就退回排序第一个）
+    默认皮肤名 = 表.get("默认风格") or None
     for i, (名, 一套) in enumerate(风格们.items()):
         颜色 = 一套.get("颜色", {})
         样式 = 一套.get("样式", {})
@@ -243,7 +245,10 @@ def 生成主题css() -> str:
         # ★ 选择器不能都挂 `:root`：那样 5 套风格会互相覆盖，只有最后一套生效
         #   （实测踩过）。默认那套挂 `:root`（没设 data-风格 时也能看），
         #   其余只挂属性选择器。
-        默认 = (i == 0)
+        # ★ 默认皮肤由 `风格表.json` 的 `默认风格` 字段决定，**不再靠列表排序**。
+        #   靠排序的话，"想换个默认皮肤"就得去挪数据顺序 —— 那会连带改掉
+        #   `风格表.ts` 的顺序，界面上皮肤列表也跟着跳，属于用错了杠杆。
+        默认 = (名 == 默认皮肤名) or (默认皮肤名 is None and i == 0)
         选择器 = (':root, [data-风格="%s"]' % 名) if 默认 else ('[data-风格="%s"]' % 名)
         行.append(f"/* {名} · {一套.get('英文名','')} —— {一套.get('一句话','')} */")
         行.append(f"{选择器} {{")
@@ -306,7 +311,9 @@ def 生成主题ts() -> str:
                     json.dumps(一套.get("一句话", ""), ensure_ascii=False),
                     json.dumps(一套.get("基底主题", "dark"), ensure_ascii=False)))
     行 += ["];", "",
-          "export const 默认风格 = %s;" % json.dumps(表["风格列表"][0], ensure_ascii=False),
+          # ★ 同样认 `默认风格` 字段，不靠 风格列表[0]
+          "export const 默认风格 = %s;" % json.dumps(
+              表.get("默认风格") or 表["风格列表"][0], ensure_ascii=False),
           ""]
     return "\n".join(行)
 

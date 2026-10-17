@@ -38,7 +38,9 @@ interface 外壳偏好 {
   侧栏开: boolean;
 }
 
-const 默认偏好: 外壳偏好 = { 侧栏宽: 300, 控制台高: 190, 侧栏开: true };
+// 控制台默认 150（原来 190）：网页区只占窗口 44%，190 会把中区压得只剩一条，
+// 卡片被裁得看不全。要更大随时拖分隔条 —— 它本来就可拖。
+const 默认偏好: 外壳偏好 = { 侧栏宽: 300, 控制台高: 150, 侧栏开: true };
 
 const 侧栏界 = { 最小: 180, 最大: 640 };
 const 控制台界 = { 最小: 90, 最大: 620 };
@@ -275,8 +277,13 @@ export function App() {
     return () => window.removeEventListener("keydown", 按键);
   }, [选步, 切侧栏]);
 
+  // overflow-hidden：整页**不许**滚。实测页面 scrollHeight 会比视口高 200+ px，
+  // 一旦整页可滚，页脚就会被挤出可视区（表现是状态栏被切掉半行）。
   return (
-    <div className="flex h-full min-h-0 flex-col" style={{ background: "var(--bg)" }}>
+    <div
+      className="flex h-full min-h-0 flex-col overflow-hidden"
+      style={{ background: "var(--bg)" }}
+    >
       <div className="flex min-h-0 flex-1">
         <活动栏 当前={步骤} 侧栏开={偏好.侧栏开} on选步={选步} />
 
