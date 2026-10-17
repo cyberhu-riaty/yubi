@@ -28,32 +28,40 @@ MUJOCO版本要求 = ">=3.12"          # 插件系统从这个版本开始有
 
 
 def _导入官方():
-    """导入官方 studio 插件系统。失败时抛人话版异常（附解决办法）。"""
-    try:
-        import mujoco
-        from mujoco.experimental import studio
+    """取官方 Studio 的各子模块。
 
-        # 逐个点名导入，比 import * 更容易发现"哪个东西没了"
-        from mujoco.experimental.studio import messages       # 消息类型 + handler 标签
-        from mujoco.experimental.studio import step_control   # 官方默认步进插件
-        from mujoco.experimental.studio import viewer_app     # 官方 GUI（19 个面板）
-        from mujoco.experimental.studio import viewer_protocol  # 配置类
-        from mujoco.experimental.studio import launch_native   # 原生窗口
-        from mujoco.experimental.studio import launch_thread   # 线程版端点
-        from mujoco.experimental.studio import viewer_handle   # 仿真侧句柄
-        from mujoco.experimental.studio import endpoints       # 消息通道
-    except ImportError as e:
-        提示 = (
-            f"\n✗ 当前 Python 环境里没有可用的 Studio 插件系统：{e}\n\n"
-            f"  你现在用的是：{sys.executable}\n"
-            f"  原因：Studio 插件系统只在官方 pip 包（mujoco >= 3.12 的完整版）里有，\n"
-            f"        conda 渠道装的 mujoco 是「零件版」，不含界面层和插件系统。\n\n"
-            f"  解决：用叠加层环境跑（第 0 步已经建好）：\n"
-            f"    cd \"/Users/huspark/Desktop/驭臂\"\n"
-            f"    .venv/bin/python 软件/主程序.py\n"
-        )
-        raise SystemExit(提示) from e
-    return mujoco, messages, step_control, viewer_app, viewer_protocol, launch_native, launch_thread, viewer_handle, endpoints
+    ★ 现在**不在本文件碰 `mujoco.experimental`** —— 全部经由 `软件/官方层.py`
+      （全工程唯一一处 import 官方实验层的地方）。
+      好处：MuJoCo 升级改了 API，只需改那一个文件，`官方层.自检()` 会逐条指出缺什么。
+      失败时抛人话版异常（附解决办法）。
+    """
+    try:
+        import 官方层 as _官方
+        mujoco = _官方.mujoco
+        messages = _官方.messages
+        step_control = _官方.step_control
+        viewer_app = _官方.viewer_app
+        viewer_protocol = _官方.viewer_protocol
+        launch_native = _官方.launch_native
+        launch_thread = _官方.launch_thread
+        viewer_handle = _官方.viewer_handle
+        endpoints = _官方.endpoints
+        if mujoco is None:
+            raise ImportError("官方层里 mujoco 为空")
+    except (ImportError, SystemExit) as 异常:
+        try:
+            import 官方层 as _官方2
+            通过, 总数, 问题 = _官方2.自检()
+            明细 = "\n".join(f"    · {条}" for 条 in 问题) or "    （无明细）"
+            尾巴 = _官方2._缺东西提示()
+        except Exception:                                             # noqa: BLE001
+            通过, 总数, 明细, 尾巴 = 0, 0, "    （连自检都跑不起来）", ""
+        raise SystemExit(
+            f"\n✗ 取不到 Studio 插件系统（{type(异常).__name__}: {异常}）\n\n"
+            f"  官方层自检：{通过}/{总数}\n{明细}\n{尾巴}"
+        ) from 异常
+    return (mujoco, messages, step_control, viewer_app, viewer_protocol,
+            launch_native, launch_thread, viewer_handle, endpoints)
 
 
 (mujoco, messages, step_control, viewer_app, viewer_protocol,
@@ -163,13 +171,41 @@ class 控制插件:
         return {}
 
     def 设置参数(self, 名: str, 值: float) -> str:
-        """外壳调这个来改参数。返回 "" 表示成功，否则返回失败原因。"""
+        """外壳调这个来改参数。返回 "" 表示成功，否则返回失败原因。
+
+        ★ 这里会**按插件自己声明的 `范围` 校验**（P1 加）。
+          为什么必须校验，而不是"界面会限制所以不用管"：
+            界面的滑杆确实被限制在 `范围` 内，但参数的来源**不止界面** ——
+            项目文件（人可以直接编辑）、Web 命令、识别结果回填都能送值进来。
+            实测踩过：Web 端发了 KP=99999（范围是 10~20000），
+            基类不校验 → 照单全收 → 写回项目文件 → 界面上显示的仍是旧值，
+            而**实际生效的是那个越界值**。这种"显示和实际不一致"比直接报错危险得多。
+          校验点放在基类而不是各插件里：`可调参数()` 声明的范围就是契约，
+          基类照着执行一次，所有插件自动受益，也让"范围"这个字段真的有意义。
+        """
         if not hasattr(self, 名):
             return f"插件 {type(self).__name__} 没有参数「{名}」"
+        数值 = float(值)
+        范围 = None
         try:
-            setattr(self, 名, float(值))
+            声明 = self.可调参数() or {}
+            项 = 声明.get(名) or {}
+            范围 = 项.get("范围")
+        except Exception:                                                # noqa: BLE001
+            # 插件的 可调参数() 出错不该让"改参数"整个失败：退回旧行为（不校验）
+            范围 = None
+        if 范围 is not None:
+            try:
+                低, 高 = float(范围[0]), float(范围[1])
+                if not (低 <= 数值 <= 高):
+                    return (f"【{getattr(self, '名称', type(self).__name__)}】"
+                            f"参数「{名}」超出范围：{数值:g} 不在 [{低:g}, {高:g}] 内")
+            except (TypeError, ValueError, IndexError):
+                pass                       # 范围写得不规范就跳过校验，不因它拦住改参数
+        try:
+            setattr(self, 名, 数值)
             return ""
-        except Exception as 异常:                                    # noqa: BLE001
+        except Exception as 异常:                                        # noqa: BLE001
             return f"设置 {名} 失败：{异常}"
 
     def 收到模型(self, event) -> None:
@@ -409,7 +445,7 @@ class 安全注册表:
 
     def _单独派发(self, 插件, 消息) -> None:
         """只把消息交给这一个插件；它崩了就隔离它。"""
-        from mujoco.experimental.studio import plugin_registry
+        from 官方层 import plugin_registry          # 走适配层
         for info, 方法 in plugin_registry._discover_handlers(插件):  # noqa: SLF001
             # 按 MRO 匹配：消息类型是标注类型的子类也算命中（官方同款规则）
             if not issubclass(type(消息), info.message_type):

@@ -18,7 +18,7 @@
       ② 写你的 每步控制()
       ③ 项目的 `算法` 字段写 "*" 时自动就会加载它；只想挂某几个项目就写进那些项目的列表
   细节见 软件/项目.py 与 软件/装配器.py 的文件头；自检见
-  "优化（软件优化的报告都放这里面来）/验证/校验项目.py"。
+  "工具/验证/校验项目.py"。
 """
 from __future__ import annotations
 
@@ -35,6 +35,8 @@ import 插件系统 as 插件框架            # noqa: E402  （我们自己的�
 import 启动                            # noqa: E402
 import 皮肤桥
 import 文案                          # noqa: E402  （面板外观换肤：风格表/热切换）
+import Web桥                          # noqa: E402  （方案 B 的 P0：给仿真侧开 Web 数据出口）
+import 重力桥                          # noqa: E402  （--开重力：让脚本化启动也能推进物理）
 
 # ============================================================================
 # 【算法装配】—— 方案 C：算法不再写死在这个文件里，改由「项目」声明
@@ -206,6 +208,15 @@ def main() -> int:
     ap.add_argument("--自检", action="store_true",
                     help="不开窗口：逐条检查我们对官方的全部依赖点是否还成立（官方 API 改动会在这里露出来）")
     ap.add_argument("--无插件", action="store_true", help="不加载任何控制算法（只开窗口）")
+    ap.add_argument("--开重力", "--gravity", dest="开重力", action="store_true",
+                    help="启动时就勾上【Display】的「加载重力」（物理推进）。"
+                         "默认是**冻结在默认位置** —— 不勾的话机械臂一动不动，"
+                         "脚本化/自动化启动时没法推进物理，所以给一个开关")
+    ap.add_argument("--无web", "--no-web", dest="无web", action="store_true",
+                    help="不开 Web 数据出口（默认开，见 --web口）")
+    ap.add_argument("--web口", "--web-port", dest="web口", type=int, default=None,
+                    help=f"Web 数据出口端口（默认 {Web桥.默认端口}）。"
+                         "开窗后浏览器打开 http://127.0.0.1:<端口>/ 可看真实指标流")
     ap.add_argument("--项目", default=None,
                     help="启动时装哪个项目（项目/ 下的名字）。不指定则用上次的项目，"
                          "再退回'启动模型所属的项目'。列出全部：--列项目")
@@ -227,6 +238,16 @@ def main() -> int:
                     help="先清掉界面布局/主题的保存文件（~/.mujoco.ini）再启动")
     args = ap.parse_args()
 
+    # Web 数据出口：命令行开关 → 环境变量（真正启动点在 启动.py，那里读环境变量）
+    if args.无web:
+        os.environ["驭臂_关Web"] = "1"
+    if args.web口:
+        os.environ["驭臂_Web端口"] = str(args.web口)
+
+    # 勾上「加载重力」= 物理推进（等价于点界面上那个开关）
+    if args.开重力:
+        重力桥.设界面重力(True)
+
     if args.空场景:
         args.模型, 原因 = 空场景路径, "命令行指定 --空场景"
     elif args.模型:
@@ -237,7 +258,7 @@ def main() -> int:
     # 主题通过环境变量传给 启动.应用主题()，在窗口创建时应用
     os.environ["MUJOCO_STUDIO_THEME"] = args.主题.upper()
     if args.恢复默认界面:
-        from mujoco.experimental.studio import ux
+        from 官方层 import ux          # 全部走适配层，见 软件/官方层.py
         ux.reset_config()
         print("✓ 已恢复默认界面（布局与主题的保存文件 ~/.mujoco.ini 已清理）")
 
