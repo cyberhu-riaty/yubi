@@ -94,6 +94,12 @@ if [ -z "$PKG_DIR" ]; then
 fi
 LOG="$PKG_DIR/启动日志.txt"
 echo "===== $(date '+%Y-%m-%d %H:%M:%S') 启动，包根=$PKG_DIR =====" >> "$LOG"
+# ★ 首次双击时 macOS 会弹「"小软件" 想访问"桌面"文件夹中的文件」——
+#   因为整个包在 ~/Desktop 下，而桌面是受保护目录。**必须点「允许」**，
+#   否则进程会卡在那个 open() 上（日志只有这一行，什么错都不报）。
+#   这是系统行为，不是程序 bug；同一个 .app 只需授权一次。
+#   写在下面这句里，是为了让排查的人先看到它。
+echo "（若卡住不动：请在弹出的「想访问桌面文件夹」对话框里点【允许】）" >> "$LOG"
 
 PY="$PKG_DIR/.venv/bin/python"
 if [ ! -x "$PY" ]; then
@@ -101,18 +107,43 @@ if [ ! -x "$PY" ]; then
   echo "✗ 找不到 $PY" >> "$LOG"; exit 1
 fi
 
-# 主程序位置：不同包结构不一样（资料包 / 独立包），逐个试
-APP_PY=""
-for CAND in "$PKG_DIR/{主程序相对路径}" "$PKG_DIR/软件/主程序.py" "$PKG_DIR/软件/主程序.py"; do
+# 主程序位置：不同包结构不一样（资料包 / 独立包），逐个试。
+# ★ 入口**回退链**：宿主窗口优先（界面与 3D 都在自己的窗口里），
+#   缺 PyObjC / 端口被占 / 起不来时退回浏览器版，再退回原生 ImGui 版 ——
+#   双击图标不该"开不出东西"。
+for CAND in "$PKG_DIR/{主程序相对路径}" {回退候选}; do
   if [ -f "$CAND" ]; then APP_PY="$CAND"; break; fi
 done
 if [ -z "$APP_PY" ]; then
-  osascript -e 'display dialog "找到了包文件夹，但里面找不到主程序（主程序.py）。\n\n期望位置：{主程序相对路径} 或 软件/主程序.py" buttons {{"好"}} default button 1 with icon stop' 2>/dev/null
-  echo "✗ 找不到主程序（试过 {主程序相对路径} / 软件/主程序.py / 软件/主程序.py）" >> "$LOG"; exit 1
+  osascript -e 'display dialog "找到了包文件夹，但里面找不到主程序。\n\n期望位置：{主程序相对路径} / 软件/主程序窗口.py / 软件/主程序Web.py / 软件/主程序.py" buttons {{"好"}} default button 1 with icon stop' 2>/dev/null
+  echo "✗ 找不到主程序（都试过了）" >> "$LOG"; exit 1
 fi
 
+# 运行期回退：当前入口**非 0 退出**时换下一个（0 = 用户正常关了窗口，不回退）
+回退() {
+  case "$APP_PY" in
+    */主程序窗口.py)  次="$PKG_DIR/软件/主程序Web.py" ;;
+    */主程序Web.py)   次="$PKG_DIR/软件/主程序.py" ;;
+    *)                return 1 ;;
+  esac
+  [ -f "$次" ] || return 1
+  echo "----- $APP_PY 未能启动，回退到 $次 -----" >> "$LOG"
+  APP_PY="$次"
+  return 0
+}
+
 cd "$PKG_DIR" || exit 1
-exec "$PY" -u "$APP_PY" "$@" >> "$LOG" 2>&1
+# {附加参数} 由打包时写入（例如 Web 版是 --不开浏览器；原生版为空）。
+# ★ 为什么固定参数写在包里而不是靠用户传：双击 .app **传不了参数**，
+#   而两种前端的默认行为不一样（Web 版要自动开浏览器、且不能重复开）。
+while :; do
+  # shellcheck disable=SC2086
+  "$PY" -u "$APP_PY" {附加参数} "$@" >> "$LOG" 2>&1
+  码=$?
+  # 0 = 正常退出（用户关了窗口），不回退
+  [ "$码" -eq 0 ] && exit 0
+  回退 || exit "$码"
+done
 """
 
 # ---------------------------------------------------------------------------
@@ -220,6 +251,7 @@ def 编译原生启动器(目标路径: str, 软件名: str, 语言目录: str) 
 
 
 def 生成(包根: str, 软件名: str, 主程序相对路径: str, 标识: str | None, 版本: str,
+         附加参数: str = "",
          图标: str | None = None) -> str:
     app = os.path.join(包根, f"{软件名}.app")
     os.makedirs(os.path.join(app, "Contents", "MacOS"), exist_ok=True)
@@ -241,10 +273,19 @@ def 生成(包根: str, 软件名: str, 主程序相对路径: str, 标识: str 
     包文件夹名 = os.path.basename(os.path.normpath(包根))
     # ★ 用 replace 而不是 str.format：启动器里有大量 shell 的 ${变量} 和 {{ }}，
     #   用 format 会把它们当占位符（实测报 KeyError: '驭臂_包路径'）。
+    #
+    # ★ 回退链里要去掉"已经是指定入口"的那一项：否则 `--主程序 软件/主程序窗口.py`
+    #   会生成 `"…/主程序窗口.py" "…/主程序窗口.py"` 这种重复项
+    #   （功能上无害，但读起来像 bug，而且真正的第二候选被挤到后面才试）。
+    候选 = ["软件/主程序窗口.py", "软件/主程序Web.py", "软件/主程序.py"]
+    去重 = [c for c in 候选 if os.path.normpath(c) != os.path.normpath(主程序相对路径)]
+    回退项 = " ".join(f'"$PKG_DIR/{c}"' for c in 去重)
     脚本 = (启动器模板
             .replace("{软件名}", 软件名)
             .replace("{主程序相对路径}", 主程序相对路径)
-            .replace("{包文件夹名}", 包文件夹名))
+            .replace("{回退候选}", 回退项)
+            .replace("{包文件夹名}", 包文件夹名)
+            .replace("{附加参数}", 附加参数.strip()))
     # 上面把 shell 里被误写的 {{ }} 还原成 { }
     脚本 = 脚本.replace("{{", "{").replace("}}", "}")
     with open(脚本路径, "w", encoding="utf-8") as f:
@@ -365,13 +406,18 @@ def 刷新系统注册(app: str) -> None:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="生成 macOS .app（双击启动）")
     ap.add_argument("--包根", default=None, help="资料包根目录（默认：本脚本的上上级）")
-    ap.add_argument("--名字", default="小软件", help="软件名（会作为 .app 文件名）")
+    ap.add_argument("--名字", default="小软件", help="软件名（用于 Info.plist 的显示名）")
+    ap.add_argument("--输出名", default=None,
+                    help=".app 的文件名（默认与 --名字 相同）。"
+                         "同一台机器上有两个前端时用它区分文件，显示名仍可一致")
+    ap.add_argument("--附加参数", default="",
+                    help="写进启动器的固定参数（双击传不了参数，所以固定参数要落在包里）")
     ap.add_argument("--主程序", default="软件/主程序.py",
                     help="主程序相对于包根的路径")
     ap.add_argument("--标识", default=None,
                     help="Bundle Identifier（默认：沿用已有的；没有则按名字自动派生一个唯一 id）")
     ap.add_argument("--版本", default="0.3", help="版本号")
-    ap.add_argument("--图标", default=None, help=".icns 路径（默认：包根/图标.icns）")
+    ap.add_argument("--图标", default=None, help=".icns 路径（默认：工具/图标.icns）")
     ap.add_argument("--不刷新注册", action="store_true",
                     help="不调用 lsregister 刷新系统注册")
     args = ap.parse_args(argv)
@@ -392,8 +438,9 @@ def main(argv: list[str]) -> int:
         print(f"  ⚠ 主程序不在预期位置：{args.主程序}")
         print("     （仍会生成，但双击时会弹'找不到主程序'）")
 
-    图标 = args.图标 or os.path.join(包根, "图标.icns")
-    app = 生成(包根, args.名字, args.主程序, args.标识, args.版本, 图标)
+    图标 = args.图标 or os.path.join(包根, "工具", "图标.icns")
+    app = 生成(包根, args.输出名 or args.名字, args.主程序, args.标识, args.版本,
+               附加参数=args.附加参数, 图标=图标)
 
     if not args.不刷新注册:
         刷新系统注册(app)

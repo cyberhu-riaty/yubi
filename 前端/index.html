@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<!-- `data-风格` 的初值只是"首帧兜底"：main.tsx 会在挂载前按 localStorage 覆盖掉它，
+     真正的皮肤数据源是 `软件/风格表.json` → `src/生成/主题.css`。 -->
+<html lang="zh-CN" data-风格="极简">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>驭臂 · 机器人仿真工作台</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,275 @@
+/*
+ * index.css —— Tailwind 入口 + 本项目自己的语义类。
+ *
+ * 两条纪律（都是 `约定.md` §三 与参考项目的教训）：
+ *  ① 颜色**只**从 `生成/主题.css` 的 `var(--…)` 来 —— 写死一个颜色就换不了肤。
+ *  ② 不覆盖 Tailwind 自己的工具类。参考项目里那种
+ *     `.flex { display:block }`、满屏 `!important` 的写法，这一份里一个都没有：
+ *     需要复用就加**新**类名（`.面板` / `.段` / `.控件`），而不是改别人的类。
+ *
+ * ★ 关于"类名用中文还是 ASCII"（踩过的坑，写在这里免得后人重踩）：
+ *   自定义类（`@layer components` 里的 `.面板` `.段头`…）用中文没问题 —— 那是手写 CSS。
+ *   但 **Tailwind 的工具类必须 ASCII**：本层起初写的是 `text-次要`、`bg-框`，
+ *   实测 Tailwind 4.3 的候选提取器按 ASCII 词边界切 token，中文类名一个都扫不出来
+ *   （`@source` 显式声明内容来源也一样），`@utility text-正文` 还会直接报
+ *   "invalid utility name"。所以：**语义类中文、工具类 ASCII**，两边都不硬编码颜色。
+ *
+ * `主题.css` 由 `main.tsx` 引入（顺序在 Tailwind 之后），保证 `var(--…)` 已就绪。
+ */
+@import "tailwindcss";
+
+/*
+ * 把主题变量登记成 Tailwind 的语义 token。
+ * 右边写的是 `var(--…)`，所以换肤时工具类（`text-dim`、`bg-frame`…）
+ * 会跟着一起变 —— 工具类和下面的自定义类走同一份变量。
+ *
+ * `@theme inline` + `@utility` 为什么两件都要：
+ *   `@theme` 只登记颜色，Tailwind 仍按需生成（中文类名扫不到 → 什么都没生成）；
+ *   `@utility` 是**无条件生成**的，所以真正被组件用到的这几条写在下面。
+ */
+@theme inline {
+  --color-canvas: var(--bg);
+  --color-panel: var(--bg-panel);
+  --color-popup: var(--bg-popup);
+  --color-menu: var(--bg-menu);
+  --color-titlebar: var(--bg-title);
+  --color-header: var(--bg-header);
+  --color-frame: var(--bg-frame);
+  --color-frame-hover: var(--bg-frame-hover);
+  --color-frame-on: var(--bg-frame-on);
+  --color-tab: var(--bg-tab);
+  --color-tab-on: var(--bg-tab-on);
+  --color-tablehead: var(--bg-table-head);
+  --color-rowalt: var(--bg-row-alt);
+  --color-fg: var(--fg);
+  --color-dim: var(--fg-dim);
+  --color-link: var(--fg-link);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-on: var(--accent-on);
+  --color-grab: var(--grab);
+  --color-sel: var(--sel-bg);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-line-soft: var(--border-light);
+  --color-sep: var(--separator);
+  --font-ui2: var(--font-ui);
+  --font-mono2: var(--font-mono);
+  --radius-skin: var(--radius);
+}
+
+/*
+ * 组件真正用到的那几条工具类（中文类名扫不到，所以在这里显式声明）。
+ * 只声明**用到的**：`text-dim` / `text-fg` / 三个底色 / 两个边框色。
+ * 颜色仍然只有一个来源：`var(--…)`。
+ */
+@utility text-fg {
+  color: var(--fg);
+}
+@utility text-dim {
+  color: var(--fg-dim);
+}
+@utility bg-frame {
+  background: var(--bg-frame);
+}
+@utility bg-frame-hover {
+  background: var(--bg-frame-hover);
+}
+@utility bg-accent {
+  background: var(--accent);
+}
+@utility bg-accent-hover {
+  background: var(--accent-hover);
+}
+@utility bg-accent-on {
+  background: var(--accent-on);
+}
+@utility border-line {
+  border-color: var(--border);
+}
+@utility border-line-strong {
+  border-color: var(--border-strong);
+}
+@utility border-line-soft {
+  border-color: var(--border-light);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    font-size: calc(13px * var(--字号倍率, 1));
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * Tailwind v4 的 preflight 把 border-color 定成 currentColor。
+   * 全部改回主题变量：这样声明了 `border` 宽度的元素不用每个都写颜色，
+   * 也不会因为继承文字色而在换肤时串色。
+   */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  /* 键盘可见焦点：只用主题色，不画死颜色 */
+  :focus-visible {
+    outline: 2px solid var(--grab);
+    outline-offset: 1px;
+  }
+
+  /* 滚动条跟着皮肤走（macOS 上系统滚动条太亮，和深色皮肤冲突） */
+  * {
+    scrollbar-color: var(--bg-scroll-grab) var(--bg-scroll);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-scroll);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--bg-scroll-grab);
+    border-radius: var(--radius);
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+/*
+ * 语义类：只描述"这是什么"，不描述"长什么样"。
+ * 一律用 `var(--…)`，并且**不改** Tailwind 的同名工具类。
+ */
+@layer components {
+  /* 一块面板容器（侧栏里的段、中区里的卡片都用它） */
+  .面板 {
+    background: var(--bg-panel);
+    border: var(--border-w, 1px) solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  /* 侧栏/控制台里的一"段"（可折叠区块的外框） */
+  .段 {
+    border-bottom: var(--border-w, 1px) solid var(--border-light);
+  }
+
+  /* 段落标题条：可折叠区块的按钮就是它 */
+  .段头 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: var(--pad-y) var(--pad-x);
+    background: var(--bg-header);
+    color: var(--fg);
+    border: 0;
+    text-align: left;
+    cursor: pointer;
+  }
+  .段头:hover {
+    background: var(--bg-header-hover);
+  }
+
+  /* 通用可交互控件（按钮 / 开关 / 页签的公共壳） */
+  .控件 {
+    background: var(--bg-frame);
+    border: var(--border-w, 1px) solid var(--border);
+    border-radius: var(--radius);
+    color: var(--fg);
+    cursor: pointer;
+    padding: calc(var(--pad-y) * 0.5) calc(var(--pad-x) * 0.6);
+  }
+  .控件:hover:not(:disabled) {
+    background: var(--bg-frame-hover);
+  }
+  .控件:disabled {
+    color: var(--fg-dim);
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  /* 输入框（换模型路径、辨识时长…） */
+  .输入 {
+    background: var(--bg);
+    border: var(--border-w, 1px) solid var(--border);
+    border-radius: var(--radius);
+    color: var(--fg);
+    padding: calc(var(--pad-y) * 0.5) calc(var(--pad-x) * 0.6);
+    width: 100%;
+  }
+  .输入::placeholder {
+    color: var(--fg-dim);
+  }
+
+  /* 小标签（轴数、单位、未接入…） */
+  .标签 {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px;
+    border: var(--border-w, 1px) solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-frame);
+    color: var(--fg-dim);
+    font-size: 0.85em;
+    white-space: nowrap;
+  }
+
+  /* "未接入 / 未实现"这类诚实标注：虚线框，不与真控件混淆 */
+  .未接入 {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--fg-dim);
+    padding: var(--pad-y) var(--pad-x);
+    background: var(--bg-row-alt);
+  }
+
+  /* 数字一律等宽，避免抖动（表格、状态栏、曲线图例） */
+  .等宽 {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 拖动分隔条的抓手 */
+  .分隔条 {
+    flex: 0 0 auto;
+    background: var(--separator);
+  }
+  .分隔条:hover,
+  .分隔条[data-拖动="1"] {
+    background: var(--grab);
+  }
+}
+
+/* 参数输入框（验证视图的参数表）——颜色只来自主题变量，改皮肤自动跟随 */
+.参数输入 {
+  width: 9ch;
+  padding: 1px 4px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  color: var(--fg);
+  background: var(--bg-frame);
+  border: var(--border-w, 1px) solid var(--border);
+  border-radius: var(--radius);
+}
+.参数输入:hover { background: var(--bg-frame-hover); }
+.参数输入:focus-visible { background: var(--bg-frame-on); outline: 2px solid var(--accent); outline-offset: 1px; }
+.参数输入:disabled { opacity: 0.5; }
