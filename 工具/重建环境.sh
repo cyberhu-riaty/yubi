@@ -39,12 +39,14 @@ else
   "$BASE" -m venv --system-site-packages "$PKG/.venv"
 fi
 
+离线依赖目录="$PKG/归档/离线依赖"
+
 # ---------- 3. 装官方完整版 mujoco（优先用离线包）----------
 echo
 echo "== 2/3 安装 mujoco 3.13.0 =="
-if ls "$PKG/离线依赖/"mujoco-*.whl >/dev/null 2>&1; then
+if ls "$离线依赖目录/"mujoco-*.whl >/dev/null 2>&1; then
   echo "  用离线包安装"
-  "$PKG/.venv/bin/pip" install --no-index --find-links="$PKG/离线依赖" "mujoco==3.13.0"
+  "$PKG/.venv/bin/pip" install --no-index --find-links="$离线依赖目录" "mujoco==3.13.0"
 else
   echo "  离线包不在，走网络安装"
   "$PKG/.venv/bin/pip" install "mujoco==3.13.0"
@@ -56,10 +58,10 @@ echo "== 3/3 修 glfw 动态库（macOS 必需）=="
 "$PKG/.venv/bin/pip" install --force-reinstall --no-deps "glfw==2.10.2"
 
 # ---------- 5. 可选：参数辨识用的依赖 ----------
-if ls "$PKG/离线依赖/"scipy-*.whl >/dev/null 2>&1; then
+if ls "$离线依赖目录/"scipy-*.whl >/dev/null 2>&1; then
   echo
   echo "== 附加：安装参数辨识依赖（离线包）=="
-  "$PKG/.venv/bin/pip" install --no-index --find-links="$PKG/离线依赖" \
+  "$PKG/.venv/bin/pip" install --no-index --find-links="$离线依赖目录" \
       scipy colorama imageio imageio-ffmpeg plotly pyyaml tabulate typing_extensions \
       || echo "  （部分依赖没装上，参数辨识可能不可用；界面和执行控制不受影响）"
 fi
@@ -82,7 +84,20 @@ else
   echo "    \"$PKG/.venv/bin/python\" \"$PKG/工具/打补丁_中文字体.py\""
 fi
 
-# ---------- 7. 自检 ----------
+# ---------- 7. 前端生成物（把契约与风格表同步到前端）----------
+#   前端是 Web 技术栈，但它**不是**运行时的必需品：
+#     · `软件/web/` 里若没有构建产物，Web 数据出口会自动回落到内置的单文件仪表盘；
+#     · 但只要前端源码在，生成物就必须与来源同步，否则前端会拿旧契约解析新数据。
+#   所以这一步总是跑（纯 Python，秒级，无网络、无 Node 依赖）。
+echo
+echo "== 前端生成物（契约 → TS、风格表 → CSS）=="
+"$PKG/.venv/bin/python" "$PKG/工具/生成前端资产.py" \
+    || echo "  （生成失败，不影响软件本体；前端可能显示旧契约）"
+
+#   注意：**构建**前端（vite build）需要 Node，且只在"改了前端"时才需要。
+#   构建产物入库，所以普通用户双击启动不需要 Node。要重新构建见 前端/约定.md §四。
+
+# ---------- 8. 自检 ----------
 echo
 echo "== 自检 =="
 "$PKG/.venv/bin/python" - <<'PY'
