@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import dataclasses
+import time
 from typing import Any
 
 from 官方层 import messages          # 全部走适配层，见 软件/官方层.py
@@ -90,6 +91,34 @@ def 采集可调参数(注册表) -> dict[str, dict]:
                 "单位": str(信息.get("单位", "")),
             }
     return 表
+
+
+@dataclasses.dataclass(frozen=True)
+class 批量参数命令(messages.Snapshot):
+    """界面 → 仿真侧：**一次性**应用一组参数（事务语义）。
+
+    ★ 为什么需要它（单条 `参数消息` 做不到的事）：
+      单条消息是"改一个算一个"。用户在参数表里改了 8 个值然后点"应用"，
+      如果第 5 个非法，前 4 个已经生效了 —— 机器人就处在**一个谁也没想要**的
+      中间状态。真机上这是危险的（比如 KP 已改而 KD 没改，会直接振荡）。
+      所以这一条要求：**全成功，或者一个都不动**。
+    """
+    动作: str = "应用"          # 应用 / 回滚
+    参数: tuple = ()            # ((全名, 值), ...) —— 用元组保证可哈希、可比较
+
+
+@dataclasses.dataclass(frozen=True)
+class 参数事务结果(messages.Snapshot):
+    """仿真侧 → 界面：这次事务到底做成了什么。"""
+    状态: str = "空闲"          # 空闲 / ✓ 已提交 / ✗ 已回滚
+    成功数: int = 0
+    失败数: int = 0
+    时间: str = ""
+    # 每项：{全名, 旧值, 新值}
+    差异: tuple = ()
+    # 失败原因（给人看的，逐条）
+    失败: tuple = ()
+    说明: str = ""
 
 
 class 参数应用器:
@@ -174,6 +203,134 @@ class 参数应用器:
                         print(f"⚠ 参数存盘失败（参数已生效，只是没记住）："
                               f"{type(异常).__name__}: {异常}")
         return False
+
+
+    # ------------------------------------------------------------------
+    # 事务式批量应用（全成功，或一个都不动）
+    # ------------------------------------------------------------------
+    @messages.handler
+    def 收批量(self, 命令: 批量参数命令) -> bool:
+        if str(getattr(命令, "动作", "")) != "应用":
+            return False
+        # ★ 契约里 `参数` 是 object[]，每项 `{全名, 值}`（能被 JSON Schema 描述的写法）。
+        #   但内部/测试里也会写成 dict 或 (全名, 值) 元组 —— 三种都接。
+        #   第一版只认元组，于是 Web 发来的对象数组被当成"空改动"，
+        #   报出"当前这组算法里没有【全名】"这种让人摸不着头脑的错。
+        改动: dict[str, Any] = {}
+        for 项 in (getattr(命令, "参数", None) or ()):
+            if isinstance(项, dict):
+                名 = str(项.get("全名") or 项.get("名") or "")
+                if 名:
+                    改动[名] = 项.get("值")
+            elif isinstance(项, (tuple, list)) and len(项) == 2:
+                改动[str(项[0])] = 项[1]
+        if not 改动:
+            self._发事务(参数事务结果(状态="✗ 已回滚", 时间=time.strftime("%H:%M:%S"),
+                                     说明="没有要改的参数"))
+            return False
+
+        # ── 第一步：**预检**（一个都不写）。这一步是事务能成立的关键。
+        计划: list[tuple[Any, str, str, float, float]] = []
+        失败: list[str] = []
+        for 全名, 新值 in 改动.items():
+            插件名, _, 参数名 = str(全名).partition("·")
+            实例 = self._插件名到实例.get(插件名)
+            if 实例 is None:
+                失败.append(f"{全名}：当前这组算法里没有【{插件名}】")
+                continue
+            try:
+                表 = 实例.可调参数() or {}
+            except Exception as 异常:                                     # noqa: BLE001
+                失败.append(f"{全名}：读不到参数表（{type(异常).__name__}）")
+                continue
+            声明 = 表.get(参数名)
+            if not isinstance(声明, dict):
+                失败.append(f"{全名}：插件没有声明这个参数")
+                continue
+            旧 = float(声明.get("值", 0.0))
+            try:
+                新 = float(新值)
+            except (TypeError, ValueError):
+                失败.append(f"{全名}：{新值!r} 不是数字")
+                continue
+            范围 = 声明.get("范围")
+            if isinstance(范围, (tuple, list)) and len(范围) == 2:
+                低, 高 = float(范围[0]), float(范围[1])
+                if not (低 <= 新 <= 高):
+                    失败.append(f"{全名}：{新:g} 超出范围 [{低:g}, {高:g}]")
+                    continue
+            计划.append((实例, str(全名), 参数名, 旧, 新))
+
+        # 任何一条不合格 → 一个都不写（这正是"事务"的意思）
+        if 失败 or not 计划:
+            self._发事务(参数事务结果(
+                状态="✗ 已回滚", 失败数=len(失败), 失败=tuple(失败),
+                时间=time.strftime("%H:%M:%S"),
+                说明="预检未通过，所有参数保持原值"))
+            for 行 in 失败:
+                print(f"⚠ 参数事务被拒：{行}", flush=True)
+            return False
+
+        # ── 第二步：逐个写；**任何一步失败就把已写的退回去**
+        已写: list[tuple[Any, str, float]] = []
+        差异: list[dict] = []
+        按插件归并: dict[str, dict] = {}
+        for 实例, 全名, 参数名, 旧, 新 in 计划:
+            错 = 实例.设置参数(参数名, 新)
+            if 错:
+                失败.append(f"{全名}：{错}")
+                break
+            已写.append((实例, 参数名, 旧))
+            差异.append({"全名": 全名, "旧值": 旧, "新值": 新})
+            self.已应用 += 1
+            self.最近[全名] = 新
+            按插件归并.setdefault(全名.partition("·")[0], {})[参数名] = 新
+
+        if 失败:
+            # 回滚：按**写入顺序的逆序**退回，保证互相依赖的参数也回到一致状态
+            退不回 = []
+            for 实例, 参数名, 旧 in reversed(已写):
+                try:
+                    if 实例.设置参数(参数名, 旧):
+                        退不回.append(参数名)
+                except Exception:                                         # noqa: BLE001
+                    退不回.append(参数名)
+            self._发事务(参数事务结果(
+                状态="✗ 已回滚", 成功数=len(已写) - len(退不回), 失败数=len(失败),
+                差异=tuple(差异), 失败=tuple(失败), 时间=time.strftime("%H:%M:%S"),
+                说明=("已把写过的参数全部退回原值"
+                      if not 退不回 else f"回滚有 {len(退不回)} 项失败：{退不回}")))
+            print(f"⚠ 参数事务失败并回滚：{失败[0]}", flush=True)
+            return False
+
+        # ── 第三步：提交（存盘只在这里做一次，不会写半套）
+        if 按插件归并 and self._参数存盘 is not None:
+            for 插件名, 值表 in 按插件归并.items():
+                try:
+                    self._参数存盘(插件名, 值表)
+                except Exception as 异常:                                 # noqa: BLE001
+                    print(f"⚠ 参数存盘失败（参数已生效，只是没记住）："
+                          f"{type(异常).__name__}: {异常}", flush=True)
+        self._发事务(参数事务结果(
+            状态="✓ 已提交", 成功数=len(差异), 差异=tuple(差异),
+            时间=time.strftime("%H:%M:%S"),
+            说明=f"已应用 {len(差异)} 项"))
+        print(f"✓ 参数事务提交：{len(差异)} 项", flush=True)
+        return False
+
+    def 绑定发布(self, 发送函数) -> "参数应用器":
+        """注入"把事务结果发出去"的通道（外壳在装配时接上）。"""
+        self._发送 = 发送函数
+        return self
+
+    def _发事务(self, 结果: 参数事务结果) -> None:
+        发送 = getattr(self, "_发送", None)
+        if 发送 is None:
+            return
+        try:
+            发送(结果)
+        except Exception:                                             # noqa: BLE001
+            pass
 
 
 class 发布器:
