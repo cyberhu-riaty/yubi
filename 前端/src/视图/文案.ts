@@ -117,6 +117,18 @@ const 表 = {
   "步骤.验证.一句话": ["实时曲线与参数表", "Live curves and parameter table"],
   "步骤.辨识": ["辨识", "Identify"],
   "步骤.辨识.一句话": ["参数辨识进度与结果", "System identification progress and results"],
+  "步骤.诊断": ["诊断", "Diagnose"],
+  "步骤.诊断.一句话": [
+    "把终端里那些断言搬进界面：点一下真跑一遍，逐条报过没过",
+    "The terminal checks, in the UI: click to actually run them, one result per suite",
+  ],
+  "诊断.说明": [
+    "每项都是真跑 工具/验证 下对应的脚本（子进程调用，跟你在终端里敲的是同一批）。没有「上次全绿」的缓存——每次都重跑，因为缓存住的绿灯会在你真改坏东西时骗你。",
+    "Each row really runs the matching script under 工具/验证 (as a subprocess — the same ones you would run in a terminal). There is no cached all-green: cached green lies exactly when you break something.",
+  ],
+  "诊断.开始": ["开始检查", "Run checks"],
+  "诊断.运行中": ["检查中…", "Running…"],
+  "诊断.没跑过": ["还没跑过 —— 点上面的按钮开始", "Not run yet — use the button above"],
   "步骤.监控": ["监控", "Monitor"],
   "步骤.监控.一句话": [
     "实时率、步频、内存 —— 跑得动跑不动，看这里",

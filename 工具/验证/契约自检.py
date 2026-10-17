@@ -136,6 +136,48 @@ def 检查主题白名单与契约同源() -> None:
     判(not 漏掉, f"契约里登记的下行主题都在白名单里" + (f"（漏掉：{漏掉}）" if 漏掉 else ""))
 
 
+def 检查桥模块的消息都已登记() -> None:
+    明细.append("\n【⑥ 桥模块里定义的消息是否都登记进契约】")
+    import ast
+    import glob
+    import os
+
+    import 契约
+
+    已登记类名 = {t.类名 for t in (契约.下行主题 + 契约.上行主题)}
+    # 明确**不参与** Web 契约的内部消息（每条都要写清为什么不参与，
+    # 否则这个白名单迟早变成"什么都往里塞"的垃圾桶）。
+    内部消息 = {
+        "面板目标消息":
+            "viewer→sim 的滑杆目标（官方窗口内部用）。"
+            "Web 界面改参数走 `命令.改参数`，不走这条，所以它不该进契约。",
+    }
+    # ★ 用文件顶部算好的 `软件目录`。我第一版这里又算了一遍，还少了一层
+    #   （`工具/验证` → `工具`），于是 glob 到空目录、扫了 0 个类、"全部通过" ——
+    #   **一个什么都不查的检查比没有检查更糟**：它会给你一个假的绿灯。
+    漏 = []
+    扫过 = 0
+    for 路径 in sorted(glob.glob(os.path.join(软件目录, "*.py"))):
+        try:
+            树 = ast.parse(open(路径, encoding="utf-8").read())
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        for 节点 in ast.walk(树):
+            if not isinstance(节点, ast.ClassDef):
+                continue
+            基 = [getattr(b, "id", getattr(b, "attr", "")) for b in 节点.bases]
+            if not any(x in ("Snapshot", "Message") for x in 基):
+                continue
+            扫过 += 1
+            if 节点.name in 内部消息:
+                continue
+            if 节点.name not in 已登记类名:
+                漏.append(f"{os.path.basename(路径)}: class {节点.name}")
+    判(not 漏,
+       f"扫了 {扫过} 个消息类，全部在契约里登记"
+       if not 漏 else "有消息类没登记进契约（发不出去）：" + "；".join(漏))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--简", action="store_true", help="只打结论")
@@ -151,6 +193,7 @@ def main() -> int:
     检查上行命令能落地()
     检查校验器()
     检查主题白名单与契约同源()
+    检查桥模块的消息都已登记()     # ★ 反向检查：该登记却没登记的
 
     if not args.简:
         print("\n".join(明细))
@@ -168,3 +211,18 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# ---------------------------------------------------------------------------
+# ⑥ 反向检查：每个桥模块里定义的 Snapshot/命令类，都必须在契约里登记
+# ---------------------------------------------------------------------------
+# ★ 为什么需要这条（不是理论，是我真踩了）：
+#   给「诊断」加主题时，我那个改文件的脚本在**第二个断言**处就抛异常了 ——
+#   于是 `write_text` 根本没执行，契约里其实没加。
+#   而当时 `契约自检` 报的是「26 通过 / 0 失败」——因为它检查的是
+#   "**已登记**的主题对不对"，发现不了"**该登记却没登记**"。
+#   结果：消息类写好了、处理器也接上了，但 Web 白名单里没有它 → 页面上永远不出现，
+#   排查时还以为是发送端坏了（白花了不少时间）。
+#
+#   这条检查反过来看：扫 软件/*桥.py，找出所有 `messages.Snapshot`（及 messages.Message）
+#   的子类，逐个核对"类名是否在契约里出现过"。漏登记立刻报出来。

@@ -85,6 +85,14 @@ function 图标({ 名 }: { 名: 步骤id }) {
           <path d="M2.2 13.4h11.6" />
         </svg>
       );
+    case "诊断": // 听诊器/放大镜 + 勾
+      return (
+        <svg {...公共}>
+          <circle cx="7" cy="7" r="4.6" />
+          <path d="M10.4 10.4 14 14" />
+          <path d="M5.2 7l1.3 1.3L9 5.8" />
+        </svg>
+      );
     case "外观": // 调色盘
       return (
         <svg {...公共}>
