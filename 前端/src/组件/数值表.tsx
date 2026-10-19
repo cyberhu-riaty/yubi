@@ -49,6 +49,8 @@ export interface 数值行 {
   纯文本?: string;
   /** 这一行是"没有值"的诚实说明（如「未接入」），用弱色显示 */
   弱?: boolean;
+  /** 键名/取值的解释（悬停提示；用于 nq、nu 这类缩写） */
+  提示?: string;
 }
 
 export interface 数值表参数 {
@@ -64,7 +66,7 @@ export function 数值表({ 行, 空, 键宽 }: 数值表参数) {
     return <div className="text-dim">{空 ?? "--"}</div>;
   }
   return (
-    <table className="w-full border-collapse">
+    <table className="数值表 w-full border-collapse">
       <tbody>
         {行.map((r) => (
           <tr key={r.键} className="align-top">
@@ -72,12 +74,13 @@ export function 数值表({ 行, 空, 键宽 }: 数值表参数) {
               scope="row"
               className={`pr-2 text-left font-normal text-dim ${键宽 ?? ""}`}
               style={{ whiteSpace: "nowrap" }}
+              title={r.提示}
             >
               {r.键}
             </th>
             <td
               className={`break-all text-right ${r.弱 ? "text-dim" : ""}`}
-              title={r.纯文本}
+              title={r.纯文本 ?? r.提示}
             >
               {r.值}
               {r.单位 ? <span className="text-dim"> {r.单位}</span> : null}
@@ -119,7 +122,7 @@ export function 小表格({ 列, 行, 空, 行键 }: 小表格参数) {
               <th
                 key={i}
                 scope="col"
-                className={`border-b px-1.5 py-1 text-left font-normal text-dim ${c.宽度 ?? ""}`}
+                className={`border-b px-1.5 py-1 text-left font-normal text-dim whitespace-nowrap ${c.宽度 ?? ""}`}
                 style={{ background: "var(--bg-table-head)" }}
               >
                 {c.标题}

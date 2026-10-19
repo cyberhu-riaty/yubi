@@ -116,10 +116,34 @@ export function 曲线({ 数据, 显示, 窗口 = 120, 高 = 200, on暂停 }: �
         if (点 && 点.length) 最晚 = Math.max(最晚, 点[点.length - 1].t);
       }
       if (!最晚) {
-        // 一个点都没有：不画坐标轴（避免看起来"有坐标系只是没数据"的暗示）
+        // 一个点都没有：坐标轴照画，但用文案明确写"尚无指标帧"。
+        // 工程师反馈"图表空白，用户只能从旁边文字推断"——坐标系本身是信息，
+        // 关键是别让它看起来像"有数据只是没画出来"。
+        笔.strokeStyle = 取v("--plot-grid", "#333");
+        笔.lineWidth = 1;
+        笔.strokeRect(左, 上, 图宽, 图高2);
+        for (let i = 1; i < 4; i += 1) {
+          const y = 上 + (i / 4) * 图高2;
+          笔.beginPath();
+          笔.moveTo(左, y);
+          笔.lineTo(左 + 图宽, y);
+          笔.stroke();
+        }
+        笔.fillStyle = 取v("--plot-tick", "#888");
+        笔.font = "10px " + 取v("--font-mono", "monospace");
+        笔.textAlign = "center";
+        笔.fillText(t("曲线.轴时间"), 左 + 图宽 / 2, 图高 - 4);
+        笔.save();
+        笔.translate(12, 上 + 图高2 / 2);
+        笔.rotate(-Math.PI / 2);
+        笔.fillText(t("曲线.轴值"), 0, 0);
+        笔.restore();
         笔.fillStyle = 取v("--plot-text", "#888");
-        笔.font = "12px " + 取v("--font-mono", "monospace");
-        笔.fillText(t("曲线.空"), 左, 图高 / 2);
+        笔.font = "12px " + 取v("--font-ui", "sans-serif");
+        笔.fillText(t("曲线.空"), 左 + 图宽 / 2, 上 + 图高2 / 2 - 4);
+        笔.font = "10px " + 取v("--font-ui", "sans-serif");
+        笔.fillStyle = 取v("--plot-tick", "#888");
+        笔.fillText(t("曲线.空提示"), 左 + 图宽 / 2, 上 + 图高2 / 2 + 14);
         return;
       }
       /*

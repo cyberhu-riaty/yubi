@@ -1,41 +1,38 @@
 /**
- * 状态栏.tsx —— 底部一条，**只放约定里那六项**：
+ * 状态栏.tsx —— 底部一条，只放**运行现场最常扫的几项**：
  *
- *   项目 · 模型 · 物理开关 · 仿真时间 · 曲线帧率 · 连接状态
+ *   物理运行状态 · 仿真时间 · 实时倍率 RTF · 指标帧率 · 连接状态
  *
- * 不放行号/编码/缩进/Prettier 这类"仿编辑器"的装饰 —— 参考项目那条假状态栏
- * 就是这么来的（`约定.md` §三 点名过）。所以这里每一个数字都必须能追到一个真字段：
+ * 不放行号/编码/缩进/Prettier 这类"仿编辑器"的装饰。每一个数字都必须能追到
+ * 一个真字段：
  *
- *   项目     ← `项目状态.项目`
- *   模型     ← `模型状态.当前显示名`
  *   物理     ← `项目状态.重力开`；点它是**发真命令**（`命令.重力`）并等回执
- *   仿真时间 ← 连接建立后经过的墙钟时间。⚠️ 仿真侧自己的仿真时间**不在契约里**，
- *              所以悬停提示里写明这一条，不把它装成 sim time
- *   曲线帧率 ← `指标` 主题最近一秒**实测**收到的帧数（没有就是 0，不编）
+ *   仿真时间 ← `系统.仿真时间`（仿真侧 data.time，1 Hz），**不是**连接后的墙钟
+ *   实时倍率 ← `系统.RTF` = 仿真时间增量 ÷ 墙钟增量
+ *   指标帧率 ← `指标` 主题最近一秒**实测**收到的帧数（没有就是 0，不编）
  *   连接     ← WebSocket 连接状态
  *
- * 最右边是语言切换（"右上角"的语言开关在这个单窗口布局里落到状态栏右侧，
- * 不为它多开一条顶栏 —— 那条顶栏只会是装饰）。
+ * 项目名/模型名/语言不在这里：它们分别属于「定义」「外观」，塞进同一条状态栏
+ * 只会把它撑成两行（实测 576px 宽时旧版就换行了）。语言开关放在「外观」页。
  */
 import { 命令, 用仓库 } from "../数据/仓库";
-import { 命令收尾, 记命令发出, 用连接起始 } from "../数据/日志";
-import { 用节拍 } from "../数据/时钟";
-import { 按钮 } from "../组件/按钮";
-import { 另一种语言, 语言名, 取语言, 设语言, 连接键, use取, 时长 } from "../视图/文案";
+import { 命令收尾, 记命令发出 } from "../数据/日志";
+import { 连接键, use取, 数, 时长 } from "../视图/文案";
 
 export function 状态栏() {
   const t = use取();
-  const 节拍 = 用节拍();
   const 连接 = 用仓库((s) => s.连接);
   const 项目 = 用仓库((s) => s.项目.数据);
-  const 模型 = 用仓库((s) => s.模型.数据);
+  const 系统 = 用仓库((s) => s.系统.数据);
   const 指标速率 = 用仓库((s) => s.主题速率["指标"] ?? 0);
-  const 连接起始 = 用连接起始();
-  const 语 = 取语言();
 
-  // "仿真时间" = 连接建立之后经过的墙钟秒数；没连过就是 undefined → 显示 "--"
-  const 仿真秒 = 连接起始 ? (节拍 - 连接起始) / 1000 : undefined;
   const 物理 = 项目?.重力开;
+  const 仿真秒 = 系统?.仿真时间;
+  const RTF = 系统?.RTF;
+  // 冻结时 RTF 天然是 0，不算"跑不动"；只有推进中且明显掉速才提示。
+  const RTF警示 = 物理 === true && RTF !== undefined && RTF < 0.95;
+  const 连接色 =
+    连接 === "已连接" ? "var(--ok)" : 连接 === "连接中" ? "var(--warn)" : "var(--danger)";
 
   const 切物理 = async () => {
     if (typeof 物理 !== "boolean") return;
@@ -46,26 +43,18 @@ export function 状态栏() {
 
   return (
     <footer
-      className="状态栏 flex flex-none flex-wrap items-center gap-x-3 gap-y-0.5 px-2.5 py-1 text-[0.9em]"
-      aria-label={t("状态栏.连接")}
+      className="状态栏 flex flex-none items-center gap-x-2.5 gap-y-0 px-2.5 text-[0.82em]"
+      aria-label={t("状态栏.标题")}
     >
-      <格 标签={t("状态栏.项目")} 提示={t("状态栏.提示.项目")} 值={项目?.项目 || "--"} />
-      <格
-        标签={t("状态栏.模型")}
-        提示={t("状态栏.提示.模型")}
-        值={模型?.当前显示名 || 模型?.当前路径 || "--"}
-      />
-
-      <span className="flex items-center gap-1" title={t("状态栏.提示.物理")}>
-        <span className="flex-none text-dim">{t("状态栏.物理")}</span>
+      <span className="状态栏项" title={t("状态栏.提示.物理")}>
+        <span className="状态栏标签">{t("状态栏.物理")}</span>
         <button
           type="button"
           role="switch"
           aria-checked={typeof 物理 === "boolean" ? 物理 : "mixed"}
           disabled={typeof 物理 !== "boolean"}
           onClick={() => void 切物理()}
-          className="控件 等宽"
-          style={{ padding: "0 6px" }}
+          className="状态开关 等宽"
         >
           {typeof 物理 === "boolean"
             ? 物理
@@ -79,30 +68,58 @@ export function 状态栏() {
         标签={t("状态栏.仿真时间")}
         提示={t("状态栏.提示.仿真时间")}
         值={仿真秒 === undefined ? "--" : 时长(仿真秒)}
+        宽="13ch"
       />
-      <格 标签={t("状态栏.曲线帧率")} 提示={t("状态栏.提示.曲线帧率")} 值={`${指标速率} Hz`} />
-      <格 标签={t("状态栏.连接")} 提示={t("状态栏.提示.连接")} 值={t(连接键[连接])} />
+      <格
+        标签={t("状态栏.实时率")}
+        提示={t("状态栏.提示.实时率")}
+        值={RTF === undefined ? "--" : `${数(RTF, 2)}×`}
+        宽="9ch"
+        警示={RTF警示}
+      />
+      <格
+        标签={t("状态栏.帧率")}
+        提示={t("状态栏.提示.帧率")}
+        值={`${指标速率} Hz`}
+        宽="9ch"
+      />
 
       <span className="flex-1" />
 
-      <按钮
-        尺寸="小"
-        种类="幽灵"
-        on按下={() => 设语言(另一种语言[语])}
-        title={t("状态栏.切到", { 语: 语言名[另一种语言[语]] })}
-      >
-        {t("状态栏.语言")}: {语言名[语]}
-      </按钮>
+      <span className="状态栏项" role="status" title={t("状态栏.提示.连接")}>
+        <span className="状态栏标签">{t("状态栏.连接")}</span>
+        <span className="状态点" aria-hidden="true" style={{ background: 连接色 }} />
+        <span className="等宽">{t(连接键[连接])}</span>
+      </span>
     </footer>
   );
 }
 
 /** 一格：标签 + 值（值等宽；悬停给出这个字段的**真实来源**） */
-function 格({ 标签, 值, 提示 }: { 标签: string; 值: string; 提示: string }) {
+function 格({
+  标签,
+  值,
+  提示,
+  宽,
+  警示 = false,
+}: {
+  标签: string;
+  值: string;
+  提示: string;
+  宽?: string;
+  警示?: boolean;
+}) {
   return (
-    <span className="flex min-w-0 items-center gap-1" title={提示}>
-      <span className="flex-none text-dim">{标签}</span>
-      <span className="等宽 truncate" style={{ maxWidth: "22ch" }}>
+    <span className="状态栏项 min-w-0" title={提示}>
+      <span className="状态栏标签 flex-none">{标签}</span>
+      {警示 ? (
+        <span
+          className="状态点"
+          style={{ background: "var(--warn)" }}
+          aria-hidden="true"
+        />
+      ) : null}
+      <span className="等宽 truncate" style={{ maxWidth: 宽 ?? "14ch" }}>
         {值}
       </span>
     </span>

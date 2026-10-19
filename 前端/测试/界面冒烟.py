@@ -11,7 +11,8 @@
     两个都不是类型错误，只能靠"跑一遍 + 看真的 DOM/截图"发现。
 
 它做什么：
-    ① 需要先起一个对端：`前端/测试/假后端.py`（提供 ws 与产物 HTTP，同源 8712）
+    ① 需要先起一个对端：`前端/测试/假后端.py`（提供 ws 与产物 HTTP，默认同源 8712；
+       真后端占着 8712 时用 `驭臂_测试端口=8713` 换端口）
     ② 起 headless Chrome，按 CDP 导航、等待、取 `document.body.innerText`、截图
     ③ 检查若干**必须出现**的事实（模型名、握手行、主题速率、状态栏字段…）
     ④ 切皮肤 / 切语言 / 切页签 / 切到验证视图，各再取一次并留下一张图
@@ -37,7 +38,9 @@ import websockets
 
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 调试端口 = 9333
-地址 = "http://127.0.0.1:8712/"
+# 端口可用环境变量改（与假后端共用同一个变量）：真后端正在 8712 上跑时不必抢端口。
+端口 = int(os.environ.get("驭臂_测试端口", "8712"))
+地址 = f"http://127.0.0.1:{端口}/"
 
 
 class 页:
@@ -115,6 +118,11 @@ async def 主(输出目录: str) -> int:
             P = 页(连)
             await P.调("Page.enable")
             await P.调("Runtime.enable")
+            # 固定 CSS 像素视口：headless 的 --window-size 在部分版本上只影响
+            # 截图位图，不影响 innerWidth；不固定的话媒体查询会在 980px 上做判断。
+            await P.调("Emulation.setDeviceMetricsOverride", {
+                "width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False,
+            })
             await P.调("Page.navigate", {"url": 地址})
             await asyncio.sleep(8)
 
@@ -127,15 +135,18 @@ async def 主(输出目录: str) -> int:
                 "自由度 nq", "执行器数 nu",
                 "握手成功",             # 真握手日志
                 "主题速率",
-                "指标",                 # 真收到的主题
-                "曲线帧率",
+                "帧率",
                 "仿真时间",
+                "实时倍率",             # 系统主题里的 RTF，不是墙钟冒充的
                 # ★ 中区文案在 P3 改成实话了：原生 3D 真接上了（由宿主窗口放在中区
-                #   **下方**），所以这里断言的是"说清楚 3D 在哪"，而不是旧文案
+                #   **右侧**），所以这里断言的是"说清楚 3D 在哪"，而不是旧文案
                 #   "尚未接入"。断言的意图没变：中区不能假装自己有几何。
-                "原生 3D 就在窗口下方",
+                "原生 3D 在宿主窗口右侧",
                 "模型与关节状态",
                 "已连接",
+                # 兼容性不能只埋在装配报告里：假后端的报告写了「不兼容」，
+                # 定义页顶部必须出现可处理提示。
+                "有算法与当前模型不兼容",
             ]
             for 词 in 必须:
                 if 词 not in 文:
@@ -273,18 +284,22 @@ async def 主(输出目录: str) -> int:
             if "未接入" not in 文部署:
                 失败.append("部署视图没有「未接入」状态（验收项：必须有）")
 
-            # 规划视图：必须是「未实现」
+            # 规划视图：功能已实现，空状态必须是「尚无航点」而不是「未实现」；
+            # 并且要给出"至少记录 2 个航点"的可执行条件。
             if not await P.点("规划"):
                 失败.append("点不到「规划」")
             await asyncio.sleep(1.0)
             文规划 = await P.文本()
-            if "未实现" not in 文规划:
-                失败.append("规划视图没有「未实现」状态")
+            if "尚无航点" not in 文规划:
+                失败.append("规划视图没有空状态「尚无航点」")
+            if "至少 2 个航点" not in 文规划:
+                失败.append("规划视图没有说明「至少 2 个航点」的启用条件")
 
             # 切皮肤：data-风格 与计算样式都要跟着变
             if not await P.点("外观"):
                 失败.append("点不到「外观」")
             await asyncio.sleep(1.0)
+            切前底 = await P.执行("getComputedStyle(document.body).backgroundColor")
             await P.执行("""[...document.querySelectorAll('button')]
                 .find(b => (b.textContent||'').includes('航天测控'))?.click()""")
             await asyncio.sleep(0.8)
@@ -294,6 +309,8 @@ async def 主(输出目录: str) -> int:
                 失败.append(f"皮肤没切过去（data-风格={风格}）")
             if 底 in (None, "", "rgba(0, 0, 0, 0)"):
                 失败.append(f"切肤后 body 背景没拿到（{底}）")
+            elif 切前底 == 底:
+                失败.append(f"切肤后 body 背景没变（{底}）—— 默认皮肤的 :root 可能覆盖了其他皮肤")
             await P.截图(os.path.join(输出目录, "05-皮肤-航天测控.png"))
 
             # 切语言：英文

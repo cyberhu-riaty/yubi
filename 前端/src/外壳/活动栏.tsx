@@ -1,12 +1,15 @@
 /**
  * 活动栏.tsx —— 最左边那条窄图标列（VS Code 的位置）。
  *
- * 五项是任务流的五个步骤，底部两项是外观/关于。图标全是**内联 SVG**（没有图标库依赖）：
+ * 十项按三组排：**流程**（定义→规划→验证→辨识→部署）、**运行**（监控/诊断/插件）、
+ * **信息**（外观/关于）。图标全是**内联 SVG**（没有图标库依赖）：
  *   · 描边用 `currentColor`，所以按钮本身的 `color` 决定图标颜色 —— 换肤自动跟随
  *   · 每个按钮都是真 `<button>`，Tab 能到、有 `title`（含快捷键提示）
  *   · 当前步骤用 `aria-current="step"` + 左侧色条 + 底色三重表示（不靠颜色一种手段）
  *
- * 快捷键 1..5 在这里只显示提示，真正绑在 `App.tsx`（避免两处各绑一次）。
+ * ★ 编号只保留在 title 里（1..5 仍可跳步骤），**不再画在图标角上**：
+ *   原来只有前 5 项带编号，看起来像"后 3 项不属于任务流"；统一去掉编号，
+ *   组标题说明它们各自属于哪一组。
  */
 import type { ReactNode } from "react";
 import { 底部步骤, 任务步骤, 运行步骤, type 步骤id } from "./任务流";
@@ -144,7 +147,7 @@ function 格子({
       aria-current={当前 ? "step" : undefined}
       aria-label={`${短名} —— ${说明}`}
       title={快捷键 ? `${说明} (${快捷键})` : 说明}
-      className="relative flex h-[52px] w-full flex-col items-center justify-center gap-0.5"
+      className="活动格 relative flex h-[46px] w-full flex-col items-center justify-center gap-0.5"
       style={{
         color: 当前 ? "var(--fg)" : "var(--fg-dim)",
         background: 当前 ? "var(--bg-frame-on)" : "transparent",
@@ -161,16 +164,15 @@ function 格子({
       <span className="text-[9px] leading-none" aria-hidden="true">
         {短名}
       </span>
-      {快捷键 ? (
-        <span
-          aria-hidden="true"
-          className="等宽 absolute bottom-0.5 right-1 text-[9px] leading-none"
-          style={{ color: "var(--fg-dim)" }}
-        >
-          {快捷键}
-        </span>
-      ) : null}
     </button>
+  );
+}
+
+function 组标题({ 文字 }: { 文字: string }) {
+  return (
+    <div className="活动组" aria-hidden="true">
+      {文字}
+    </div>
   );
 }
 
@@ -194,15 +196,19 @@ export function 活动栏({ 当前, 侧栏开, on选步 }: 活动栏参数) {
     <nav
       aria-label={t("活动栏.标题")}
       aria-orientation="vertical"
-      className="flex h-full w-12 flex-none flex-col justify-between"
+      className="flex h-full w-12 flex-none flex-col justify-between overflow-hidden"
       style={{ background: "var(--bg-menu)", borderRight: "1px solid var(--border)" }}
     >
       <div role="toolbar" aria-label={t("活动栏.步骤编组")} aria-orientation="vertical">
+        <组标题 文字={t("活动栏.流程组")} />
         {画组(任务步骤, 1)}
-        <div className="my-1" style={{ borderTop: "1px solid var(--border)" }} />
+        <div className="活动分隔" />
+        <组标题 文字={t("活动栏.运行组")} />
         {画组(运行步骤)}
       </div>
       <div role="toolbar" aria-label={t("活动栏.底部编组")} aria-orientation="vertical">
+        <div className="活动分隔" />
+        <组标题 文字={t("活动栏.信息组")} />
         {画组(底部步骤)}
       </div>
     </nav>

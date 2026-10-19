@@ -23,7 +23,7 @@ import { 提示错误 } from "./提示";
 import { 取 } from "../视图/文案";
 
 export type 日志等级 = "信息" | "注意" | "错误";
-export type 日志来源 = "连接" | "握手" | "回执" | "错误" | "前端" | "控制台";
+export type 日志来源 = "连接" | "握手" | "回执" | "错误" | "前端" | "控制台" | "规划" | "诊断";
 
 export interface 日志行 {
   序号: number;
@@ -35,6 +35,17 @@ export interface 日志行 {
   文本: string;
   /** 附加说明（多行/长文），展开时看 */
   细节?: string;
+  /** 结构化字段：只在来源**真的知道**时填，不靠字符串猜 */
+  模块?: string;
+  插件?: string;
+  关节?: number;
+}
+
+/** 结构化事件上下文：能填才填，不是每条日志都有 */
+export interface 结构字段 {
+  模块?: string;
+  插件?: string;
+  关节?: number;
 }
 
 /** 速率表的一行（每个主题一行，每秒刷新） */
@@ -71,9 +82,19 @@ const 最近帧 = new Map<string, number>();
 
 const 订阅者 = new Set<() => void>();
 
+/**
+ * 合并同一轮事件循环里的多次写入：高频日志/连续回执只触发一次 React 外订阅回调，
+ * 避免每条日志都让控制台整页重渲染。版本号仍逐条递增，快照不会丢行。
+ */
+let 待通知 = false;
 function 通知(): void {
   版本 += 1;
-  for (const f of 订阅者) f();
+  if (待通知) return;
+  待通知 = true;
+  queueMicrotask(() => {
+    待通知 = false;
+    for (const f of 订阅者) f();
+  });
 }
 
 let 缓存: 日志快照 = { 行: [], 速率: [], 连接起始: 0, 命令数: 0 };
@@ -86,6 +107,52 @@ export function 取日志(): 日志快照 {
 }
 
 /** 订阅日志（快照按引用比较，没变就不会白重画） */
+/** 把一行日志转成原生面板能直接渲染的字段。 */
+function 原生行(l: 日志行): Record<string, unknown> {
+  return {
+    墙钟: l.墙钟,
+    等级: l.等级,
+    来源: l.来源,
+    文本: l.文本,
+    细节: l.细节 ?? "",
+    模块: l.模块 ?? "",
+    插件: l.插件 ?? "",
+    关节: l.关节 ?? null,
+  };
+}
+
+function 发原生(内容: Record<string, unknown>): void {
+  try {
+    const w = window as unknown as {
+      webkit?: { messageHandlers?: { 驭臂日志?: { postMessage?: (x: unknown) => void } } };
+    };
+    w.webkit?.messageHandlers?.驭臂日志?.postMessage?.(内容);
+  } catch {
+    /* 镜像失败不影响 Web 控制台 */
+  }
+}
+
+/** 把单行日志镜像给原生宿主（有 WKWebView 的 messageHandler 时才发；浏览器里是 no-op）。 */
+function 送原生(l: 日志行): void {
+  发原生(原生行(l));
+}
+
+/** 把**当前主日志的完整筛选结果**发给原生面板；面板的计数/筛选/清空都以它为准。 */
+export function 送原生状态(
+  行: 日志行[],
+  总数: number,
+  筛选: string,
+  等级: 日志等级 | "全部",
+): void {
+  发原生({
+    类型: "日志状态",
+    行: 行.slice(-500).map(原生行),
+    总数,
+    筛选,
+    等级,
+  });
+}
+
 export function 用日志(): 日志快照 {
   return useSyncExternalStore(
     (回调) => {
@@ -97,7 +164,8 @@ export function 用日志(): 日志快照 {
   );
 }
 
-function 记(等级: 日志等级, 来源: 日志来源, 文本: string, 主题?: string, 细节?: string): void {
+function 记(等级: 日志等级, 来源: 日志来源, 文本: string, 主题?: string, 细节?: string,
+           结构?: 结构字段): void {
   const 新: 日志行 = {
     序号: 下一个序号++,
     墙钟: Date.now(),
@@ -106,8 +174,12 @@ function 记(等级: 日志等级, 来源: 日志来源, 文本: string, 主题?
     主题,
     文本,
     细节,
+    模块: 结构?.模块,
+    插件: 结构?.插件,
+    关节: 结构?.关节,
   };
   行 = 行.length >= 容量 ? [...行.slice(行.length - 容量 + 1), 新] : [...行, 新];
+  送原生(新);
   通知();
 }
 
@@ -124,6 +196,18 @@ export function 记错误(来源: 日志来源, 文本: string, 主题?: string,
   记("错误", 来源, 文本, 主题, 细节);
 }
 
+/** 带结构化字段的事件（插件/关节/模块）；没有字段时退化为普通日志 */
+export function 记结构化(
+  等级: 日志等级,
+  来源: 日志来源,
+  文本: string,
+  结构: 结构字段,
+  主题?: string,
+  细节?: string,
+): void {
+  记(等级, 来源, 文本, 主题, 细节, 结构);
+}
+
 /**
  * 记录一次命令发出的时刻；`命令收尾` 用返回值算出耗时（毫秒）。
  * 命令的成败**只以回执为准**，这里只负责计时。
@@ -138,14 +222,19 @@ export function 记命令发出(): number {
  * 命令回执的统一落点：写日志 + （失败时）弹提示。
  * 所有视图里的 `await 命令.xxx()` 都必须过这一道 —— 见 `约定.md` §二。
  */
-export function 命令收尾(主题: string, 回执: 回执, 起于: number): 回执 {
+export function 命令收尾(
+  主题: string,
+  回执: 回执,
+  起于: number,
+  结构?: 结构字段,
+): 回执 {
   const 耗时 = Date.now() - 起于;
   if (回执.通过) {
-    记("信息", "回执", 取("日志.回执通过", { 主题, 耗时 }), 主题, 回执.说明 || undefined);
+    记("信息", "回执", 取("日志.回执通过", { 主题, 耗时 }), 主题, 回执.说明 || undefined, 结构);
   } else {
     // 失败必须"两个出口都亮"：控制台留痕 + 右下角顶一条提示。
     const 说明 = 回执.说明 || 取("日志.无说明");
-    记("错误", "回执", 取("日志.回执失败", { 主题, 说明 }), 主题, 取("日志.耗时", { 值: 耗时 }));
+    记("错误", "回执", 取("日志.回执失败", { 主题, 说明 }), 主题, 取("日志.耗时", { 值: 耗时 }), 结构);
     提示错误(取("提示.命令失败", { 主题 }), 说明);
   }
   return 回执;
@@ -187,6 +276,9 @@ export function 起日志(): () => void {
   起动 = true;
 
   记("信息", "控制台", 取("日志.启动"));
+
+  let 上次规划事件 = "";
+  let 上次诊断事件 = "";
 
   const 取消订阅 = 后端.订阅((e) => {
     if (e.状态) {
@@ -230,6 +322,64 @@ export function 起日志(): () => void {
     }
     if (e.帧?.主题) {
       最近帧.set(e.帧.主题, Date.now());
+      const 数据 = (e.帧.数据 ?? {}) as Record<string, unknown>;
+      const 串 = (v: unknown) => (typeof v === "string" ? v : "");
+      const 数 = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+
+      // 规划结果里的真实关节信息：失败 / 估算限位时产生一条结构化事件。
+      // 这不是"解析日志猜关节"，而是直接读后端规划结果的 `瓶颈关节`。
+      if (e.帧.主题 === "规划结果") {
+        const 状态 = 串(数据.状态);
+        const 原因 = 串(数据.原因);
+        const 限位 = 串(数据.限位来源);
+        const 关节 = 数(数据.瓶颈关节);
+        const 失败 = 状态.includes("✗");
+        const 估算 = 限位.includes("估算");
+        if (失败 || 估算) {
+          const 签名 = [状态, 数据.时间, 原因, 关节, 限位].join("|");
+          if (签名 !== 上次规划事件) {
+            上次规划事件 = 签名;
+            const 关节文本 = 关节 !== undefined && 关节 >= 0 ? `J${关节}` : 取("通用.无");
+            const 文本 = 失败
+              ? 取("日志.规划失败", { 原因: 原因 || 取("日志.无说明") })
+              : 取("日志.规划估算", { 来源: 限位, 关节: 关节文本 });
+            记结构化(
+              失败 ? "错误" : "注意",
+              "规划",
+              文本,
+              { 模块: "规划", 关节: 关节 !== undefined && 关节 >= 0 ? 关节 : undefined },
+              "规划结果",
+              失败 ? 原因 || undefined : 限位 || undefined,
+            );
+          }
+        } else {
+          上次规划事件 = "";
+        }
+      }
+
+      // 诊断报告里的失败项：同样来自真实报告，不解析自由文本。
+      if (e.帧.主题 === "诊断") {
+        const 项们 = Array.isArray(数据.项) ? (数据.项 as Record<string, unknown>[]) : [];
+        const 失败项 = 项们.filter((x) => x && x.通过 === false);
+        const 出错 = 串(数据.出错);
+        if (失败项.length || 出错) {
+          const 签名 = [数据.时间, 数据.通过, 数据.总数, 失败项.map((x) => 串(x.名)).join(","), 出错].join("|");
+          if (签名 !== 上次诊断事件) {
+            上次诊断事件 = 签名;
+            const 文本 = 出错
+              ? 取("日志.诊断出错", { 说明: 出错 })
+              : 取("日志.诊断未通过", { 通过: 数(数据.通过) ?? 0, 总数: 数(数据.总数) ?? 0 });
+            记结构化(
+              "错误",
+              "诊断",
+              文本,
+              { 模块: "诊断" },
+              "诊断",
+              失败项.length ? 失败项.map((x) => 串(x.名)).filter(Boolean).join(" · ") || undefined : undefined,
+            );
+          }
+        }
+      }
     }
   });
 

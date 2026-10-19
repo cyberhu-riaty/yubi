@@ -151,6 +151,18 @@
     font: inherit;
     color: inherit;
   }
+
+  /*
+   * 按钮的 UA 外观必须关掉：
+   *   macOS/Chrome 的 `appearance: auto` 会在我们设的深色背景上再画一层
+   *   浅色原生按钮面。实测深色皮肤下皮肤卡片仍是浅灰、文字还是深色 ——
+   *   computed style 明明是 #0E151B，屏幕却是浅色，就是这层原生外观盖住了。
+   *   select 保留原生箭头，不动。
+   */
+  button {
+    appearance: none;
+    -webkit-appearance: none;
+  }
 }
 
 /*
@@ -174,7 +186,7 @@
     background: var(--bg-panel);
     border: var(--border-w, 1px) solid var(--border);
     border-radius: var(--radius);
-    box-shadow: 0 1px 2px var(--shadow);
+    /* 少一层阴影：左栏本来就有卡片边框，再加投影只会显得"一叠纸" */
     overflow: hidden;
   }
 
@@ -184,28 +196,255 @@
     align-items: center;
     gap: 6px;
     width: 100%;
-    padding: var(--pad-y) var(--pad-x);
-    /* 卡片内不再铺满底色：白卡 + 灰标题条会显得"两层"，用透明更干净 */
+    min-height: 32px;
+    padding: 6px 10px;
     background: transparent;
     color: var(--fg);
     border: 0;
     text-align: left;
     cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 600;
   }
   .段头:hover {
     background: var(--bg-header-hover);
+  }
+
+  /* 两列表格：键是辅助信息，值是主角。行间用发丝线分隔，不再靠大留白。 */
+  .数值表 {
+    table-layout: fixed;
+  }
+  .数值表 th {
+    width: 36%;
+    padding: 3px 8px 3px 0;
+    font-size: 0.8em;
+    letter-spacing: 0.01em;
+    vertical-align: top;
+  }
+  .数值表 td {
+    width: 64%;
+    padding: 3px 0;
+    font-size: 0.9em;
+    font-weight: 500;
+    vertical-align: top;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .数值表 tr + tr > * {
+    border-top: 1px solid var(--border-light);
+  }
+
+  /* 长路径：文件名 + 上级目录；复制按钮常驻但低对比，悬停变亮 */
+  .路径值 {
+    max-width: 100%;
+  }
+  .路径文件名 {
+    font-weight: 600;
+  }
+  .复制键 {
+    flex: none;
+    padding: 0 4px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--fg-dim);
+    font-size: 0.72em;
+    line-height: 1.8;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .复制键:hover {
+    color: var(--fg);
+    background: var(--bg-frame);
+    border-color: var(--border);
+  }
+
+  /* 兼容性提示：左侧 3px 警告条 + 文字结论。颜色只是辅助，标题里写了"不兼容"。 */
+  .兼容条 {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--warn);
+    border-radius: var(--radius);
+    background: var(--bg-panel);
+    padding: 8px 10px;
+  }
+  .兼容标题 {
+    font-weight: 600;
+    color: var(--fg);
+  }
+
+  /* 算法行：一行放不下就换行，不把名字挤成竖排 */
+  .算法项 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 3px 6px;
+    padding: 4px 7px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    background: var(--bg-row-alt);
+    font-size: 0.88em;
+  }
+  .算法名 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-weight: 500;
+  }
+  .算法版本 {
+    font-size: 0.78em;
+  }
+
+  /* 部署页顶部：把"后端已连接"和"真机未接入"分成两格，避免两个"已连接"混淆 */
+  .部署状态 {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-row-alt);
+  }
+  .部署状态项 {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.82em;
+  }
+
+  /* 皮肤预览：节点带 data-风格，所以它自己就吃那套主题变量，不需要第二份颜色表。 */
+  .皮肤预览 {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    width: 76px;
+    height: 48px;
+    padding: 4px 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  .皮肤预览-条 {
+    display: block;
+    width: 100%;
+    height: 5px;
+    border-radius: 1px;
+    background: var(--bg-header);
+  }
+  .皮肤预览-字 {
+    font-size: 9px;
+    line-height: 1;
+    font-weight: 600;
+  }
+  .皮肤预览-钮 {
+    align-self: flex-start;
+    width: 20px;
+    height: 7px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+
+  /* 装配报告：原生 details，默认收起；summary 像一条可点的辅助行 */
+  .装配详情 {
+    border-top: 1px solid var(--border-light);
+    padding-top: 5px;
+  }
+  .装配详情 > summary {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    color: var(--fg-dim);
+    font-size: 0.8em;
+    list-style: none;
+    user-select: none;
+  }
+  .装配详情 > summary::-webkit-details-marker {
+    display: none;
+  }
+  .装配详情 > summary::before {
+    content: "▸";
+    font-family: var(--font-mono);
+  }
+  .装配详情[open] > summary::before {
+    content: "▾";
+  }
+  .装配详情 > summary:hover {
+    color: var(--fg);
+  }
+
+  /* 侧栏顶部的一行上下文：当前项目 / 当前模型 */
+  .上下文条 {
+    display: flex;
+    flex: none;
+    gap: 8px;
+    padding: 3px 10px 4px;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-menu);
+    color: var(--fg-dim);
+    font-size: 0.72em;
+    line-height: 1.5;
+  }
+  .上下文项 {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 0;
+    align-items: baseline;
+    gap: 3px;
+  }
+  .上下文标签 {
+    flex: none;
+    opacity: 0.8;
+  }
+  .上下文未接入 {
+    flex: none;
+    border-bottom: 1px dashed currentColor;
+    opacity: 0.9;
+  }
+
+  /* 活动栏：统一分组；编号只留在 title 里 */
+  .活动格 {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .活动格:hover {
+    background: var(--bg-frame-hover) !important;
+  }
+  .活动组 {
+    padding: 7px 0 2px;
+    color: var(--fg-dim);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    text-align: center;
+    user-select: none;
+  }
+  .活动分隔 {
+    margin: 4px 6px;
+    border-top: 1px solid var(--border);
   }
 
   /* 窗口改成"左 Web / 右 3D"之后，Web 面板只有 40% 宽（约 520~760px）。
    * 这么窄再塞"中区仪表盘"会挤成一团 —— 而中区本来就是"3D 没地方放时的替代品"，
    * 现在 3D 就在右边，它没有存在意义了，直接收掉。
    * 用媒体查询而不是 JS：宽度变化是纯展示问题，不需要触发 React 重渲染。 */
+  /* 中区收掉之后，让侧栏自己撑满，卡片才有地方呼吸。
+     这条既服务窄窗口，也服务"侧栏被拖得很宽、剩余中区不够 620px"的宿主布局。 */
+  .侧栏格-满 {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    border-right: none !important;
+  }
+
   @media (max-width: 860px) {
     .中区格 {
       display: none;
     }
-    /* 中区收掉之后，那半行会剩一条白（侧栏是固定宽度）。
-       让侧栏自己撑满，卡片才有地方呼吸。 */
     .侧栏格 {
       flex: 1 1 auto !important;
       width: auto !important;
@@ -219,22 +458,57 @@
   .状态栏 {
     background: var(--bg-nav);
     color: var(--fg-on-accent);
+    flex-wrap: nowrap;
+    min-height: 26px;
+    line-height: 1.6;
+    white-space: nowrap;
+    overflow: hidden;
   }
   .状态栏 .text-dim {
     color: inherit;
-    opacity: 0.72;
+    opacity: 0.8;
   }
   .状态栏 .等宽 {
     color: inherit;
   }
-  /* 状态栏里的按钮（如"物理"开关）改成"玻璃片"，不跟主色打架 */
-  .状态栏 button {
-    background: #FFFFFF22;
-    border-color: #FFFFFF33;
-    color: inherit;
+  .状态栏项 {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
   }
-  .状态栏 button:hover {
-    background: #FFFFFF33;
+  .状态栏标签 {
+    font-size: 0.9em;
+    opacity: 0.82;
+  }
+  .状态开关 {
+    padding: 0 7px;
+    border: 1px solid color-mix(in srgb, var(--fg-on-accent) 32%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--fg-on-accent) 14%, transparent);
+    color: inherit;
+    font-size: 0.92em;
+    line-height: 1.55;
+    cursor: pointer;
+  }
+  .状态开关:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--fg-on-accent) 24%, transparent);
+  }
+  .状态开关:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+  .状态点 {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: none;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg-on-accent) 45%, transparent);
+  }
+  .状态栏未接入 {
+    border-bottom: 1px dashed currentColor;
+    opacity: 0.9;
+    font-size: 0.95em;
   }
 
   /* 通用可交互控件（按钮 / 开关 / 页签的公共壳） */
@@ -305,6 +579,209 @@
   .分隔条:hover,
   .分隔条[data-拖动="1"] {
     background: var(--grab);
+  }
+
+  /* ---- 底部控制台：两行日志 + 紧凑筛选 ---- */
+  /* 原生全宽工程面板打开时，Web 自己的控制台要收起（日志已镜像到原生面板）。
+     用 html[data-工程面板] 而不是等 React 状态：面板一出现就立即生效，不会出现两份日志。 */
+  html[data-工程面板="1"] .控制台格,
+  html[data-工程面板="1"] .控制台召回,
+  html[data-工程面板="1"] .分隔条:has(+ .控制台格) {
+    display: none !important;
+  }
+
+  .控制台头 {
+    min-height: 30px;
+    background: var(--bg-title);
+  }
+  .控制台页签 {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.88em;
+  }
+  .控制台页签:hover {
+    background: var(--bg-frame);
+  }
+  .控制台动作 {
+    flex: none;
+    padding: 1px 5px;
+    border: 1px solid transparent;
+    border-radius: calc(var(--radius) * 0.6);
+    background: transparent;
+    color: var(--fg-dim);
+    font-size: 0.78em;
+    line-height: 1.6;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .控制台动作:hover {
+    color: var(--fg);
+    background: var(--bg-frame);
+    border-color: var(--border);
+  }
+  .控制台动作[aria-pressed="true"] {
+    color: var(--fg);
+    background: var(--bg-frame-on);
+    border-color: var(--border-strong);
+  }
+  .控制台筛选 {
+    min-height: 24px;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 0.78em;
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .筛选器 {
+    display: inline-flex;
+    min-width: 0;
+  }
+  .筛选器 select {
+    max-width: 9.5em;
+    padding: 1px 3px;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) * 0.6);
+    background: var(--bg-frame);
+    color: var(--fg);
+    font-size: 0.95em;
+    cursor: pointer;
+  }
+  .操作反馈 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.95em;
+  }
+
+  /* 控制台收起后的召回条：必须一眼看到"有错/有警告"，也要能点回来 */
+  .控制台召回 {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 4px 10px;
+    border: 0;
+    border-top: 1px solid var(--border);
+    background: var(--bg-title);
+    color: var(--fg);
+    font-size: 0.9em;
+    text-align: left;
+    cursor: pointer;
+  }
+  .控制台召回:hover {
+    background: var(--bg-frame);
+  }
+  .控制台召回-徽标 {
+    flex: none;
+    font-size: 0.85em;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .日志列表 {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .日志项 {
+    border-bottom: 1px solid var(--border-light);
+  }
+  .日志项:hover {
+    background: var(--bg-row-alt);
+  }
+  .日志行 {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    width: 100%;
+    padding: 3px 10px;
+    border: 0;
+    background: transparent;
+    color: var(--fg);
+    text-align: left;
+    cursor: default;
+  }
+  .日志行[aria-expanded] {
+    cursor: pointer;
+  }
+  .日志行首 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 6px;
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    font-size: 0.72em;
+    line-height: 1.5;
+  }
+  .日志时间 {
+    color: var(--fg-dim);
+  }
+  .日志等级 {
+    font-weight: 600;
+  }
+  .日志来源 {
+    padding: 0 4px;
+    border-radius: 3px;
+    background: var(--bg-frame);
+    color: var(--fg-dim);
+  }
+  .日志主题 {
+    max-width: 16ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.9;
+  }
+  .日志插件 {
+    max-width: 14ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: var(--bg-frame-on);
+    color: var(--fg);
+  }
+  .日志关节 {
+    flex: none;
+    padding: 0 4px;
+    border: 1px solid var(--warn);
+    border-radius: 3px;
+    color: var(--warn);
+    cursor: pointer;
+  }
+  .日志关节:hover,
+  .日志关节:focus-visible {
+    background: var(--bg-frame-on);
+    outline: none;
+  }
+  .日志文本 {
+    color: var(--fg);
+    font-size: 0.88em;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+  .日志细节 {
+    margin: 0;
+    padding: 0 10px 5px;
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    font-size: 0.78em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .速率区 {
+    padding: 6px 10px 8px;
+    border-top: 1px solid var(--border-light);
+  }
+  .问题项 {
+    padding: 7px 9px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-panel);
   }
 }
 

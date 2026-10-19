@@ -15,7 +15,7 @@
  *   │        │      ║───────────────────────────────│
  *   │        │      ║ 控制台 [输出][事件][问题]      │
  *   ├──────────────────────────────────────────────┤
- *   │ 状态栏：项目·模型·物理·仿真时间·曲线帧率·连接 │
+ *   │ 状态栏：物理·仿真时间·实时倍率·帧率·连接     │
  *   └──────────────────────────────────────────────┘
  */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,11 +24,12 @@ import { 起日志 } from "../数据/日志";
 import { 活动栏 } from "./活动栏";
 import { 侧栏 } from "./侧栏";
 import { 中区 } from "./中区";
-import { 控制台, type 控制台页签 } from "./控制台";
+import { 控制台, 控制台召回, type 控制台页签 } from "./控制台";
 import { 状态栏 } from "./状态栏";
 import { 提示区 } from "./提示区";
 import { 任务步骤, type 步骤id } from "./任务流";
-import { 取 as 取文案 } from "../视图/文案";
+import { 跳步事件 } from "./跳步";
+
 
 const 存储键 = "驭臂.外壳";
 
@@ -38,12 +39,14 @@ interface 外壳偏好 {
   侧栏开: boolean;
 }
 
-// 控制台默认 150（原来 190）：网页区只占窗口 44%，190 会把中区压得只剩一条，
-// 卡片被裁得看不全。要更大随时拖分隔条 —— 它本来就可拖。
-const 默认偏好: 外壳偏好 = { 侧栏宽: 300, 控制台高: 150, 侧栏开: true };
+// 左 Web / 右 3D 之后，网页面板是 576×920 左右的一块窄面板：侧栏 330 是
+// 「模型 + 项目 + 兼容性」三块内容都还能读的宽度；控制台 190 能放约 4 条
+// 两行日志。两个值都可拖，双击分隔条回到这里。
+const 默认偏好: 外壳偏好 = { 侧栏宽: 330, 控制台高: 150, 侧栏开: true };
 
 const 侧栏界 = { 最小: 180, 最大: 640 };
 const 控制台界 = { 最小: 90, 最大: 620 };
+const 控制台页签序: 控制台页签[] = ["输出", "事件", "问题", "诊断"];
 
 /**
  * 窗口很窄时，硬撑两个可拖动格会出现"负宽"和重叠。
@@ -97,6 +100,7 @@ function 分隔条({
   标题,
   on改,
   on双击,
+  反向 = false,
 }: {
   方向: "横" | "纵";
   值: number;
@@ -106,6 +110,8 @@ function 分隔条({
   标题: string;
   on改: (下一个: number) => void;
   on双击?: () => void;
+  /** 值锚在"末端"时置 true（例如底部控制台的高度）：鼠标向下 = 高度变小 */
+  反向?: boolean;
 }) {
   const [拖动, 设拖动] = useState(false);
   const 基点 = useRef({ 坐标: 0, 值: 0 });
@@ -128,7 +134,10 @@ function 分隔条({
     if (e.key === 减 || e.key === 加) {
       e.preventDefault();
       const 幅 = e.shiftKey ? 大步 : 步骤;
-      on改(夹(值 + (e.key === 加 ? 幅 : -幅), 界.最小, 界.最大));
+      // 反向的“纵”值锚在底部：方向键也要按视觉方向走。
+      // 正常：右/下 = +值；反向：下 = -值、上 = +值。
+      const 值增 = e.key === 加 ? (反向 ? -幅 : 幅) : (反向 ? 幅 : -幅);
+      on改(夹(值 + 值增, 界.最小, 界.最大));
       return;
     }
     if (e.key === "Home") {
@@ -168,7 +177,8 @@ function 分隔条({
       onPointerMove={(e) => {
         if (!拖动) return;
         const 现 = 方向 === "横" ? e.clientX : e.clientY;
-        on改(夹(基点.current.值 + (现 - 基点.current.坐标), 界.最小, 界.最大));
+        const 增量 = (现 - 基点.current.坐标) * (反向 ? -1 : 1);
+        on改(夹(基点.current.值 + 增量, 界.最小, 界.最大));
       }}
       onPointerUp={(e) => {
         e.currentTarget.releasePointerCapture?.(e.pointerId);
@@ -182,6 +192,16 @@ export function App() {
   const [步骤, 设步骤] = useState<步骤id>("定义");
   const [控制台开, 设控制台开] = useState(true);
   const [页签, 设页签] = useState<控制台页签>("输出");
+  const [视口宽, 设视口宽] = useState(() => (typeof window === "undefined" ? 1440 : window.innerWidth));
+
+  useEffect(() => {
+    const 量 = () => 设视口宽(window.innerWidth);
+    window.addEventListener("resize", 量);
+    return () => window.removeEventListener("resize", 量);
+  }, []);
+
+  // 原生工程面板打开时不卸载 Web 控制台，只由 CSS 隐藏；
+  // 这样主日志的筛选/清空状态和原生日志面板始终是同一份。
   const [偏好, 设偏好] = useState<外壳偏好>(() => {
     const 初 = 读偏好();
     const { 宽, 高 } = 可用();
@@ -216,6 +236,22 @@ export function App() {
     设偏好((旧) => ({ ...旧, 侧栏开: !旧.侧栏开 }));
   }, []);
 
+  // 中区（模型/曲线仪表）只在"侧栏之外还剩足够空间"时显示。
+  // 不能只看 window.innerWidth：用户可能把侧栏拖得很宽，1100px 的面板减去
+  // 48 活动栏和 780 侧栏只剩 272px，再塞两列就会逐字换行（实测截图）。
+  const 中区可用 = 视口宽 - 48 - (偏好.侧栏开 ? 偏好.侧栏宽 : 0);
+  const 显示中区 = 中区可用 >= 620;
+
+  // 视图内部请求切步（例如验证页的"去插件配指标"）。只做导航，不碰数据。
+  useEffect(() => {
+    const 听 = (事件: Event) => {
+      const 目标 = (事件 as CustomEvent<步骤id>).detail;
+      if (typeof 目标 === "string") 选步(目标 as 步骤id);
+    };
+    window.addEventListener(跳步事件, 听);
+    return () => window.removeEventListener(跳步事件, 听);
+  }, [选步]);
+
   // ④ 快捷键（输入框里不抢键）
   useEffect(() => {
     const 按键 = (e: KeyboardEvent) => {
@@ -228,9 +264,11 @@ export function App() {
       if (e.key === "[" || e.key === "]") {
         e.preventDefault();
         设控制台开(true);
-        设页签((旧) =>
-          旧 === "输出" ? (e.key === "]" ? "事件" : "问题") : 旧 === "事件" ? (e.key === "]" ? "问题" : "输出") : e.key === "]" ? "输出" : "事件",
-        );
+        设页签((旧) => {
+          const 步 = 控制台页签序.indexOf(旧);
+          const 下一 = (步 + (e.key === "]" ? 1 : -1) + 控制台页签序.length) % 控制台页签序.length;
+          return 控制台页签序[下一];
+        });
       }
       return;
     }
@@ -303,25 +341,29 @@ export function App() {
             {偏好.侧栏开 ? (
               <>
                 <div
-                  className="侧栏格 flex min-h-0 flex-none flex-col overflow-hidden"
+                  className={`侧栏格 flex min-h-0 flex-none flex-col overflow-hidden ${显示中区 ? "" : "侧栏格-满"}`}
                   style={{ width: 偏好.侧栏宽, borderRight: "1px solid var(--border)" }}
                 >
                   <侧栏 步骤={步骤} 开 on收起={切侧栏} />
                 </div>
-                <分隔条
-                  方向="横"
-                  值={偏好.侧栏宽}
-                  界={侧栏界}
-                  标题={"侧栏宽度（拖动 / 方向键 / - = 键）"}
-                  on改={(值) => 设偏好((旧) => ({ ...旧, 侧栏宽: 值 }))}
-                  on双击={() => 设偏好((旧) => ({ ...旧, 侧栏宽: 默认偏好.侧栏宽 }))}
-                />
+                {显示中区 ? (
+                  <分隔条
+                    方向="横"
+                    值={偏好.侧栏宽}
+                    界={侧栏界}
+                    标题={"侧栏宽度（拖动 / 方向键 / - = 键；双击恢复 330）"}
+                    on改={(值) => 设偏好((旧) => ({ ...旧, 侧栏宽: 值 }))}
+                    on双击={() => 设偏好((旧) => ({ ...旧, 侧栏宽: 默认偏好.侧栏宽 }))}
+                  />
+                ) : null}
               </>
             ) : null}
 
-            <div className="中区格 min-h-0 min-w-0 flex-1">
-              <中区 />
-            </div>
+            {显示中区 ? (
+              <div className="中区格 min-h-0 min-w-0 flex-1">
+                <中区 />
+              </div>
+            ) : null}
           </div>
 
           {/* 控制台（横跨整个左面板下方） */}
@@ -331,27 +373,21 @@ export function App() {
                 方向="纵"
                 值={偏好.控制台高}
                 界={控制台界}
-                标题={"控制台高度（拖动 / 方向键 / [ ] 键）"}
+                标题={"控制台高度（拖动 / 方向键 / [ ] 键；双击恢复 150）"}
+                反向
                 on改={(值) => 设偏好((旧) => ({ ...旧, 控制台高: 值 }))}
                 on双击={() => 设偏好((旧) => ({ ...旧, 控制台高: 默认偏好.控制台高 }))}
               />
               <div
-                className="min-h-0 flex-none overflow-hidden"
+                className="控制台格 min-h-0 flex-none overflow-hidden"
                 style={{ height: 偏好.控制台高, borderTop: "1px solid var(--border)" }}
               >
-                <控制台 页签={页签} on换页签={设页签} />
+                <控制台 页签={页签} on换页签={设页签} on收起={() => 设控制台开(false)} />
               </div>
             </>
           ) : (
             /* 控制台被收起时留一条可点的"叫回来"的边 —— 收起不能变成"找不回来" */
-            <button
-              type="button"
-              onClick={() => 设控制台开(true)}
-              className="控件 flex-none rounded-none text-left text-[0.9em]"
-              aria-expanded={false}
-            >
-              ▴ {取文案("控制台.标题")}
-            </button>
+            <控制台召回 on展开={() => 设控制台开(true)} />
           )}
         </div>
       </div>

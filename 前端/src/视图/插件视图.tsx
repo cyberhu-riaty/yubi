@@ -25,7 +25,9 @@ import { use取 } from "./文案";
 export function 插件视图() {
   const t = use取();
   const 目录 = 用仓库((s) => s.插件.数据);
+  const 项目 = 用仓库((s) => s.项目.数据);
   const [忙, 设忙] = useState(false);
+  const 不兼容报告 = (项目?.报告 ?? []).filter((行) => 行.includes("不兼容"));
 
   const 项们 = 目录?.插件 ?? [];
   // ★ 启用序必须用**模块名**（`关节pd控制`），不能用界面上的显示名
@@ -40,7 +42,10 @@ export function 插件视图() {
         ? 启用序.filter((n) => n !== 插件名)
         : [...启用序, 插件名];            // 新加的排最后（= 最后写 ctrl，最容易看到效果）
       const 起于 = 记命令发出();
-      命令收尾("命令.应用算法", await 命令.应用算法(目标), 起于);
+      命令收尾("命令.应用算法", await 命令.应用算法(目标), 起于, {
+        模块: "插件",
+        插件: 插件名,
+      });
     } finally {
       设忙(false);
     }
@@ -53,50 +58,57 @@ export function 插件视图() {
         徽标={项们.length ? <标签>{项们.length}</标签> : <标签 语气="警示">{t("通用.待接入")}</标签>}
       >
         <p className="text-dim">{t("插件.说明")}</p>
-        <p className="mt-1 text-[0.85em]" style={{ color: "var(--warning)" }}>
+        <p className="mt-1 text-[0.85em]" style={{ color: "var(--warn)" }}>
           {t("插件.没有远端")}
         </p>
+        <p className="mt-1 text-[0.8em] text-dim">{t("插件.兼容性未判定")}</p>
 
         {项们.length ? (
           <ul className="mt-2 space-y-1">
             {项们.map((x) => {
               const 名 = x.插件 ?? "";
+              const 显示名 = x.名称 || 名;
               const 已启用 = !!x.当前启用;
+              const 不兼容 = 不兼容报告.some((行) => 行.includes(显示名) || (名 && 行.includes(名)));
               return (
                 <li key={名} className="面板 p-2">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="min-w-0 flex-1 truncate" style={{ fontWeight: 600 }}>
-                      {x.名称 || 名}
+                    <span className="min-w-0 flex-1 truncate" style={{ fontWeight: 600 }} title={x.文件 ? `${t("插件.文件")}: ${x.文件}` : undefined}>
+                      {显示名}
                     </span>
                     <span className="flex-none text-[0.8em] text-dim 等宽">
                       {x.版本 ? `v${x.版本}` : t("插件.未标注")}
                     </span>
-                    {已启用 ? <标签 语气="强调">{t("插件.已启用")}</标签> : null}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <标签>{t("插件.状态.已安装")}</标签>
+                    <标签 语气={已启用 ? "成功" : "中性"}>{已启用 ? t("插件.状态.当前项目已启用") : t("插件.状态.当前项目未启用")}</标签>
+                    {不兼容 ? <标签 语气="错误">! {t("定义.算法状态.不兼容")}</标签> : null}
                   </div>
                   <div className="mt-1 text-[0.85em] text-dim">
                     {x.说明 || t("插件.无说明")}
-                  </div>
-                  <div className="mt-1 flex items-center gap-2 text-[0.8em] text-dim">
-                    <span className="等宽">{x.文件}</span>
-                    <span className="flex-1" />
-                    {x.作者 ? <span>{`${t("插件.作者")}: ${x.作者}`}</span> : null}
                   </div>
                   {x.被项目使用?.length ? (
                     <div className="mt-1 text-[0.8em] text-dim">
                       {`${t("插件.被使用")}: ${x.被项目使用.join(" / ")}`}
                     </div>
                   ) : (
-                    <div className="mt-1 text-[0.8em] text-dim">{t("插件.没人用")}</div>
+                    <div className="mt-1 text-[0.8em] text-dim">{t("插件.未被任何项目使用")}</div>
                   )}
-                  <div className="mt-1">
+                  {不兼容 ? (
+                    <div className="mt-1 text-[0.8em]" style={{ color: "var(--danger)" }}>{t("插件.不兼容说明")}</div>
+                  ) : null}
+                  <div className="mt-1 flex items-center gap-2">
                     <按钮
                       种类={已启用 ? "次" : "主"}
                       尺寸="小"
-                      disabled={忙}
+                      disabled={忙 || (不兼容 && !已启用)}
+                      title={不兼容 && !已启用 ? t("插件.不兼容说明") : undefined}
                       on按下={() => void 切换(名, 已启用)}
                     >
                       {已启用 ? t("插件.停用") : t("插件.启用")}
                     </按钮>
+                    {x.作者 ? <span className="text-[0.8em] text-dim">{`${t("插件.作者")}: ${x.作者}`}</span> : null}
                   </div>
                 </li>
               );

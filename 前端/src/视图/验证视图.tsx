@@ -17,6 +17,8 @@ import { 按钮 } from "../组件/按钮";
 import { 标签 } from "../组件/标签";
 import { 小表格, 数值文本, 文本, type 列 } from "../组件/数值表";
 import { 命令, 用仓库 } from "../数据/仓库";
+import { 用节拍 } from "../数据/时钟";
+import { 请求跳步 } from "../外壳/跳步";
 import type { 参数项 } from "../数据/仓库";
 import { 提示错误 } from "../数据/提示";
 import { use取 } from "./文案";
@@ -29,6 +31,7 @@ export function 验证视图() {
   const 曲线数 = 用仓库((s) => s.曲线);
   const 参数 = 用仓库((s) => s.参数.数据);
   const 参数帧号 = 用仓库((s) => s.参数.帧号);
+  const 节拍 = 用节拍();
 
   const 名们 = useMemo(() => Object.keys(曲线数).sort(), [曲线数]);
   const [隐藏, 设隐藏] = useState<Set<string>>(new Set());
@@ -43,6 +46,7 @@ export function 验证视图() {
     }
     return 最晚;
   }, [名们, 曲线数]);
+  const 最近年龄 = 最新时刻 ? Math.max(0, 节拍 / 1000 - 最新时刻) : undefined;
 
   const 窗口外 = 最新时刻
     ? 名们.filter((n) => {
@@ -73,7 +77,7 @@ export function 验证视图() {
   const 图例列: 列[] = [
     {
       标题: t("验证.选中"),
-      宽度: "w-8",
+      宽度: "w-[3.4em]",
       格: (行) => {
         const 名 = String(行.名);
         return (
@@ -242,6 +246,7 @@ export function 验证视图() {
         }
       >
         <p className="text-dim">{t("验证.曲线.说明")}</p>
+        <p className="mt-1 text-[0.8em] text-dim">{t("验证.单位说明")}</p>
         <div className="mt-1.5 面板" style={{ background: "var(--plot-bg)", borderRadius: "var(--radius)" }}>
           <曲线 数据={曲线数} 显示={显示} 窗口={窗口秒} 高={190} on暂停={设暂停} />
         </div>
@@ -250,6 +255,10 @@ export function 验证视图() {
           <span className="等宽">{t("验证.窗口.值", { 值: 窗口秒 })}</span>
           <span aria-hidden="true">·</span>
           <span>{t("曲线.轴时间")}</span>
+          <span aria-hidden="true">·</span>
+          <span className="等宽">
+            {最近年龄 === undefined ? t("验证.从未收到") : t("验证.最近更新", { 秒: 最近年龄.toFixed(0) })}
+          </span>
           {暂停 ? <标签 语气="强调">{t("验证.暂停中")}</标签> : null}
           {窗口外 > 0 ? <标签 语气="警示">{t("验证.超出窗口", { 条: 窗口外 })}</标签> : null}
         </div>
@@ -274,7 +283,13 @@ export function 验证视图() {
             </div>
           </>
         ) : (
-          <div className="mt-2 未接入">{t("验证.没有指标")}</div>
+          <div className="mt-2 未接入 space-y-1">
+            <div>{t("验证.没有指标")}</div>
+            <div className="text-[0.85em]">{t("验证.空原因")}</div>
+            <按钮 尺寸="小" 种类="幽灵" on按下={() => 请求跳步("插件")}>
+              {t("验证.去插件")}
+            </按钮>
+          </div>
         )}
 
         <p className="mt-2 text-[0.85em] text-dim">{t("曲线.说明")}</p>

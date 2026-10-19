@@ -20,13 +20,13 @@ export function 监控视图() {
   const t = use取();
   const 系统 = 用仓库((s) => s.系统.数据);
   const 连接 = 用仓库((s) => s.连接);
+  const 项目 = 用仓库((s) => s.项目.数据);
+  const 物理 = 项目?.重力开;
+  const 已冻结 = 物理 === false;
+  const 跑得动 = 系统?.RTF !== undefined && 系统.RTF >= 0.95;
 
-  /** RTF 的语气：1 附近算正常；掉到 0.8 以下就该提示了 */
-  const RTF语气 = (() => {
-    if (!系统?.RTF) return "警示" as const;
-    if (系统.RTF >= 0.95) return "强调" as const;   // 跑得动 = 好
-    return "警示" as const;                          // 掉到 0.95 以下就该看
-  })();
+  /** 冻结时 RTF=0 不是告警；只有推进中掉速才告警 */
+  const RTF语气 = !系统 ? "警示" as const : 已冻结 ? "中性" as const : 跑得动 ? "成功" as const : "警告" as const;
 
   const 行: 数值行[] = 系统
     ? [
@@ -60,13 +60,16 @@ export function 监控视图() {
         标题={t("步骤.监控")}
         徽标={
           系统 ? (
-            <标签 语气={RTF语气}>{`RTF ${系统.RTF?.toFixed(2) ?? "--"}`}</标签>
+            <标签 语气={RTF语气}>{已冻结 ? "已冻结" : `RTF ${系统.RTF?.toFixed(2) ?? "--"}`}</标签>
           ) : (
-            <标签 语气="警示">{t("通用.待接入")}</标签>
+            <标签 语气="警示">{t("监控.等待")}</标签>
           )
         }
       >
         <p className="text-dim">{t("监控.说明")}</p>
+        {已冻结 ? (
+          <p className="mt-1 text-[0.85em]" style={{ color: "var(--warn)" }}>{t("监控.冻结")}</p>
+        ) : null}
         {系统 ? (
           <div className="mt-2">
             <数值表 行={行} />
@@ -77,10 +80,11 @@ export function 监控视图() {
           </div>
         )}
         {系统?.出错 ? (
-          <div className="mt-2" style={{ color: "var(--warning)" }}>
+          <div className="mt-2" style={{ color: "var(--warn)" }}>
             {系统.出错}
           </div>
         ) : null}
+        <p className="mt-2 text-[0.8em] text-dim">{t("监控.无趋势")}</p>
       </可折叠区块>
     </div>
   );

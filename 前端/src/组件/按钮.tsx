@@ -55,6 +55,7 @@ export function 按钮({
         尺寸类[尺寸],
         种类类[种类],
         已按下 ? "bg-accent-on" : "",
+        disabled ? "opacity-40 cursor-not-allowed" : "",
         className,
       ]
         .filter(Boolean)

@@ -26,6 +26,25 @@ export function 辨识视图() {
   const t = use取();
   const 辨识 = 用仓库((s) => s.辨识.数据);
   const 帧号 = 用仓库((s) => s.辨识.帧号);
+  const 连接 = 用仓库((s) => s.连接);
+  const 状态 = 辨识?.状态 ?? "";
+  const 运行中 = 状态.includes("采样中") || 状态.includes("辨识中");
+  const 完成 = 状态.includes("完成");
+  const 出错 = 状态.includes("失败") || 状态.includes("错误");
+  const 可发 = 连接 === "已连接";
+
+  const 导出结果 = () => {
+    if (!辨识) return;
+    const 体 = JSON.stringify(辨识, null, 2);
+    const 地址 = URL.createObjectURL(new Blob([体], { type: "application/json;charset=utf-8" }));
+    const 链 = document.createElement("a");
+    链.href = 地址;
+    链.download = "驭臂辨识结果.json";
+    document.body.appendChild(链);
+    链.click();
+    document.body.removeChild(链);
+    window.setTimeout(() => URL.revokeObjectURL(地址), 1000);
+  };
 
   const [时长, 设时长] = useState("10");
   const [忙, 设忙] = useState<"开始" | "停止" | null>(null);
@@ -40,7 +59,7 @@ export function 辨识视图() {
       动作 === "开始"
         ? await 命令.开始辨识(Number.isFinite(秒) ? 秒 : 10)
         : await 命令.停止辨识();
-    const r = 命令收尾(主题, 回执, 起于);
+    const r = 命令收尾(主题, 回执, 起于, { 模块: "辨识" });
     设最近回执({ 通过: r.通过, 文本: `${r.主题}：${r.说明 || t("日志.无说明")}` });
     设忙(null);
   };
@@ -93,12 +112,21 @@ export function 辨识视图() {
       <可折叠区块
         标题={t("辨识.标题")}
         徽标={
-          <>
-            {辨识?.状态 ? <标签 语气="强调">{辨识.状态}</标签> : <标签 语气="警示">{t("通用.未接入")}</标签>}
-          </>
+          辨识?.状态 ? (
+            <标签 语气={运行中 ? "强调" : 完成 ? "成功" : 出错 ? "错误" : "中性"}>{辨识.状态}</标签>
+          ) : (
+            <标签>{t("辨识.尚无状态")}</标签>
+          )
         }
       >
-        {辨识 ? <数值表 行={概览} /> : <div className="text-dim">{t("辨识.没状态")}</div>}
+        {辨识 ? (
+          <数值表 行={概览} />
+        ) : (
+          <div className="mt-1 text-[0.85em] text-dim">
+            <div>{t("辨识.没状态")}</div>
+            <div className="mt-0.5">{t("辨识.等待开始")}</div>
+          </div>
+        )}
 
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <label className="block" style={{ width: 120 }}>
@@ -110,18 +138,32 @@ export function 辨识视图() {
               onChange={(e) => 设时长(e.target.value)}
             />
           </label>
-          <按钮 种类="主" disabled={忙 !== null} on按下={() => void 发命令("开始")}>
+          <按钮
+            种类="主"
+            disabled={忙 !== null || !可发 || 运行中}
+            on按下={() => void 发命令("开始")}
+          >
             {忙 === "开始" ? "…" : t("辨识.开始")}
           </按钮>
-          <按钮 种类="次" disabled={忙 !== null} on按下={() => void 发命令("停止")}>
+          <按钮
+            种类="次"
+            disabled={忙 !== null || !运行中}
+            title={!运行中 ? t("辨识.停止条件") : undefined}
+            on按下={() => void 发命令("停止")}
+          >
             {忙 === "停止" ? "…" : t("辨识.停止")}
           </按钮>
+          {辨识 ? (
+            <按钮 种类="幽灵" 尺寸="小" on按下={导出结果}>
+              {t("辨识.导出")}
+            </按钮>
+          ) : null}
         </div>
         <p className="mt-1 text-[0.85em] text-dim">{t("辨识.时长说明")}</p>
         {最近回执 ? (
           <div
             className="mt-1 等宽 text-[0.9em]"
-            style={{ color: 最近回执.通过 ? "var(--fg)" : "var(--fg-dim)" }}
+            style={{ color: 最近回执.通过 ? "var(--ok)" : "var(--danger)" }}
           >
             {最近回执.通过 ? "ok" : "fail"} —— {最近回执.文本}
           </div>

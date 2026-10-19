@@ -25,7 +25,10 @@
    `default_selector()`）：**名字里第 2 个字符起若含 `_`、且不以 `_` 结尾 → 纯 Python 方法**。
      · `drawRect_` / `mouseDown_` / `窗口改尺寸_`：**故意**要注册成选择器 → 尾巴一个下划线；
      · 纯内部方法 → `准_备` / `同步_状态` / `视角_复位`（中间下划线）。
-   ⚠️ 前缀式 `_准备` **不管用**（下划线在第 1 个字符，`"_" in name[1:]` 为假）；
+   ⚠️ **前缀式 `_准备` 也不行**：实测 `default_selector("_加线")` 返回一个 0 参
+      选择器 `_加线`，PyObjC 会把它当 ObjC 方法注册，然后因为 Python 实现带了 4 个
+      参数而直接 `BadPrototypeError`（本次真的踩到）。内部方法统一用**中间**下划线
+      （`加_线` / `准_备` / `适配_视图`），不要用前缀。
    ⚠️ 尾下划线 `准备_` 会被当选择器 `准备:`（要 0 参、实现有 1 参 → 报错）；
    ⚠️ 无下划线的 `同步状态` 被当 0 参选择器 → 同样报错。
    自查：`objc._transform.default_selector("方法名")`，返回 None 才是纯 Python 方法。
@@ -67,6 +70,7 @@
 """
 from __future__ import annotations
 
+import math
 import os
 import threading
 import time
@@ -74,14 +78,23 @@ from typing import Any
 
 import objc
 from AppKit import (NSApplication, NSApplicationActivationPolicyRegular, NSBackingStoreBuffered,
-                    NSColor, NSMakeRect, NSOpenGLPFAAccelerated, NSOpenGLPFAColorSize,
+                    NSBezelStyleRounded, NSBezierPath, NSButton, NSButtonTypeToggle, NSColor, NSFont,
+                    NSCursor, NSMakeRect, NSOpenGLPFAAccelerated, NSOpenGLPFAColorSize,
+                    NSAttributedString, NSAppearance, NSFontAttributeName, NSForegroundColorAttributeName, NSMakeSize, NSMakePoint,
+                    NSScrollView, NSSegmentedControl, NSTextView,
                     NSOpenGLPFADepthSize, NSOpenGLPFADoubleBuffer, NSOpenGLPFAOpenGLProfile,
-                    NSOpenGLPixelFormat, NSOpenGLProfileVersionLegacy, NSOpenGLView, NSWindow,
-                    NSWindowDidResizeNotification, NSWindowStyleMaskClosable,
-                    NSWindowStyleMaskMiniaturizable, NSWindowStyleMaskResizable,
-                    NSWindowStyleMaskTitled)
-from Foundation import NSNotificationCenter, NSObject, NSURL, NSURLRequest
-from WebKit import WKWebView, WKWebViewConfiguration
+                    NSOpenGLPixelFormat, NSOpenGLProfileVersionLegacy, NSOpenGLView,
+                    NSTextField, NSView, NSWindow, NSWindowDidResizeNotification,
+                    NSWindowStyleMaskClosable, NSWindowStyleMaskMiniaturizable,
+                    NSWindowStyleMaskResizable, NSWindowStyleMaskTitled)
+from Foundation import NSNotificationCenter, NSObject, NSURL, NSURLRequest, NSUserDefaults
+from WebKit import (WKWebView, WKWebViewConfiguration, WKUserScript,
+                   WKUserScriptInjectionTimeAtDocumentStart)
+
+try:
+    import 高亮桥 as _高亮桥
+except Exception:                                                     # noqa: BLE001
+    _高亮桥 = None
 
 # 布局：下方 3D 视口，上方 Web 界面（与 P2 spike 的验收布局一致）
 # 布局：**左 Web 界面 / 右 3D 视口**（横向切分）
@@ -92,8 +105,8 @@ from WebKit import WKWebView, WKWebViewConfiguration
 #   左右切之后 3D 是右侧**主区域**（占 60%+ 宽、整窗高），和参考项目一致：
 #   左边是面板（资产/参数/日志），右边是场景。
 默认网页宽比 = 0.40      # 左侧 Web 面板占窗口宽度的比例
-网页最小宽 = 520.0       # 再窄就放不下活动栏 + 侧栏
-视口最小宽 = 420.0       # 3D 再窄就没法看了
+网页最小宽 = 500.0       # 再窄就放不下活动栏 + 侧栏
+视口最小宽 = 560.0       # 3D 再窄就不好操作了（原 420 太窄，曲线/机械臂都挤）
 def _切分宽度(总宽: float) -> tuple[float, float]:
     """把窗口宽度切成 (左 Web 宽, 右 3D 宽)，两边都有下限。
 
@@ -105,6 +118,23 @@ def _切分宽度(总宽: float) -> tuple[float, float]:
     网 = max(float(网页最小宽), min(总 * 默认网页宽比, 总 - float(视口最小宽)))
     网 = round(网)
     return 网, round(总) - 网
+
+
+def _工程面板高度(视口宽: float, 总高: float) -> float:
+    """3D 变窄时，底部工程面板应占的高度（0 = 不显示）。
+
+    ★ 判据不是"窗口比例"，而是 3D 视口的**宽高比**：3D 越窄越高，画面越容易
+      在上下留黑边。目标比 0.95 ≈「还能看清机械臂、又不用整窗高」；低于它时，
+      把差额让给底部工程面板，3D 仍贴着窗口上边。
+    ★ 下限 190 px：内容少时不要占太高的空间；需要时再调。
+    总高的 45% 上限：防止面板把 3D 挤没。
+    """
+    宽 = max(1.0, float(视口宽))
+    高 = max(1.0, float(总高))
+    if 宽 >= 高 * 0.95:
+        return 0.0
+    差 = 高 - 宽 / 0.95
+    return max(190.0, min(高 * 0.50, 差))
 
 
 默认窗口 = (1440.0, 920.0)
@@ -171,6 +201,113 @@ def 记诊断(内容: str) -> None:
         pass
 
 
+def _模型包围盒(模型, 数据) -> tuple[Any, Any, float]:
+    """用世界坐标几何算视觉包围盒（给自动取景/网格定尺用）。
+
+    为什么不用 `geom_pos`：那是 body 局部坐标，直接平均会落在底座附近，
+    相机贴脸、机械臂顶出画面（实测半径 0.36 vs 真实 ~0.85）。
+    为什么不用 `stat.extent`：模型自带值对 1 m 臂偏大，画面偏小。
+    为什么用 `geom_xpos + geom_rbound`：MuJoCo 已按真实 mesh 算好世界坐标包围球。
+
+    排除面片/高度场和 worldbody 装饰（地面、天空盒），否则包围盒会被撑到无穷大。
+    """
+    import mujoco
+    import numpy as np
+
+    位置 = np.asarray(数据.geom_xpos, dtype=float).reshape(-1, 3)
+    半径 = np.asarray(模型.geom_rbound, dtype=float).ravel()
+    类型 = np.asarray(模型.geom_type).ravel()
+    所属 = np.asarray(模型.geom_bodyid).ravel()
+    有效 = np.isfinite(位置).all(axis=1) & np.isfinite(半径) & (半径 > 0)
+    有效 &= ~np.isin(类型, [int(mujoco.mjtGeom.mjGEOM_PLANE),
+                          int(mujoco.mjtGeom.mjGEOM_HFIELD)])
+    有效 &= (所属 != 0)
+    if not bool(有效.any()):
+        # 有些模型把整台机器人放在 worldbody 里；此时退回“只排面片”
+        有效 = np.isfinite(位置).all(axis=1) & np.isfinite(半径) & (半径 > 0)
+    位置, 半径 = 位置[有效], 半径[有效]
+    # 防御：贴地大平面 / 环境装饰的半径会远大于机器人部件
+    中位 = float(np.median(半径)) if len(半径) else 0.0
+    正常 = 半径 < max(1.0, 中位 * 8.0)
+    if bool(正常.any()):
+        位置, 半径 = 位置[正常], 半径[正常]
+    低 = (位置 - 半径[:, None]).min(axis=0)
+    高 = (位置 + 半径[:, None]).max(axis=0)
+    if not np.isfinite(低).all() or not np.isfinite(高).all() or bool((高 <= 低).any()):
+        raise ValueError("包围盒退化")
+    return 低, 高, float(np.max(高 - 低))
+
+
+def _取景(模型, 数据, 宽: int, 高: int, 方位: float, 仰角: float,
+          余量: float = 1.10) -> tuple[Any, float, float]:
+    """按包围盒 + 真实投影方向算相机（中心、距离、模型尺度）。
+
+    ★ 不再用“包围球半径 / tan(fovy/2)”：那会把相机拉得比需要远 40%+
+      （机器人只占 50% 画面高），而且中心是几何平均点，画面会偏。
+      这里把包围盒 8 个角投到相机的 right/up 上，分别按水平/竖直视场求最小距离。
+    """
+    import mujoco
+    import numpy as np
+
+    低, 高盒, 尺度 = _模型包围盒(模型, 数据)
+    中心 = (低 + 高盒) / 2.0
+    半 = (高盒 - 低) / 2.0
+
+    fovy = float(getattr(模型.vis.global_, "fovy", 45.0) or 45.0)
+    tan_v = math.tan(math.radians(fovy) / 2.0)
+    tan_h = tan_v * (float(宽) / max(1.0, float(高)))
+    if tan_h <= 1e-9 or tan_v <= 1e-9:
+        raise ValueError("视场角退化")
+
+    # 用距离 1 的临时相机取 MuJoCo 的相机基（right/up/forward），
+    # 这样取景方向与真正渲染时完全一致，不用自己推一遍符号。
+    选项 = mujoco.MjvOption()
+    mujoco.mjv_defaultOption(选项)
+    临时 = mujoco.MjvCamera()
+    mujoco.mjv_defaultFreeCamera(模型, 临时)
+    临时.azimuth, 临时.elevation = float(方位), float(仰角)
+    临时.lookat[:] = 中心
+    临时.distance = 1.0
+    场景 = mujoco.MjvScene(模型, maxgeom=1000)
+    mujoco.mjv_updateScene(模型, 数据, 选项, None, 临时,
+                           mujoco.mjtCatBit.mjCAT_ALL, 场景)
+    相机0 = 场景.camera[0]
+    相机位 = np.asarray(相机0.pos, dtype=float)
+    前 = np.asarray(相机0.forward, dtype=float)
+    上 = np.asarray(相机0.up, dtype=float)
+    右 = np.cross(前, 上)
+    右 /= max(1e-9, float(np.linalg.norm(右)))
+    上 /= max(1e-9, float(np.linalg.norm(上)))
+
+    边距 = float(max(半)) * 0.04
+    角们 = np.array([
+        [x, y, z]
+        for x in (低[0] - 边距, 高盒[0] + 边距)
+        for y in (低[1] - 边距, 高盒[1] + 边距)
+        for z in (低[2] - 边距, 高盒[2] + 边距)
+    ])
+    需要 = 0.0
+    for 点 in 角们:
+        相对 = 点 - 相机位
+        深0 = float(np.dot(相对, 前))
+        x = float(np.dot(相对, 右))
+        y = float(np.dot(相对, 上))
+        # 相机后退 Δ 后深度变成 深0+Δ；要求 |x|/深 <= tan_h、|y|/深 <= tan_v
+        需要 = max(需要, abs(x) / tan_h, abs(y) / tan_v)
+    if not math.isfinite(需要) or 需要 <= 0.05:
+        raise ValueError("取景距离退化")
+    return 中心, float(需要 * 余量), 尺度
+
+
+def _网格定尺(尺度: float) -> tuple[float, int]:
+    """网格步长/半径：小机器人 0.1 m 一格，大场景 0.5/1 m 一格。"""
+    if 尺度 < 2.0:
+        return 0.1, 10
+    if 尺度 < 8.0:
+        return 0.5, 10
+    return 1.0, 10
+
+
 class Viewport(NSOpenGLView):
     """原生 3D 视口：MuJoCo 场景 + 轨道相机。
 
@@ -205,6 +342,10 @@ class Viewport(NSOpenGLView):
         self.统计 = {"fps": 0.0, "渲染帧": 0, "显示帧": 0, "同步": 0}
         self._帧时刻: list[float] = []
         self._该停 = False
+        self._渲染线程 = None
+        self._模型代 = 0
+        self._模型路径 = ""
+        self.切换中 = False
         # ★ 用 Event 等"该渲染了"，**不要用 sleep 忙等**：忙等会一直抢 GIL，
         #   把主线程饿死（实测表现为主线程在跑、而渲染/显示一帧都没有）。
         import threading as _th
@@ -224,16 +365,69 @@ class Viewport(NSOpenGLView):
         self._拖拽起点 = (0.0, 0.0)
         self._拖拽中 = False
         self._平移中 = False
+        # 分隔条拖动期间锁住 3D 相机输入：分隔条拖动只应该改尺寸，
+        # 不允许滚轮/拖拽事件漏进视口把相机拉近（用户报过"拖动后机械臂顶到脸上"）。
+        self.交互锁定 = False
         # 最新状态快照：**仿真线程写、主线程读**。
         # 只做"整体替换一个引用"，所以不需要锁（CPython 的属性赋值是原子的）。
         self.最新状态 = None
+        # 相机：默认相机在装载时按模型算一次；复位回到它，适配则按当前姿态重算。
+        self.默认相机 = None
+        self.网格开 = True
+        self.末端坐标开 = True
+        self.高亮关节 = None
+        self._网格 = (0.1, 10)
+        self._尺度 = 1.0
+        # 第一次收到仿真状态后按**真实姿态**再取一次景：
+        # 装载时的 model 默认姿态与仿真线程发来的首帧可能不同（实测机械臂会偏到右边）
+        self._首帧已取景 = False
         return self
 
     # ------------------------------------------------------------------
     # 装载：模型 + 渲染器（在独立线程里做，见教训 ③）
     # ------------------------------------------------------------------
+    def 换_模型(self, 模型路径: str) -> bool:
+        """主线程调用：停旧渲染线程、清状态、装载新模型。"""
+        if not 模型路径 or not os.path.exists(模型路径):
+            self.错误 = f"模型文件不存在：{模型路径}"
+            记诊断(f"✗ 换模型：{self.错误}")
+            return False
+        self.切换中 = True
+        self.停止_渲染线程()
+        self._模型代 += 1          # 让尚未完成的旧装载线程作废
+        self.就绪 = False
+        self.错误 = ""
+        self.模型 = None
+        self.数据 = None
+        self.相机 = None
+        self.选项 = None
+        self.状态缓冲 = None
+        self.缓冲表 = {}
+        self.最新状态 = None
+        self.默认相机 = None
+        self._首帧已取景 = False
+        # ★ 不清 self.画面 / 纹理：新模型装载期间继续显示上一帧，
+        #   避免"点一下先黑屏再出现"。新帧到达后由渲染线程自然覆盖。
+        self.准_备(模型路径)
+        self.setNeedsDisplay_(True)
+        记诊断(f"换模型：开始装载 {os.path.basename(模型路径)}")
+        return True
+
+    def 停止_渲染线程(self) -> None:
+        """停掉旧渲染线程并等它退出（渲染器在它自己的线程里 close）。"""
+        self._该停 = True
+        self._要渲.set()
+        t = self._渲染线程
+        if t is not None and t.is_alive():
+            t.join(timeout=2.0)
+        self._渲染线程 = None
+        self.渲染器 = None
+
     def 准_备(self, 模型路径: str, 画布: tuple[int, int] | None = None) -> None:
         """装载模型并起渲染线程。**渲染器在渲染线程里建**（见 `_渲染循环`）。"""
+        self._模型路径 = 模型路径
+        self._模型代 += 1
+        代 = self._模型代
         if 画布:
             self.画布尺寸 = (int(画布[0]), int(画布[1]))
         else:
@@ -260,50 +454,30 @@ class Viewport(NSOpenGLView):
                 #   对 Franka（约 1 m）勉强，换成 UR10e / iiwa14 就不合适了 ——
                 #   小模型会缩成一点，大模型会顶出画面。这才是"模型看着太小"的原因。
                 #   用 `geom_pos` 与 `geom_rbound` 算包围球（MuJoCo 白送的字段）。
-                相机.azimuth, 相机.elevation = 135.0, -16.0
+                # ★ 自动取景：包围盒 8 个角投到相机平面，按水平/竖直视场求距离。
+                #   旧版用“包围球半径 / tan(fovy/2)”，Franka 只占约 54% 画高，
+                #   而且中心取的是几何平均点（偏上），所以画面看起来“又小又靠下”。
+                相机.azimuth, 相机.elevation = 135.0, -24.0
                 try:
-                    import numpy as _np
-                    # ★ 用 MuJoCo 自己算好的 `stat.center` / `stat.extent`。
-                    #   我第一版用 `geom_pos` + `geom_rbound` 自己算包围球，结果是
-                    #   半径 0.359 / 中心 z≈0.01 —— 因为 `geom_pos` 是**相对 body 的局部坐标**，
-                    #   直接取平均会把"一堆挤在底座上的小几何"当成整台机器人，
-                    #   于是相机被拉到 1.17 m，机械臂直接顶出画面。
-                    #   `stat` 是 MuJoCo 在编译模型时按真实几何（含 mesh）算的，直接可用。
-                    # ★ 用**世界坐标**下的几何包围球：`data.geom_xpos` + `geom_rbound`。
-                    #   试过三个来源，只有这个对：
-                    #     · `model.geom_pos` —— 局部坐标，平均后落在底座（半径 0.36，相机贴脸）
-                    #     · `model.stat.extent` —— 1.325，对这条 1.1 m 的臂偏大（画面偏小）
-                    #     · `data.geom_xpos`（本行）—— 世界坐标，实测半径 0.62，画面刚好
-                    位置 = _np.asarray(数据.geom_xpos, dtype=float).reshape(-1, 3)
-                    球径 = _np.asarray(模型.geom_rbound, dtype=float).ravel()
-                    有效 = _np.isfinite(位置).all(axis=1) & _np.isfinite(球径)
-                    if not bool(有效.any()):
-                        raise ValueError("没有可用几何")
-                    位置, 球径 = 位置[有效], 球径[有效]
-                    # 只取"真几何"：半径过大的（贴地平面等）会把包围球撑爆
-                    正常 = 球径 < 0.5
-                    if bool(正常.any()):
-                        位置, 球径 = 位置[正常], 球径[正常]
-                    中心 = 位置.mean(axis=0)
-                    半径 = float(_np.max(_np.linalg.norm(位置 - 中心, axis=1) + 球径))
-                    if not _np.isfinite(中心).all() or 半径 <= 0:
-                        raise ValueError("包围球计算失败")
-                    # 竖直方向要留更多余量：机械臂是"高瘦"的，水平方向几乎不占地方，
-                    # 只按包围球算会让它在竖直方向贴边。
-                    # 取景系数：离屏实测"半径 0.851 + 系数 1.15"只占 54% 画高，偏小；
-                    # 0.92 大约占 65~70%，是"整台机器人都看得清、又不空旷"的比例。
-                    # 取景余量：0.92 时起始姿态占 67% 画高，但机器人**动起来之后**
-                    # 会比起始姿态高（抬臂/正弦摆动的峰值都超出 home 姿态），
-                    # 于是顶端被切掉。1.15 → 距离 2.36，给运动留出头部空间。
-                    竖直余量 = 1.15
-                    fovy = float(getattr(模型.vis.global_, "fovy", 45.0) or 45.0)
-                    相机.lookat[:] = (float(中心[0]), float(中心[1]), float(中心[2]))
-                    相机.distance = float(半径 * 竖直余量 / _np.tan(_np.radians(fovy) / 2.0))
-                    记诊断(f"自动取景：中心={_np.round(中心, 3).tolist()} 半径={半径:.3f} "
-                           f"fovy={fovy:.0f} 距离={相机.distance:.2f}")
+                    宽画布, 高画布 = self.画布尺寸
+                    中心, 距离, 尺度 = _取景(
+                        模型, 数据, 宽画布, 高画布,
+                        方位=相机.azimuth, 仰角=相机.elevation, 余量=1.10)
+                    相机.lookat[:] = 中心
+                    相机.distance = float(距离)
+                    self.默认相机 = (中心.copy(), float(距离),
+                                     float(相机.azimuth), float(相机.elevation))
+                    self._尺度 = float(尺度)
+                    self._网格 = _网格定尺(self._尺度)
+                    记诊断(f"自动取景：中心={中心.round(3).tolist()} "
+                           f"尺度={尺度:.3f} 距离={相机.distance:.3f} "
+                           f"网格={self._网格[0]}m")
                 except Exception as _取景异常:                            # noqa: BLE001
-                    相机.distance, 相机.elevation = 3.2, -16.0
+                    相机.distance, 相机.elevation = 2.6, -24.0
                     相机.lookat[:] = (0.0, 0.0, 0.45)
+                    self.默认相机 = (相机.lookat.copy(), 2.6, 135.0, -24.0)
+                    self._尺度 = 1.0
+                    self._网格 = (0.1, 10)
                     记诊断(f"自动取景失败，退回默认视角：{_取景异常}")
                 选项 = mujoco.MjvOption()
                 mujoco.mjv_defaultOption(选项)
@@ -311,6 +485,8 @@ class Viewport(NSOpenGLView):
                 #   而"在哪建"和"在哪用"必须同一个线程 —— 在装载线程建、却在渲染线程用，
                 #   实测会**卡死在第一次 render() 里**（不报错、不返回）。
                 #   所以渲染器放到 `_渲染循环` 开头建。
+                if 代 != self._模型代:
+                    return
                 self.模型, self.数据 = 模型, 数据
                 self.相机, self.选项 = 相机, 选项
                 # ★ 缓冲尺寸必须与**发布方的签名**一致。仿真那边发的是
@@ -326,15 +502,23 @@ class Viewport(NSOpenGLView):
                         np.float64),
                 }
                 self.状态缓冲 = self.缓冲表[int(mujoco.mjtState.mjSTATE_INTEGRATION)]
+                if 代 != self._模型代:
+                    return
                 self.就绪 = True
-                threading.Thread(target=self._渲染循环, daemon=True,
-                                 name="3D渲染线程").start()
+                self.切换中 = False
+                self._首帧已取景 = False
+                self._该停 = False
+                self._渲染线程 = threading.Thread(target=self._渲染循环, daemon=True,
+                                                  name="3D渲染线程")
+                self._渲染线程.start()
                 self.请求渲染()
                 记诊断(f"视口装载完成：{os.path.basename(模型路径)} "
                       f"nq={模型.nq} nu={模型.nu} 画布={self.画布尺寸}")
                 print(f"  ✓ 3D 视口：已装载 {os.path.basename(模型路径)}"
                       f"（nq={模型.nq} nu={模型.nu}）", flush=True)
             except Exception as 异常:                                 # noqa: BLE001
+                if 代 == self._模型代:
+                    self.切换中 = False
                 self.错误 = f"{type(异常).__name__}: {异常}"
                 记诊断(f"视口装载失败：{self.错误}")
                 print(f"  ✗ 3D 视口装载失败：{self.错误}", flush=True)
@@ -369,6 +553,14 @@ class Viewport(NSOpenGLView):
             mujoco.mj_setState(self.模型, self.数据, 缓冲, 签名)
             mujoco.mj_forward(self.模型, self.数据)
             self.统计["同步"] += 1
+            # 首帧按仿真侧的真实姿态重新取景（装载时用的是模型默认姿态）
+            if not self._首帧已取景 and self.就绪:
+                self._首帧已取景 = True
+                try:
+                    self.适配_视图()
+                    记诊断("首帧状态到达：已按真实姿态重新取景")
+                except Exception as _取景异常:                            # noqa: BLE001
+                    记诊断(f"首帧取景失败（保留装载取景）：{_取景异常}")
             return True
         except Exception as 异常:                                     # noqa: BLE001
             self.错误 = f"同步状态失败：{type(异常).__name__}: {异常}"
@@ -460,11 +652,17 @@ class Viewport(NSOpenGLView):
             #   （后者要分配一个 2.7MB 的临时数组，每帧分配会明显拖慢）。
             掩码 = (图[:, :, 0] | 图[:, :, 1] | 图[:, :, 2]) < 4
             if self._天空 is None or self._天空.shape[0] != 高 or self._天空.shape[1] != 宽:
-                # 自上而下的渐变：顶部偏蓝、地平线附近发白（和参考项目那种"室外天光"接近）
+                # 深色工程场景：顶部深蓝、地平线略亮、近地再压暗。
+                # 旧版是"上蓝下白"，灰色机器人压在浅底上对比很弱；
+                # 网格线是浅色不透明线，在这层背景上还能保持可见（不会变成暗点）。
                 行 = _np.linspace(0.0, 1.0, 高, dtype=_np.float32)[:, None]
-                顶 = _np.array([86, 128, 176], dtype=_np.float32)      # 上方天蓝
-                底 = _np.array([226, 233, 240], dtype=_np.float32)     # 近地发白
-                色带 = 顶[None, :] * (1.0 - 行) + 底[None, :] * 行      # (高, 3)
+                顶 = _np.array([22, 36, 54], dtype=_np.float32)
+                中 = _np.array([55, 74, 96], dtype=_np.float32)
+                底 = _np.array([38, 52, 70], dtype=_np.float32)
+                上半 = _np.clip(行 / 0.55, 0.0, 1.0)
+                下半 = _np.clip((行 - 0.55) / 0.45, 0.0, 1.0)
+                色带 = 顶[None, :] * (1.0 - 上半) + 中[None, :] * 上半
+                色带 = 色带 * (1.0 - 下半) + 底[None, :] * 下半
                 self._天空 = _np.repeat(色带[:, None, :], 宽, axis=1).astype(_np.uint8)
             # ★ 这里原来写的是 `图[掩码] = self._天空[掩码]`（布尔索引），
             #   实测 **57.5 ms/帧**，帧率从 60 掉到 11.8 —— 肉眼可见地卡。
@@ -475,6 +673,128 @@ class Viewport(NSOpenGLView):
                 图[:, :, _c] = _np.where(掩码, self._天空[:, :, _c], 图[:, :, _c])
         except Exception:                                             # noqa: BLE001
             pass          # 天空只是观感，失败绝不影响 3D 本身
+
+    # ------------------------------------------------------------------
+    # 场景装饰：地面网格 / 世界坐标 / 末端坐标
+    # ------------------------------------------------------------------
+    def 加_线(self, 场景, 起, 止, 颜色, 宽: float = 1.0) -> None:
+        """往 MjvScene 里追加一条装饰线段（不动物理、不改 MJCF）。"""
+        import mujoco
+        import numpy as np
+        if 场景 is None or 场景.ngeom >= 场景.maxgeom:
+            return
+        几何 = 场景.geoms[场景.ngeom]
+        mujoco.mjv_initGeom(
+            几何, int(mujoco.mjtGeom.mjGEOM_LINE),
+            np.array([float(宽), 0.0, 0.0], dtype=float),
+            np.zeros(3, dtype=float), np.eye(3).reshape(9),
+            np.array(颜色, dtype=np.float32))
+        mujoco.mjv_connector(
+            几何, int(mujoco.mjtGeom.mjGEOM_LINE), float(宽),
+            np.asarray(起, dtype=float), np.asarray(止, dtype=float))
+        几何.category = int(mujoco.mjtCatBit.mjCAT_DECOR)
+        场景.ngeom += 1
+
+    def 画_装饰(self, 场景) -> None:
+        """网格 + 世界轴 + 末端坐标。颜色/线宽都是装饰，不参与任何判定。"""
+        import numpy as np
+        if 场景 is None:
+            return
+        if self.网格开:
+            步长, 格数 = self._网格
+            范围 = float(步长) * int(格数)
+            for i in range(-格数, 格数 + 1):
+                if i == 0:
+                    continue
+                主格 = (i % 5 == 0)
+                颜色 = (0.52, 0.60, 0.70, 1.0) if 主格 else (0.30, 0.36, 0.43, 1.0)
+                宽 = 2.0 if 主格 else 1.0
+                值 = i * 步长
+                self.加_线(场景, (值, -范围, 0.0), (值, 范围, 0.0), 颜色, 宽)
+                self.加_线(场景, (-范围, 值, 0.0), (范围, 值, 0.0), 颜色, 宽)
+            # 世界坐标：X 红 / Y 绿 / Z 蓝。只画 3 格长，避免 Z 轴穿出机器人头顶像一条杂线。
+            轴长 = 3.0 * float(步长)
+            self.加_线(场景, (0, 0, 0), (轴长, 0, 0), (0.95, 0.28, 0.28, 1), 3)
+            self.加_线(场景, (0, 0, 0), (0, 轴长, 0), (0.28, 0.85, 0.38, 1), 3)
+            self.加_线(场景, (0, 0, 0), (0, 0, 轴长), (0.35, 0.55, 1.0, 1), 3)
+            # 原点标记（小球）：一眼看出世界原点在哪
+            if 场景.ngeom < 场景.maxgeom:
+                import mujoco
+                几何 = 场景.geoms[场景.ngeom]
+                mujoco.mjv_initGeom(
+                    几何, int(mujoco.mjtGeom.mjGEOM_SPHERE),
+                    np.array([0.012, 0.0, 0.0], dtype=float),
+                    np.zeros(3, dtype=float), np.eye(3).reshape(9),
+                    np.array([0.85, 0.92, 1.0, 1.0], dtype=np.float32))
+                几何.category = int(mujoco.mjtCatBit.mjCAT_DECOR)
+                场景.ngeom += 1
+        if self.末端坐标开:
+            self.画_末端坐标(场景)
+        # 关节高亮：日志里的 Jn 点击后到这里画一个橙色球 + 三条短线。
+        # 只做视觉标记，不改变任何物理量。
+        if self.高亮关节 is not None and self.模型 is not None and self.数据 is not None:
+            try:
+                import mujoco
+                关节 = int(self.高亮关节)
+                if 0 <= 关节 < int(self.模型.njnt):
+                    位置 = np.asarray(self.数据.xanchor[关节], dtype=float).reshape(3)
+                    半径 = max(0.04, min(0.09, float(self._尺度) * 0.055))
+                    # 关节锚点常在连杆内部，只画球会被挡住：从锚点向上引一根
+                    # 橙色针，针顶再画球/坐标轴，保证在模型外面也看得见。
+                    针长 = max(0.18, min(0.38, float(self._尺度) * 0.18))
+                    针顶 = 位置 + np.array([0.0, 0.0, 针长], dtype=float)
+                    self.加_线(场景, 位置, 针顶, (1.0, 0.50, 0.08, 1), 4.0)
+                    for 球位置 in (位置, 针顶):
+                        if 场景.ngeom < 场景.maxgeom:
+                            几何 = 场景.geoms[场景.ngeom]
+                            mujoco.mjv_initGeom(
+                                几何, int(mujoco.mjtGeom.mjGEOM_SPHERE),
+                                np.array([半径, 0.0, 0.0], dtype=float),
+                                球位置, np.eye(3).reshape(9),
+                                np.array([1.0, 0.55, 0.08, 1.0], dtype=np.float32))
+                            几何.category = int(mujoco.mjtCatBit.mjCAT_DECOR)
+                            场景.ngeom += 1
+                    长 = max(0.10, min(0.22, float(self._尺度) * 0.14))
+                    for 轴, 色 in enumerate(((1.0, 0.45, 0.10, 1),
+                                             (1.0, 0.80, 0.20, 1),
+                                             (0.35, 0.75, 1.00, 1))):
+                        方向 = np.zeros(3, dtype=float)
+                        方向[轴] = 长
+                        self.加_线(场景, 针顶, 针顶 + 方向, 色, 3.0)
+            except Exception:                                         # noqa: BLE001
+                pass
+
+    def 画_末端坐标(self, 场景) -> None:
+        """在末端 site（没有就最后一个 body）画一小段 RGB 坐标轴。"""
+        import mujoco
+        import numpy as np
+        if self.模型 is None or self.数据 is None:
+            return
+        位置 = None
+        旋转 = None
+        站点 = -1
+        for i in range(int(self.模型.nsite)):
+            名 = mujoco.mj_id2name(self.模型, int(mujoco.mjtObj.mjOBJ_SITE), i) or ""
+            小写 = 名.lower()
+            if any(k in 小写 for k in ("attach", "ee_", "tool", "tcp", "grip", "flange")):
+                站点 = i
+                break
+        if 站点 < 0 and int(self.模型.nsite) > 0:
+            站点 = int(self.模型.nsite) - 1
+        if 站点 >= 0:
+            位置 = np.asarray(self.数据.site_xpos[站点], dtype=float)
+            旋转 = np.asarray(self.数据.site_xmat[站点], dtype=float).reshape(3, 3)
+        elif int(self.模型.nbody) > 1:
+            体 = int(self.模型.nbody) - 1
+            位置 = np.asarray(self.数据.xpos[体], dtype=float)
+            旋转 = np.asarray(self.数据.xmat[体], dtype=float).reshape(3, 3)
+        if 位置 is None or 旋转 is None:
+            return
+        长 = 0.08
+        for 轴, 颜色 in enumerate(((0.95, 0.35, 0.35, 1),
+                                  (0.35, 0.90, 0.45, 1),
+                                  (0.40, 0.60, 1.00, 1))):
+            self.加_线(场景, 位置, 位置 + 旋转[:, 轴] * 长, 颜色, 2.0)
 
     def _渲染循环(self) -> None:
         import time as _t
@@ -514,6 +834,8 @@ class Viewport(NSOpenGLView):
                     记诊断(f"渲染线程：画布重建为 {self.画布尺寸}")
                 self.渲染器.update_scene(self.数据, camera=self.相机,
                                        scene_option=self.选项)
+                # ★ 装饰必须加在 update_scene 之后：它每帧会重置 ngeom。
+                self.画_装饰(self.渲染器.scene)
                 图 = self.渲染器.render()
                 # 把 MuJoCo 的**纯黑背景**换成渐变天空（视觉，不改任何物理）
                 self.画面_铺天空(图)
@@ -532,6 +854,12 @@ class Viewport(NSOpenGLView):
                 self.错误 = f"渲染线程：{type(异常).__name__}: {异常}"
                 记诊断(f"✗ {self.错误}")
                 _t.sleep(0.5)
+        try:
+            if self.渲染器 is not None:
+                self.渲染器.close()
+        except Exception:                                             # noqa: BLE001
+            pass
+        self.渲染器 = None
         self.统计["渲染线程退出"] = 1
 
     def 请求渲染(self) -> None:
@@ -568,6 +896,14 @@ class Viewport(NSOpenGLView):
         try:
             上下文 = self.openGLContext()
             上下文.makeCurrentContext()
+            # ★ 每帧绘制前再 update 一次：窗口/分隔条 resize 时，
+            #   AppKit 的 reshape 和我们的 layout 都可能比 drawable 快一拍；
+            #   如果 drawable 还是旧尺寸而 glViewport 已经用新尺寸，
+            #   画面就会被裁切/放大（用户报的"机械臂顶到脸上"）。
+            try:
+                上下文.update()
+            except Exception:                                         # noqa: BLE001
+                pass
             尺寸 = self.convertRectToBacking_(self.bounds()).size
             宽, 高 = max(1, int(尺寸.width)), max(1, int(尺寸.height))
             GL.glViewport(0, 0, 宽, 高)
@@ -623,6 +959,16 @@ class Viewport(NSOpenGLView):
         return True
 
     def mouseDown_(self, 事件):
+        if getattr(self, "交互锁定", False):
+            return
+        # 点进 3D 才让视口拿键盘焦点：这样 R/F/G 不会和网页输入框抢键。
+        try:
+            self.window().makeFirstResponder_(self)
+        except Exception:                                             # noqa: BLE001
+            pass
+        if int(事件.clickCount()) >= 2:
+            self.适配_视图()
+            return
         self._拖拽起点 = (事件.locationInWindow().x, 事件.locationInWindow().y)
         self._拖拽中 = True
         # NSEventModifierFlagShift = 1 << 17
@@ -632,7 +978,7 @@ class Viewport(NSOpenGLView):
         self._拖拽中 = False
 
     def mouseDragged_(self, 事件):
-        if not self.就绪:
+        if not self.就绪 or getattr(self, "交互锁定", False):
             return
         import math
         x, y = 事件.locationInWindow().x, 事件.locationInWindow().y
@@ -652,20 +998,500 @@ class Viewport(NSOpenGLView):
         self.setNeedsDisplay_(True)
 
     def scrollWheel_(self, 事件):
-        if not self.就绪:
+        if not self.就绪 or getattr(self, "交互锁定", False):
             return
-        self.相机.distance = max(0.4, min(40.0,
-                                     self.相机.distance * (1.0 - 事件.scrollingDeltaY() * 0.02)))
+        # 分隔条刚被点/拖过时，吞掉惯性滚动：否则触控板/鼠标的残余滚动
+        # 会把 3D 相机一下拉到 0.4 的最近距离（机械臂顶满画面）。
+        主人 = globals().get("_最后主人")
+        # 分隔条拖动/窗口调整后，触控板惯性滚动经常还会持续一两秒；
+        # 0.8s 不够，残余滚动会把相机推进机械臂（用户看到的"巨大局部"）。
+        if 主人 is not None and time.monotonic() - getattr(主人, "分栏交互时刻", 0.0) < 2.0:
+            return
+        # 0.4/0.8 都仍然会进入"机械臂占满画面"的距离。默认适配距离约 1.84，
+        # 1.50 留出整机取景；要近看请用 F/适配或后续专门的聚焦，不靠滚轮钻进去。
+        前 = float(self.相机.distance)
+        self.相机.distance = max(1.50, min(40.0,
+                                     self.相机.distance * (1.0 - 事件.scrollingDeltaY() * 0.014)))
+        if abs(self.相机.distance - 前) > 0.001:
+            记诊断(f"相机滚轮：{前:.2f} -> {self.相机.distance:.2f}")
+        self.请求渲染()
+        self.setNeedsDisplay_(True)
+
+    def 适配_视图(self) -> None:
+        """按**当前姿态**重新适配（双击 3D 或按 F）。方向保持用户当前视角。"""
+        if not self.就绪 or self.模型 is None or self.数据 is None:
+            return
+        try:
+            宽, 高 = self._画布目标
+            中心, 距离, 尺度 = _取景(
+                self.模型, self.数据, 宽, 高,
+                方位=float(self.相机.azimuth), 仰角=float(self.相机.elevation),
+                余量=1.10)
+            self.相机.lookat[:] = 中心
+            self.相机.distance = float(距离)
+            self.默认相机 = (中心.copy(), float(距离),
+                             float(self.相机.azimuth), float(self.相机.elevation))
+            self._尺度 = float(尺度)
+            self._网格 = _网格定尺(self._尺度)
+            记诊断(f"适配视图：中心={中心.round(3).tolist()} 距离={距离:.3f}")
+        except Exception as 异常:                                         # noqa: BLE001
+            记诊断(f"适配视图失败：{type(异常).__name__}: {异常}")
         self.请求渲染()
         self.setNeedsDisplay_(True)
 
     def 视角_复位(self) -> None:
+        """回到装载时算好的取景（R 键）。不再写死 3.2 / z=0.45。"""
         if not self.就绪:
             return
-        self.相机.distance, self.相机.azimuth, self.相机.elevation = 3.2, 135.0, -16.0
-        self.相机.lookat[:] = (0.0, 0.0, 0.45)
+        if self.默认相机 is not None:
+            中心, 距离, 方位, 仰角 = self.默认相机
+            self.相机.lookat[:] = 中心
+            self.相机.distance = float(距离)
+            self.相机.azimuth = float(方位)
+            self.相机.elevation = float(仰角)
+        else:
+            self.相机.distance, self.相机.azimuth, self.相机.elevation = 2.6, 135.0, -24.0
+            self.相机.lookat[:] = (0.0, 0.0, 0.45)
         self.请求渲染()
         self.setNeedsDisplay_(True)
+
+    def 切换_网格(self) -> None:
+        self.网格开 = not self.网格开
+        记诊断(f"网格：{'开' if self.网格开 else '关'}")
+        self.请求渲染()
+        self.setNeedsDisplay_(True)
+
+    def 切换_末端坐标(self) -> None:
+        self.末端坐标开 = not self.末端坐标开
+        self.请求渲染()
+        self.setNeedsDisplay_(True)
+
+    def keyDown_(self, 事件):
+        """视口获得焦点后的快捷键。R 复位 / F 适配 / G 网格 / E 末端坐标。"""
+        字 = (事件.charactersIgnoringModifiers() or "").lower()
+        if 字 == "r":
+            self.视角_复位()
+            return
+        if 字 == "f":
+            self.适配_视图()
+            return
+        if 字 == "g":
+            self.切换_网格()
+            return
+        if 字 == "e":
+            self.切换_末端坐标()
+            return
+        objc.super(Viewport, self).keyDown_(事件)
+
+
+class Splitter(NSView):
+    """Web / 3D 之间的原生分隔条（可左右拖）。
+
+    WebView 与原生视口是同级视图；这里放一条 7px 的 NSView 盖在交界处。
+    拖它只改两个子视图的 frame 与 3D 画布尺寸，不碰任何业务状态。
+    """
+
+    def initWithHost_(self, 宿主):
+        self = objc.super(Splitter, self).init()
+        if self is None:
+            return None
+        self.宿主 = 宿主
+        self._起点x = 0.0
+        self._起点宽 = 0.0
+        return self
+
+    def resetCursorRects(self):
+        self.addCursorRect_cursor_(self.bounds(), NSCursor.resizeLeftRightCursor())
+
+    def drawRect_(self, 矩形):
+        NSColor.colorWithCalibratedWhite_alpha_(0.45, 0.42).setFill()
+        NSBezierPath.fillRect_(self.bounds())
+        NSColor.colorWithCalibratedWhite_alpha_(0.92, 0.72).setFill()
+        宽 = self.bounds().size.width
+        高 = self.bounds().size.height
+        for 偏移 in (-10.0, 0.0, 10.0):
+            NSBezierPath.bezierPathWithOvalInRect_(
+                NSMakeRect((宽 - 3.0) / 2.0, 高 / 2.0 + 偏移, 3.0, 3.0)).fill()
+
+    def acceptsFirstMouse_(self, _事件):
+        # 窗口不是 key 时，第一次点击也能开始拖分隔条。
+        return True
+
+    def mouseDown_(self, 事件):
+        if int(事件.clickCount()) >= 2:
+            self.宿主.重置_分栏()
+            return
+        self._起点x = float(事件.locationInWindow().x)
+        self._起点宽 = float(self.宿主.取_网页宽())
+        self.宿主.开始_分栏拖动()
+
+    def mouseDragged_(self, 事件):
+        dx = float(事件.locationInWindow().x) - self._起点x
+        self.宿主.设_网页宽(self._起点宽 + dx)
+
+    def mouseUp_(self, _事件):
+        self.宿主.结束_分栏拖动()
+
+
+class PanelGrip(NSView):
+    """工程面板顶部 7px 抓手：拖动调高度，双击收起/展开。"""
+
+    def initWithPanel_(self, 面板):
+        self = objc.super(PanelGrip, self).init()
+        if self is None:
+            return None
+        self.面板 = 面板
+        self._起y = 0.0
+        self._起高 = 0.0
+        return self
+
+    def resetCursorRects(self):
+        self.addCursorRect_cursor_(self.bounds(), NSCursor.resizeUpDownCursor())
+
+    def drawRect_(self, _矩形):
+        NSColor.colorWithCalibratedWhite_alpha_(0.78, 1.0).setFill()
+        NSBezierPath.fillRect_(NSMakeRect(0, self.bounds().size.height - 2, self.bounds().size.width, 1))
+        NSColor.colorWithCalibratedWhite_alpha_(0.55, 1.0).setFill()
+        宽 = self.bounds().size.width
+        for 偏移 in (-5.0, 0.0, 5.0):
+            NSBezierPath.bezierPathWithOvalInRect_(
+                NSMakeRect(宽 / 2.0 + 偏移, (self.bounds().size.height - 2) / 2.0, 2.0, 2.0)).fill()
+
+    def acceptsFirstMouse_(self, _事件):
+        return True
+
+    def mouseDown_(self, 事件):
+        宿主 = getattr(self.面板, "宿主", None)
+        if 宿主 is None:
+            return
+        if int(事件.clickCount()) >= 2:
+            宿主.切换_工程面板收起()
+            return
+        self._起y = float(事件.locationInWindow().y)
+        self._起高 = float(getattr(宿主, "面板高", 0.0) or 190.0)
+        if getattr(宿主, "_面板收起", False):
+            宿主._面板收起 = False
+            self._起高 = 190.0
+        宿主.开始_工程面板拖动()
+
+    def mouseDragged_(self, 事件):
+        宿主 = getattr(self.面板, "宿主", None)
+        if 宿主 is None:
+            return
+        dy = float(事件.locationInWindow().y) - self._起y
+        宿主.设_面板高(self._起高 + dy)
+
+    def mouseUp_(self, _事件):
+        宿主 = getattr(self.面板, "宿主", None)
+        if 宿主 is not None:
+            宿主.结束_工程面板拖动()
+
+
+class ConsolePanel(NSView):
+    """全宽工程面板（C 阶段）：原生日志镜像。
+
+    为什么用原生而不是第二个 WKWebView：
+      · 第二个 WebView 需要一套跨页日志/命令同步，成本和回归面都很大；
+      · 这个面板只需要**展示**真实日志（由 Web 端经 WKScriptMessageHandler 发来），
+        不需要 React/DOM；原生 NSTextView 足够稳定。
+      · 命令输入仍留在 Web 端；本面板不假装是 shell。
+    """
+
+    def initWithFrame_(self, 矩形):
+        self = objc.super(ConsolePanel, self).initWithFrame_(矩形)
+        if self is None:
+            return None
+        self._行 = []
+        self._总 = 0
+        self._状态同步 = False
+        self._主筛选 = "无筛选"
+        self._筛 = "全部"
+        self._头高 = 64.0
+        self._收起 = False
+        self.宿主 = None
+        self._色背景 = NSColor.colorWithCalibratedWhite_alpha_(0.975, 1.0)
+        self._色头 = NSColor.colorWithCalibratedWhite_alpha_(0.935, 1.0)
+        self._色文字 = NSColor.colorWithCalibratedWhite_alpha_(0.13, 1.0)
+        self._色次 = NSColor.colorWithCalibratedWhite_alpha_(0.42, 1.0)
+        try:
+            # 工程面板固定用浅色：它夹在浅色 Web 与深色 3D 之间，
+            # 黑底小字是上一版用户反馈"看不清"的直接原因。
+            self.setAppearance_(NSAppearance.appearanceNamed_("NSAppearanceNameAqua"))
+        except Exception:                                             # noqa: BLE001
+            pass
+        self._标题 = NSTextField.alloc().initWithFrame_(NSMakeRect(10, 0, 260, 22))
+        self._标题.setStringValue_("工程面板 · 主日志镜像")
+        self._标题.setFont_(NSFont.systemFontOfSize_weight_(12.0, 0.4))
+        self._标题.setTextColor_(self._色文字)
+        self._标题.setDrawsBackground_(False)
+        self._标题.setBordered_(False)
+        self._标题.setEditable_(False)
+        self._标题.setSelectable_(False)
+        self._标题.setToolTip_("与左侧控制台使用同一份日志；筛选/清空会同步")
+        self.addSubview_(self._标题)
+
+        self._计数 = NSTextField.alloc().initWithFrame_(NSMakeRect(250, 0, 160, 22))
+        self._计数.setStringValue_("0 / 0 条")
+        self._计数.setFont_(NSFont.systemFontOfSize_(10.0))
+        self._计数.setTextColor_(self._色次)
+        self._计数.setDrawsBackground_(False)
+        self._计数.setBordered_(False)
+        self._计数.setEditable_(False)
+        self._计数.setSelectable_(False)
+        self.addSubview_(self._计数)
+
+        self._筛选 = NSSegmentedControl.alloc().initWithFrame_(NSMakeRect(375, 0, 230, 22))
+        self._筛选.setSegmentCount_(4)
+        for i, 标 in enumerate(("全部", "信息", "注意", "错误")):
+            self._筛选.setLabel_forSegment_(标, i)
+        self._筛选.setSelectedSegment_(0)
+        self._筛选.setTarget_(self)
+        self._筛选.setAction_("筛选:")
+        self.addSubview_(self._筛选)
+
+        self._清空 = NSButton.alloc().initWithFrame_(NSMakeRect(565, 0, 60, 22))
+        self._清空.setTitle_("清空")
+        self._清空.setBezelStyle_(NSBezelStyleRounded)
+        self._清空.setTarget_(self)
+        self._清空.setAction_("清空:")
+        self.addSubview_(self._清空)
+
+        self._折叠 = NSButton.alloc().initWithFrame_(NSMakeRect(0, 0, 60, 22))
+        self._折叠.setTitle_("收起")
+        self._折叠.setBezelStyle_(NSBezelStyleRounded)
+        self._折叠.setTarget_(self)
+        self._折叠.setAction_("折叠:")
+        self.addSubview_(self._折叠)
+
+        self._抓手 = PanelGrip.alloc().initWithPanel_(self)
+        self._抓手.setToolTip_("拖动调整工程面板高度；双击收起/展开")
+        self.addSubview_(self._抓手)
+
+        self._滚动 = NSScrollView.alloc().initWithFrame_(NSMakeRect(8, 6, 700, 120))
+        self._滚动.setHasVerticalScroller_(True)
+        self._滚动.setDrawsBackground_(True)
+        self._滚动.setBackgroundColor_(NSColor.whiteColor())
+        self._滚动.setBorderType_(0)
+        self._文本 = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, 700, 120))
+        self._文本.setEditable_(False)
+        self._文本.setSelectable_(True)
+        self._文本.setRichText_(False)
+        self._文本.setDrawsBackground_(True)
+        self._文本.setBackgroundColor_(NSColor.whiteColor())
+        self._文本.setTextColor_(self._色文字)
+        self._文本.setFont_(NSFont.monospacedSystemFontOfSize_weight_(11.0, 0.0))
+        self._文本.setTextContainerInset_(NSMakeSize(6.0, 4.0))
+        self._文本.setMinSize_(NSMakeSize(0.0, 120.0))
+        self._文本.setMaxSize_(NSMakeSize(100000.0, 100000.0))
+        self._文本.setVerticallyResizable_(True)
+        self._文本.setHorizontallyResizable_(False)
+        self._文本.textContainer().setWidthTracksTextView_(True)
+        self._滚动.setDocumentView_(self._文本)
+        self.addSubview_(self._滚动)
+        return self
+
+    def drawRect_(self, _矩形):
+        self._色背景.setFill()
+        NSBezierPath.fillRect_(self.bounds())
+        try:
+            高 = self.bounds().size.height
+            宽 = self.bounds().size.width
+            头高 = min(float(self._头高), 高)
+            self._色头.setFill()
+            NSBezierPath.fillRect_(NSMakeRect(0.0, 高 - 头高, 宽, 头高))
+            NSColor.colorWithCalibratedWhite_alpha_(0.78, 1.0).setStroke()
+            线 = NSBezierPath.bezierPath()
+            线.moveToPoint_(NSMakePoint(0.0, 高 - 头高))
+            线.lineToPoint_(NSMakePoint(宽, 高 - 头高))
+            线.stroke()
+        except Exception:                                             # noqa: BLE001
+            pass
+
+    def 排_面板(self, 宽: float, 高: float) -> None:
+        宽 = max(1.0, float(宽))
+        高 = max(1.0, float(高))
+        # 统一两行头：第一行标题/计数/收起，第二行筛选/清空。
+        # 这样 560~900px 的右列都不会把控件挤成一条。
+        self._头高 = 34.0 if self._收起 else 64.0
+        上 = 高 - 25
+        self._标题.setFrame_(NSMakeRect(10, 上, max(100, 宽 - 330), 20))
+        self._计数.setFrame_(NSMakeRect(max(120, 宽 - 300), 上, 120, 20))
+        self._折叠.setFrame_(NSMakeRect(宽 - 76, 上 - 1, 60, 22))
+        if self._收起:
+            self._标题.setStringValue_("工程面板 · 已收起（点展开或拖上沿）")
+            self._筛选.setHidden_(True)
+            self._清空.setHidden_(True)
+            self._滚动.setHidden_(True)
+            self._抓手.setFrame_(NSMakeRect(0, 高 - 7, 宽, 7))
+            return
+        self._标题.setStringValue_("工程面板 · 主日志镜像")
+        self._筛选.setHidden_(False)
+        self._清空.setHidden_(False)
+        self._滚动.setHidden_(False)
+        self._筛选.setFrame_(NSMakeRect(10, 高 - 53, 230, 22))
+        self._清空.setFrame_(NSMakeRect(252, 高 - 53, 60, 22))
+        底 = 高 - 70
+        self._滚动.setFrame_(NSMakeRect(8, 6, 宽 - 16, max(30, 底 - 6)))
+        self._文本.setFrameSize_(NSMakeSize(宽 - 16, max(30, 底 - 6)))
+        self._抓手.setFrame_(NSMakeRect(0, 高 - 7, 宽, 7))
+
+    def 设_收起(self, 收起: bool) -> None:
+        if bool(收起) == self._收起:
+            return
+        self._收起 = bool(收起)
+        self._折叠.setTitle_("展开" if self._收起 else "收起")
+        if self.宿主 is not None:
+            try:
+                self.排_面板(self.frame().size.width, self.frame().size.height)
+            except Exception:                                     # noqa: BLE001
+                pass
+
+    def 折叠_(self, _发送者):
+        宿主 = self.宿主 or globals().get("_最后主人")
+        if 宿主 is not None:
+            宿主.切换_工程面板收起()
+        else:
+            self.设_收起(not self._收起)
+
+    def 设_状态(self, 行: list, 总数: int, 摘要: str, 等级: str) -> None:
+        """接收 Web 主日志的**完整筛选结果**；计数、筛选、清空都以它为准。"""
+        try:
+            self._行 = [dict(r) for r in 行][-800:]
+            self._总 = max(0, int(总数))
+            self._主筛选 = str(摘要 or "无筛选")
+            self._状态同步 = True
+            if 等级 == "全部":
+                self._筛 = "全部"
+                self._筛选.setSelectedSegment_(0)
+            elif 等级 == "信息":
+                self._筛 = "信息"
+                self._筛选.setSelectedSegment_(1)
+            elif 等级 == "注意":
+                self._筛 = "注意"
+                self._筛选.setSelectedSegment_(2)
+            elif 等级 == "错误":
+                self._筛 = "错误"
+                self._筛选.setSelectedSegment_(3)
+            self.重_画()
+        except Exception:                                             # noqa: BLE001
+            pass
+
+    def 加_行(self, 行: dict) -> None:
+        try:
+            if self._状态同步:
+                # 状态同步后，单行消息丢弃；否则会绕过主日志筛选，计数对不上。
+                return
+            self._行.append(dict(行))
+            del self._行[:-800]
+            self.重_画()
+        except Exception:                                             # noqa: BLE001
+            pass
+
+    def 要_显示(self, 行: dict) -> bool:
+        if self._筛 == "全部":
+            return True
+        return str(行.get("等级", "")) == self._筛
+
+    def 重_画(self) -> None:
+        try:
+            self._文本.setString_("")
+            显示 = self._行 if self._状态同步 else [r for r in self._行 if self.要_显示(r)]
+            总数 = self._总 if self._状态同步 else len(self._行)
+            self._计数.setStringValue_(f"{len(显示)} / {总数} 条")
+            try:
+                self._计数.setToolTip_(f"与左侧控制台同一份日志；{self._主筛选}")
+            except Exception:                                     # noqa: BLE001
+                pass
+            for 行 in 显示[-500:]:
+                try:
+                    时 = ""
+                    try:
+                        import time as _t
+                        时 = _t.strftime("%H:%M:%S", _t.localtime(float(行.get("墙钟", 0)) / 1000.0))
+                    except Exception:                                 # noqa: BLE001
+                        时 = str(行.get("时", ""))
+                    等级 = str(行.get("等级", ""))
+                    来源 = str(行.get("来源", ""))
+                    插件 = str(行.get("插件", "") or "")
+                    关节 = 行.get("关节")
+                    头 = f"{时} {等级} {来源}"
+                    if 插件:
+                        头 += f" · {插件}"
+                    if isinstance(关节, (int, float)) and int(关节) >= 0:
+                        头 += f" · J{int(关节)}"
+                    文本 = f"{头}\n  {行.get('文本', '')}"
+                    细节 = str(行.get("细节", "") or "")
+                    if 细节:
+                        文本 += f"\n  {细节}"
+                    色 = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.16, 0.20, 0.26, 1.0)
+                    if 等级 == "注意":
+                        色 = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.63, 0.34, 0.02, 1.0)
+                    elif 等级 == "错误":
+                        色 = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.70, 0.10, 0.10, 1.0)
+                    属性 = {
+                        NSForegroundColorAttributeName: 色,
+                        NSFontAttributeName: NSFont.monospacedSystemFontOfSize_weight_(11.0, 0.0),
+                    }
+                    串 = NSAttributedString.alloc().initWithString_attributes_(文本 + "\n", 属性)
+                    self._文本.textStorage().appendAttributedString_(串)
+                except Exception:                                     # noqa: BLE001
+                    continue
+            self._文本.scrollToEndOfDocument_(None)
+        except Exception:                                             # noqa: BLE001
+            pass
+
+    def 筛选_(self, _发送者):
+        try:
+            选 = int(self._筛选.selectedSegment())
+            self._筛 = ("全部", "信息", "注意", "错误")[max(0, min(3, 选))]
+            # 先本地立刻反馈；Web 状态回来后以同一份筛选结果为准。
+            self._状态同步 = False
+            self.重_画()
+            主人 = globals().get("_最后主人")
+            if 主人 is not None:
+                主人.发_日志操作("筛选", self._筛)
+        except Exception:                                             # noqa: BLE001
+            pass
+
+    def 清空_(self, _发送者):
+        self._行 = []
+        self._总 = 0
+        self._状态同步 = True
+        self.重_画()
+        try:
+            主人 = globals().get("_最后主人")
+            if 主人 is not None:
+                主人.发_日志操作("清空", "")
+        except Exception:                                             # noqa: BLE001
+            pass
+
+
+class LogBridge(NSObject):
+    """WKWebView → 原生工程面板的单向日志桥。只接受对象，失败静默。"""
+
+    def initWithPanel_(self, 面板):
+        self = objc.super(LogBridge, self).init()
+        if self is None:
+            return None
+        self.面板 = 面板
+        return self
+
+    def userContentController_didReceiveScriptMessage_(self, _控制器, 消息):
+        try:
+            体 = dict(消息.body())
+            if self.面板 is None:
+                return
+            if 体.get("类型") == "日志状态":
+                self.面板.设_状态(
+                    体.get("行", []) or [],
+                    int(体.get("总数", 0) or 0),
+                    str(体.get("筛选", "") or ""),
+                    str(体.get("等级", "全部") or "全部"),
+                )
+            else:
+                self.面板.加_行(体)
+        except Exception:                                             # noqa: BLE001
+            pass
 
 
 class HostApp(NSObject):
@@ -682,6 +1508,36 @@ class HostApp(NSObject):
         self.命令队列 = None
         self.主线程帧 = 0
         self.上次状态 = None
+        self.视口工具条 = None
+        self.视口提示 = None
+        self.视口帧率标签 = None
+        self.视口图例 = None
+        self.网格按钮 = None
+        self.分栏 = None
+        self.网页宽当前 = None
+        self.网页宽请求 = None
+        self.分栏拖动中 = False
+        self.分栏交互时刻 = 0.0
+        self._分栏相机 = None
+        self.当前模型路径 = os.environ.get("驭臂_当前模型", "")
+        self.待换模型路径 = None
+        self.待换模型时刻 = 0.0
+        self.切换标签 = None
+        self.工程面板 = None
+        self.日志桥 = None
+        self.面板高 = 0.0
+        self._面板开上次 = False
+        self._面板高覆盖 = None
+        self._面板收起 = False
+        self._面板拖动中 = False
+        try:
+            偏好 = NSUserDefaults.standardUserDefaults()
+            存高 = 偏好.objectForKey_("驭臂.工程面板高")
+            if 存高 is not None:
+                self._面板高覆盖 = float(存高)
+            self._面板收起 = bool(偏好.boolForKey_("驭臂.工程面板收起"))
+        except Exception:                                             # noqa: BLE001
+            pass
         return self
 
     def applicationDidFinishLaunching_(self, _通知):
@@ -701,6 +1557,354 @@ class HostApp(NSObject):
         self._每帧定时 = 定时器.起(1.0 / 60.0, self._主线程每帧)
         self._诊断定时 = 定时器.一次性(2.0, self._自诊断)
         记诊断("delegate：定时器已起，delegate 结束")
+
+    # ---- 3D 视图工具条（原生浮层，不经过 Web / 不破坏"界面只走仓库"的约定）----
+    def 建_视口工具条(self, 内容, 网页宽: float, 视口宽: float, 高: float) -> None:
+        if self.视口 is None:
+            return
+        工具条 = NSView.alloc().initWithFrame_(NSMakeRect(网页宽 + 12, 高 - 44, 560, 32))
+        try:
+            工具条.setWantsLayer_(True)
+            工具条.layer().setBackgroundColor_(
+                NSColor.colorWithCalibratedWhite_alpha_(0.055, 0.62).CGColor())
+            工具条.layer().setCornerRadius_(7.0)
+        except Exception as 异常:                                         # noqa: BLE001
+            记诊断(f"工具条背景失败（不影响按钮）：{type(异常).__name__}: {异常}")
+
+        标题 = NSTextField.alloc().initWithFrame_(NSMakeRect(9, 8, 54, 16))
+        标题.setStringValue_("3D")
+        标题.setFont_(NSFont.systemFontOfSize_(10.0))
+        标题.setTextColor_(NSColor.colorWithCalibratedWhite_alpha_(0.95, 0.9))
+        标题.setDrawsBackground_(False)
+        标题.setBordered_(False)
+        标题.setEditable_(False)
+        标题.setSelectable_(False)
+        工具条.addSubview_(标题)
+        self.视口帧率标签 = 标题
+
+        def 加按钮(文字: str, x: float, 宽: float,
+                   动作: str, 切换: bool = False) -> Any:
+            按钮 = NSButton.alloc().initWithFrame_(NSMakeRect(x, 4, 宽, 24))
+            按钮.setTitle_(文字)
+            按钮.setBezelStyle_(NSBezelStyleRounded)
+            按钮.setFont_(NSFont.systemFontOfSize_(11.0))
+            按钮.setTarget_(self)
+            按钮.setAction_(动作)
+            if 切换:
+                按钮.setButtonType_(NSButtonTypeToggle)
+            else:
+                # 普通按钮也允许按一次后自动弹回
+                按钮.setButtonType_(0)
+            工具条.addSubview_(按钮)
+            return 按钮
+
+        加按钮("适配", 64, 58, "fitView:")
+        加按钮("复位", 126, 58, "resetView:")
+        self.网格按钮 = 加按钮("网格开", 188, 58, "toggleGrid:", 切换=True)
+        self.网格按钮.setState_(1 if self.视口.网格开 else 0)
+
+        提示 = NSTextField.alloc().initWithFrame_(NSMakeRect(260, 8, 292, 16))
+        提示.setStringValue_("拖拽旋转 · Shift+拖拽平移 · 滚轮缩放 · R 复位 · F 适配")
+        提示.setFont_(NSFont.systemFontOfSize_(10.0))
+        提示.setTextColor_(NSColor.colorWithCalibratedWhite_alpha_(0.88, 0.82))
+        提示.setDrawsBackground_(False)
+        提示.setBordered_(False)
+        提示.setEditable_(False)
+        提示.setSelectable_(False)
+        工具条.addSubview_(提示)
+
+        图例 = NSTextField.alloc().initWithFrame_(NSMakeRect(网页宽 + 14, 12, 340, 16))
+        图例.setStringValue_("X 红 · Y 绿 · Z 蓝 · 网格 0.1m（粗线 0.5m）")
+        图例.setFont_(NSFont.systemFontOfSize_(10.0))
+        图例.setTextColor_(NSColor.colorWithCalibratedWhite_alpha_(0.88, 0.82))
+        图例.setDrawsBackground_(True)
+        图例.setBackgroundColor_(NSColor.colorWithCalibratedWhite_alpha_(0.02, 0.55))
+        图例.setBordered_(False)
+        图例.setEditable_(False)
+        图例.setSelectable_(False)
+
+        切换 = NSTextField.alloc().initWithFrame_(NSMakeRect(网页宽 + 12, 高 - 78, 280, 22))
+        切换.setStringValue_("正在切换模型…")
+        切换.setFont_(NSFont.systemFontOfSize_(12.0))
+        切换.setTextColor_(NSColor.colorWithCalibratedWhite_alpha_(0.96, 0.95))
+        切换.setDrawsBackground_(True)
+        切换.setBackgroundColor_(NSColor.colorWithCalibratedWhite_alpha_(0.02, 0.72))
+        切换.setBordered_(False)
+        切换.setEditable_(False)
+        切换.setSelectable_(False)
+        切换.setHidden_(True)
+
+        self.视口工具条, self.视口提示, self.视口图例 = 工具条, 提示, 图例
+        self.切换标签 = 切换
+        内容.addSubview_(工具条)
+        内容.addSubview_(图例)
+        内容.addSubview_(切换)
+        self.排_视口工具条(网页宽, 视口宽, 高)
+
+    def 排_视口工具条(self, 网页宽: float, 视口宽: float, 高: float, 底: float = 0.0) -> None:
+        if self.视口工具条 is None:
+            return
+        宽 = max(300.0, min(560.0, float(视口宽) - 24.0))
+        self.视口工具条.setFrame_(NSMakeRect(网页宽 + 12, 高 - 44, 宽, 32))
+        if self.视口提示 is not None:
+            self.视口提示.setFrame_(NSMakeRect(260, 8, max(60.0, 宽 - 268.0), 16))
+            self.视口提示.setHidden_(宽 < 430)
+        if self.视口图例 is not None:
+            图宽 = max(120.0, min(360.0, float(视口宽) - 28.0))
+            self.视口图例.setFrame_(NSMakeRect(网页宽 + 14, float(底) + 12, 图宽, 16))
+            self.视口图例.setHidden_(图宽 < 160)
+        if self.切换标签 is not None:
+            标宽 = max(120.0, min(300.0, float(视口宽) - 28.0))
+            self.切换标签.setFrame_(NSMakeRect(网页宽 + 12, 高 - 78, 标宽, 22))
+            self.切换标签.setHidden_(True)
+
+    def 开始_工程面板拖动(self) -> None:
+        self._面板拖动中 = True
+
+    def 结束_工程面板拖动(self) -> None:
+        self._面板拖动中 = False
+        if self.视口 is not None:
+            try:
+                self.视口.按视口重算画布()
+                self.视口.openGLContext().update()
+                self.视口.setNeedsDisplay_(True)
+                self.视口.displayIfNeeded()
+            except Exception:                                         # noqa: BLE001
+                pass
+
+    def 设_面板高(self, 高: float) -> None:
+        self._面板收起 = False
+        self._面板高覆盖 = max(190.0, min(float(self.窗口.contentView().bounds().size.height) * 0.70,
+                                       float(高)))
+        try:
+            偏好 = NSUserDefaults.standardUserDefaults()
+            偏好.setDouble_forKey_(self._面板高覆盖, "驭臂.工程面板高")
+            偏好.setBool_forKey_(False, "驭臂.工程面板收起")
+        except Exception:                                             # noqa: BLE001
+            pass
+        if self.窗口 is not None:
+            内容 = self.窗口.contentView()
+            self.排_布局(float(内容.bounds().size.width), float(内容.bounds().size.height))
+
+    def 切换_工程面板收起(self) -> None:
+        self._面板收起 = not self._面板收起
+        try:
+            NSUserDefaults.standardUserDefaults().setBool_forKey_(self._面板收起, "驭臂.工程面板收起")
+        except Exception:                                             # noqa: BLE001
+            pass
+        if self.窗口 is not None:
+            内容 = self.窗口.contentView()
+            self.排_布局(float(内容.bounds().size.width), float(内容.bounds().size.height))
+
+    def 重置_工程面板高(self) -> None:
+        self._面板高覆盖 = None
+        self._面板收起 = False
+        self._面板拖动中 = False
+        try:
+            偏好 = NSUserDefaults.standardUserDefaults()
+            存高 = 偏好.objectForKey_("驭臂.工程面板高")
+            if 存高 is not None:
+                self._面板高覆盖 = float(存高)
+            self._面板收起 = bool(偏好.boolForKey_("驭臂.工程面板收起"))
+        except Exception:                                             # noqa: BLE001
+            pass
+        if self.窗口 is not None:
+            内容 = self.窗口.contentView()
+            self.排_布局(float(内容.bounds().size.width), float(内容.bounds().size.height))
+
+    def 发_日志操作(self, 类型: str, 值: str) -> None:
+        """原生工程面板 → Web 主日志：筛选/清空回到同一份日志状态。"""
+        if self.网页 is None:
+            return
+        try:
+            类型s = str(类型).replace("'", "")
+            值s = str(值).replace("'", "")
+            self.网页.evaluateJavaScript_completionHandler_(
+                "window.dispatchEvent(new CustomEvent('驭臂.日志操作',"
+                "{detail:{类型:'" + 类型s + "',值:'" + 值s + "'}}));",
+                None)
+        except Exception:                                             # noqa: BLE001
+            pass
+
+    def _同步面板事件(self) -> None:
+        """3D 变窄/变宽时，通知 Web 收起/恢复它自己的控制台（避免两份重复）。"""
+        开 = self.面板高 > 0.5
+        if 开 == self._面板开上次:
+            return
+        self._面板开上次 = 开
+        if self.网页 is None:
+            return
+        try:
+            值 = "true" if 开 else "false"
+            标 = "1" if 开 else "0"
+            # ★ WKWebView 的 API 是 evaluateJavaScript:completionHandler:，
+            #   没有单参数版本；写 `evaluateJavaScript_` 会被静默拒掉。
+            self.网页.evaluateJavaScript_completionHandler_(
+                "document.documentElement.setAttribute('data-工程面板','" + 标 + "');"
+                "window.dispatchEvent(new CustomEvent('驭臂.工程面板',"
+                "{detail:{开:" + 值 + "}}));",
+                None)
+            记诊断(f"工程面板事件 -> {开}")
+        except Exception as 异常:                                     # noqa: BLE001
+            记诊断(f"工程面板事件失败：{type(异常).__name__}: {异常}")
+
+    def 开始_分栏拖动(self) -> None:
+        self.分栏拖动中 = True
+        self.分栏交互时刻 = time.monotonic()
+        记诊断(f"分栏开始：当前网页宽={self.取_网页宽():.0f}")
+        v = self.视口
+        if v is None:
+            return
+        v.交互锁定 = True
+        # 只快照已经完成首帧取景的相机；否则会把"首帧适配"也一起回滚。
+        if v.相机 is not None and getattr(v, "_首帧已取景", False):
+            try:
+                self._分栏相机 = (
+                    v.相机.lookat.copy(),
+                    float(v.相机.distance),
+                    float(v.相机.azimuth),
+                    float(v.相机.elevation),
+                )
+            except Exception:                                         # noqa: BLE001
+                self._分栏相机 = None
+        else:
+            self._分栏相机 = None
+
+    def 结束_分栏拖动(self) -> None:
+        self.分栏拖动中 = False
+        self.分栏交互时刻 = time.monotonic()
+        v = self.视口
+        if v is None:
+            return
+        v.交互锁定 = False
+        if self._分栏相机 is not None and v.相机 is not None:
+            try:
+                中心, 距离, 方位, 仰角 = self._分栏相机
+                v.相机.lookat[:] = 中心
+                v.相机.distance = max(1.50, float(距离))
+                v.相机.azimuth = 方位
+                v.相机.elevation = 仰角
+                v.请求渲染()
+            except Exception:                                     # noqa: BLE001
+                pass
+        if v.相机 is not None:
+            try:
+                if float(v.相机.distance) < 1.50:
+                    记诊断(f"相机兜底：{float(v.相机.distance):.2f} -> 1.50")
+                    v.相机.distance = 1.50
+                    v.请求渲染()
+            except Exception:                                     # noqa: BLE001
+                pass
+        self._分栏相机 = None
+        记诊断(f"分栏结束：网页宽={self.取_网页宽():.0f} 画布目标={v._画布目标}")
+        # 拖动期间故意不重建渲染器；松手后再按最终尺寸重建一次。
+        try:
+            v.openGLContext().update()
+        except Exception:                                         # noqa: BLE001
+            pass
+        v.按视口重算画布()
+        v.setNeedsDisplay_(True)
+        v.displayIfNeeded()
+
+    def 重置_分栏(self) -> None:
+        """双击分隔条：回到默认 40/60，并让 C 面板按新比例重新判定。"""
+        self.网页宽请求 = None
+        if self.窗口 is None:
+            return
+        内容 = self.窗口.contentView()
+        self.排_布局(float(内容.bounds().size.width), float(内容.bounds().size.height))
+
+    def 取_网页宽(self) -> float:
+        if self.网页宽当前 is not None:
+            return float(self.网页宽当前)
+        if self.窗口 is None:
+            return float(网页最小宽)
+        宽 = float(self.窗口.contentView().bounds().size.width)
+        return float(_切分宽度(宽)[0])
+
+    def 设_网页宽(self, 宽: float) -> None:
+        if self.窗口 is None or self.视口 is None:
+            return
+        内容 = self.窗口.contentView()
+        总宽 = float(内容.bounds().size.width)
+        高 = float(内容.bounds().size.height)
+        self.网页宽请求 = max(float(网页最小宽),
+                              min(float(宽), 总宽 - float(视口最小宽)))
+        self.排_布局(总宽, 高)
+
+    def 排_布局(self, 宽: float, 高: float) -> None:
+        """按当前窗口尺寸排 Web / 3D / 分隔条 / 工具条。"""
+        if self.网页 is None:
+            return
+        if self.视口 is None:
+            self.网页宽当前 = round(宽)
+            self.网页.setFrame_(NSMakeRect(0, 0, round(宽), round(高)))
+            return
+        if self.网页宽请求 is not None:
+            网页宽 = max(float(网页最小宽),
+                        min(float(self.网页宽请求), float(宽) - float(视口最小宽)))
+        else:
+            网页宽 = _切分宽度(宽)[0]
+        网页宽 = round(网页宽)
+        视口宽 = round(宽) - 网页宽
+        self.网页宽当前 = 网页宽
+        自动高 = round(_工程面板高度(视口宽, 高))
+        if 自动高 <= 0:
+            面板高 = 0
+        elif self._面板收起:
+            面板高 = 34
+        elif self._面板高覆盖 is not None:
+            面板高 = int(max(190.0, min(float(高) * 0.70, float(self._面板高覆盖))))
+        else:
+            面板高 = 自动高
+        self.面板高 = float(面板高)
+        顶高 = round(高) - 面板高
+        # 3D 贴窗口上边；面板只在右列（3D 下方），**不碰左下角 Web 状态栏**。
+        # Web 保持整窗高：蓝色状态栏仍在最左下；右列被分成 3D（上）+ 工程面板（下）。
+        self.视口.setFrame_(NSMakeRect(网页宽, 面板高, 视口宽, 顶高))
+        self.网页.setFrame_(NSMakeRect(0, 0, 网页宽, round(高)))
+        if self.分栏 is not None:
+            self.分栏.setFrame_(NSMakeRect(网页宽 - 3, 0, 7, round(高)))
+        if self.工程面板 is not None:
+            self.工程面板.setHidden_(面板高 <= 0)
+            if 面板高 > 0:
+                self.工程面板.设_收起(self._面板收起)
+            self.工程面板.setFrame_(NSMakeRect(网页宽, 0, 视口宽, 面板高))
+            if 面板高 > 0:
+                self.工程面板.排_面板(视口宽, 面板高)
+        self._同步面板事件()
+        # 拖动分隔条时先不重建 MuJoCo 渲染器：老画面按新比例等比铺开即可，
+        # 松手后由 结束_分栏拖动() 统一重建。这样既不会每拖一像素重建一次，
+        # 也避开"渲染器重建/旧纹理同帧"导致的画面异常。
+        if not self.分栏拖动中 and not self._面板拖动中:
+            self.视口.按视口重算画布()
+        # ★ NSOpenGLView 的 drawable 不会自动跟着 setFrame_ 立刻换尺寸。
+        #   不 update 就直接 glViewport 到新尺寸，会把旧 drawable 的一部分放大/裁切
+        #   （用户拖动分隔条时看到的"机械臂突然顶到脸上"就是这个）。
+        try:
+            self.视口.openGLContext().update()
+        except Exception:                                             # noqa: BLE001
+            pass
+        self.视口.setNeedsDisplay_(True)
+        self.视口.displayIfNeeded()
+        self.排_视口工具条(网页宽, 视口宽, 高, 面板高)
+
+    def fitView_(self, _发送者):
+        if self.视口 is not None:
+            self.视口.适配_视图()
+
+    def resetView_(self, _发送者):
+        if self.视口 is not None:
+            self.视口.视角_复位()
+
+    def toggleGrid_(self, 发送者):
+        if self.视口 is not None:
+            self.视口.切换_网格()
+            try:
+                发送者.setState_(1 if self.视口.网格开 else 0)
+                发送者.setTitle_("网格开" if self.视口.网格开 else "网格关")
+            except Exception:                                             # noqa: BLE001
+                pass
 
     def _建窗口(self) -> None:
         参数 = self.参数
@@ -726,6 +1930,13 @@ class HostApp(NSObject):
         # ★ 整数像素：小数会让两个视图在边界重叠 ~1px（状态栏被盖掉半行就是这么来的）
         网页宽, 视口宽 = _切分宽度(宽)
 
+        # ⓪ 全宽工程面板（C）：先建好、默认隐藏；日志由 Web 经 WKScriptMessageHandler 镜像进来。
+        self.工程面板 = ConsolePanel.alloc().initWithFrame_(NSMakeRect(0, 0, round(宽), 0))
+        self.工程面板.宿主 = self
+        self.工程面板.setHidden_(True)
+        内容.addSubview_(self.工程面板)
+        self.日志桥 = LogBridge.alloc().initWithPanel_(self.工程面板)
+
         # ① 3D 视口（**右侧主区域**）
         if 参数.无3D:
             self.视口 = None
@@ -739,6 +1950,7 @@ class HostApp(NSObject):
             内容.addSubview_(self.视口)
             视口槽["视口"] = self.视口
             模型路径 = os.environ.get("驭臂_当前模型", "")
+            self.当前模型路径 = 模型路径
             if 模型路径 and os.path.exists(模型路径):
                 self.视口.准_备(模型路径)
             else:
@@ -748,11 +1960,47 @@ class HostApp(NSObject):
 
         # ② Web 界面（上方）：加载**本机服务**的地址（同一个 React 产物）
         配置 = WKWebViewConfiguration.alloc().init()
+        try:
+            配置.userContentController().addScriptMessageHandler_name_(self.日志桥, "驭臂日志")
+        except Exception as 异常:                                     # noqa: BLE001
+            print(f"  ⚠ 日志镜像桥不可用：{type(异常).__name__}: {异常}", flush=True)
+        try:
+            # 在文档开始就监听：宿主打开/关闭全宽工程面板时，用它把 Web 自己的控制台藏起来。
+            # CSS 负责立刻隐藏（即使 React 还没处理完事件），避免出现"上下两份日志"。
+            脚本 = WKUserScript.alloc().initWithSource_injectionTime_forMainFrameOnly_(
+                "window.addEventListener('驭臂.工程面板', function(e){"
+                "document.documentElement.setAttribute('data-工程面板',"
+                "(e && e.detail && e.detail.开) ? '1' : '0');});",
+                WKUserScriptInjectionTimeAtDocumentStart, True)
+            配置.userContentController().addUserScript_(脚本)
+        except Exception as 异常:                                     # noqa: BLE001
+            print(f"  ⚠ 工程面板脚本注入失败：{type(异常).__name__}: {异常}", flush=True)
         self.网页 = WKWebView.alloc().initWithFrame_configuration_(
             NSMakeRect(0, 0, 网页宽 if self.视口 else 宽, round(高)),
             配置)
         内容.addSubview_(self.网页)
-        self.网页.loadRequest_(NSURLRequest.requestWithURL_(NSURL.URLWithString_(参数.地址)))
+        # ★ 加版本查询串，强制 WKWebView 重新取 index.html：
+        #   Web 产物每次构建都会换 assets 哈希，但 WKWebView 会缓存 index.html，
+        #   结果就是"明明重新 build 了，界面还是旧的控制台"（本轮真实踩到）。
+        #   查询串不影响 Vite/React 路由；只让入口 HTML 不进缓存。
+        加载地址 = 参数.地址
+        加载地址 += ("&" if "?" in 加载地址 else "?") + f"v={time.time_ns()}"
+        self.网页.loadRequest_(NSURLRequest.requestWithURL_(NSURL.URLWithString_(加载地址)))
+
+        # ③ Web / 3D 分隔条（原生 NSView，可左右拖）
+        if self.视口 is not None:
+            self.分栏 = Splitter.alloc().initWithHost_(self)
+            self.分栏.setFrame_(NSMakeRect(网页宽 - 3, 0, 7, round(高)))
+            try:
+                self.分栏.setToolTip_("拖动调整 Web / 3D 宽度；双击恢复默认 40/60")
+            except Exception:                                         # noqa: BLE001
+                pass
+            内容.addSubview_(self.分栏)
+            self.网页宽当前 = round(网页宽)
+
+        # ④ 3D 视图工具条（原生 NSView，浮在 3D 顶部；Web 界面完全不知道它）
+        if self.视口 is not None:
+            self.建_视口工具条(内容, 网页宽, 视口宽, 高)
 
         窗口.makeKeyAndOrderFront_(None)
 
@@ -766,8 +2014,8 @@ class HostApp(NSObject):
             print(f"  窗口   : {宽:.0f}×{高:.0f}（--无3D：Web 界面铺满）", flush=True)
         print(f"  界面   : {参数.地址}（我们窗口里的 WKWebView，不是外部浏览器）", flush=True)
         if self.视口:
-            print("  操作   : 拖拽=转视角 ／ 滚轮=缩放 ／ Shift+拖拽=平移 ／ R=复位",
-                  flush=True)
+            print("  操作   : 拖拽=转视角 ／ 滚轮=缩放 ／ Shift+拖拽=平移 ／ "
+                  "R=复位 ／ F=适配 ／ G=网格 ／ 双击=适配", flush=True)
         print("=" * 80, flush=True)
 
     # ---- resize：按比例重排（通知触发，不是 delegate）----
@@ -782,16 +2030,41 @@ class HostApp(NSObject):
         if self.视口 is None:
             self.网页.setFrame_(NSMakeRect(0, 0, round(宽), round(高)))
             return
-        网页宽, 视口宽 = _切分宽度(宽)
-        self.视口.setFrame_(NSMakeRect(网页宽, 0, 视口宽, round(高)))
-        self.网页.setFrame_(NSMakeRect(0, 0, 网页宽, round(高)))
-        # 视口像素尺寸变了 → 重算离屏画布（保持"渲染分辨率=显示分辨率"，见 按视口重算画布）
-        self.视口.按视口重算画布()
+        self.排_布局(宽, 高)
 
     # ---- 主线程每帧：只做"拉状态 + 要求重绘" ----
     def _主线程每帧(self) -> None:
         try:
             self.主线程帧 += 1
+            if self.视口 is not None:
+                # 换模型：仿真线程的模型观察者只把路径放进槽里，这里在主线程重装。
+                # 不能在仿真线程碰 AppKit/GL；重装本身会停旧渲染线程、清状态、
+                # 重新按新模型取景，再启动新的渲染线程。
+                待换 = 视口槽.get("待换模型")
+                if 待换:
+                    视口槽["待换模型"] = None
+                    self.待换模型路径 = str(待换)
+                    self.待换模型时刻 = time.monotonic()
+                # 连续点模型时合并：最后一次点击后安静 0.15s 再重装，
+                # 避免每个中间模型都停一次渲染线程、黑一下。
+                if (self.待换模型路径
+                        and time.monotonic() - self.待换模型时刻 >= 0.15):
+                    目标 = self.待换模型路径
+                    self.待换模型路径 = None
+                    try:
+                        同路径 = os.path.normpath(str(目标)) == os.path.normpath(str(self.当前模型路径))
+                    except Exception:                                     # noqa: BLE001
+                        同路径 = str(目标) == str(self.当前模型路径)
+                    if not 同路径:
+                        if self.视口.换_模型(str(目标)) and self.切换标签 is not None:
+                            self.切换标签.setStringValue_(
+                                f"正在切换模型：{os.path.basename(str(目标))}")
+                if self.切换标签 is not None:
+                    self.切换标签.setHidden_(not bool(getattr(self.视口, "切换中", False)))
+                # 只有真正装载完成才更新“当前路径”；加载失败时保持旧路径，
+                # 这样下一次点同一路径会重试，而不是被误判成“已经是它了”。
+                if self.视口.就绪 and getattr(self.视口, "_模型路径", ""):
+                    self.当前模型路径 = str(self.视口._模型路径)
             if self.视口 is not None and self.视口.就绪:
                 状态 = self.视口.最新状态
                 # 只在收到**新**快照时同步 + 请求渲染（静止时不白烧 CPU）
@@ -800,6 +2073,35 @@ class HostApp(NSObject):
                     self.视口.同步_状态(状态)
                     self.视口.请求渲染()
                 self.视口.setNeedsDisplay_(True)
+                # 防御相机被旧版本/漏出的滚轮推进到机械臂内部；正常缩放最低 0.8。
+                if self.视口.相机 is not None and float(self.视口.相机.distance) < 1.50:
+                    记诊断(f"相机每帧兜底：{float(self.视口.相机.distance):.2f} -> 1.50")
+                    self.视口.相机.distance = 1.50
+                    self.视口.请求渲染()
+                # 关节高亮：进程内共享状态，10 Hz 轮询足够；过期自动消失。
+                if _高亮桥 is not None and self.主线程帧 % 6 == 0:
+                    try:
+                        关节 = _高亮桥.取高亮()
+                        if 关节 != self.视口.高亮关节:
+                            self.视口.高亮关节 = 关节
+                            记诊断(f"高亮关节 -> {关节}")
+                            self.视口.请求渲染()
+                            self.视口.setNeedsDisplay_(True)
+                    except Exception:                                 # noqa: BLE001
+                        pass
+                if self.主线程帧 % 30 == 0:
+                    try:
+                        fps = float(self.视口.统计.get("fps", 0.0))
+                        if self.视口帧率标签 is not None:
+                            self.视口帧率标签.setStringValue_(f"3D {fps:.0f}fps")
+                        if self.视口图例 is not None:
+                            步长 = float(self.视口._网格[0])
+                            高亮 = self.视口.高亮关节
+                            后缀 = f" · 高亮 J{int(高亮)}" if 高亮 is not None else ""
+                            self.视口图例.setStringValue_(
+                                f"X 红 · Y 绿 · Z 蓝 · 网格 {步长:g}m（粗线 {步长 * 5:g}m）{后缀}")
+                    except Exception:                                     # noqa: BLE001
+                        pass
         except Exception as 异常:                                         # noqa: BLE001
             if self.主线程帧 < 3:
                 记诊断(f"✗ 每帧回调异常：{type(异常).__name__}: {异常}")
@@ -821,9 +2123,18 @@ class HostApp(NSObject):
             print(f"  [自诊断] 3D 不可用：{v.错误}", flush=True)
 
     def keyDown_(self, 事件):
-        字 = 事件.charactersIgnoringModifiers()
-        if 字 and 字.lower() == "r" and self.视口 is not None:
+        # 窗口层的兜底：视口没拿到焦点时（极少见）也能用同样的键
+        字 = (事件.charactersIgnoringModifiers() or "").lower()
+        if self.视口 is None or not 字:
+            return
+        if 字 == "r":
             self.视口.视角_复位()
+        elif 字 == "f":
+            self.视口.适配_视图()
+        elif 字 == "g":
+            self.视口.切换_网格()
+        elif 字 == "e":
+            self.视口.切换_末端坐标()
 
 
 _参数 = None
