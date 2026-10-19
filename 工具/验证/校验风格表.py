@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import pathlib
 import re
 import sys
 
@@ -64,6 +65,38 @@ def 校验数值(路径: str, 值, 变量名: str) -> None:
     elif not isinstance(值, (int, float)):
         错误.append(f"{路径}：{变量名} 需要数字：{值!r}")
     统计["样式"] += 1
+
+
+def 检查未定义的css变量() -> None:
+    """源码里 `var(--x)` 用到的变量，必须在 `主题.css` 里真的定义过。
+
+    ★ 为什么加这条：`var(--warning)` 不存在时，浏览器**不会报错**，
+      只会把那条颜色当成"没有值"——表现就是"文字/线没颜色"，
+      代码看起来完全正常。实测踩过：告警色的走势曲线一直是空白的。
+    """
+    import re
+    import glob
+
+    定义处 = set()
+    for 文件 in ("前端/src/生成/主题.css", "前端/src/index.css"):
+        源 = (包根 / 文件).read_text(encoding="utf-8")
+        定义处 |= set(re.findall(r"(--[a-zA-Z0-9_-]+)\s*:", 源))
+    # Tailwind 与内联样式里允许的局部变量（不是颜色 token）
+    允许 = {"--tw-ring-offset-shadow", "--tw-ring-shadow", "--tw-shadow"}
+    漏 = []
+    用了 = 0
+    for 文件 in glob.glob(str(包根 / "前端/src/**/*.tsx"), recursive=True) + \
+            glob.glob(str(包根 / "前端/src/**/*.ts"), recursive=True) + \
+            glob.glob(str(包根 / "前端/src/**/*.css"), recursive=True):
+        源 = open(文件, encoding="utf-8").read()
+        for 名 in re.findall(r"var\((--[a-zA-Z0-9_-]+)", 源):
+            用了 += 1
+            if 名 not in 定义处 and 名 not in 允许:
+                漏.append(f"{pathlib.Path(文件).name}: {名}")
+    if 漏:
+        判(False, "用到未定义的 CSS 变量（不会报错，只会没颜色）：" + "；".join(sorted(set(漏))[:6]))
+    else:
+        判(True, f"{用了} 处 var(--…) 全部有定义")
 
 
 def main() -> int:
@@ -130,6 +163,36 @@ def main() -> int:
     for 名, 风格 in 风格们.items():
         if 风格.get("基底主题") not in 合法基底:
             错误.append(f"{名}.基底主题={风格.get('基底主题')!r}，官方只认 {合法基底}")
+
+    # ★ 源码里 var(--x) 用到的变量必须在主题里真的定义过：
+    #   写错名字时浏览器**不报错**，只是那条颜色"没有值"，表现是文字/曲线没颜色。
+    #   实测踩过：告警走势曲线用了不存在的 `--warning`（真名是 `--warn`），一直是空白。
+    import glob as _glob
+    import re as _re
+    _定义 = set()
+    for _f in ("前端/src/生成/主题.css", "前端/src/index.css"):
+        _源 = pathlib.Path(包根, _f).read_text(encoding="utf-8")
+        _定义 |= set(_re.findall(r"(--[a-zA-Z0-9_-]+)\s*:", _源))
+    _允许 = {"--tw-ring-offset-shadow", "--tw-ring-shadow", "--tw-shadow"}
+    _漏, _用 = [], 0
+    for _f in (_glob.glob(os.path.join(包根, "前端/src/**/*.tsx"), recursive=True)
+               + _glob.glob(os.path.join(包根, "前端/src/**/*.ts"), recursive=True)
+               + _glob.glob(os.path.join(包根, "前端/src/**/*.css"), recursive=True)):
+        _文本 = open(_f, encoding="utf-8").read()
+        for _匹配 in _re.finditer(r"var\((--[a-zA-Z0-9_-]+)(\$\{)?", _文本):
+            # ★ 动态拼接的（`var(--palette-${i})`）跳过：名字要运行期才定，
+            #   静态检查无从判断。这里只查**写死**的变量名。
+            if _匹配.group(2):
+                continue
+            _名 = _匹配.group(1)
+            _用 += 1
+            if _名 not in _定义 and _名 not in _允许:
+                _漏.append(f"{pathlib.Path(_f).name}: {_名}")
+    if _漏:
+        错误.append("用到未定义的 CSS 变量（不会报错，只会没颜色）："
+                    + "；".join(sorted(set(_漏))[:6]))
+    else:
+        print(f"  CSS 变量：{_用} 处 var(--…) 全部有定义")
 
     print()
     if 警告:

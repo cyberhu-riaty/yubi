@@ -21,6 +21,9 @@ export function 监控视图() {
   const 系统 = 用仓库((s) => s.系统.数据);
   const 连接 = 用仓库((s) => s.连接);
   const 项目 = 用仓库((s) => s.项目.数据);
+  const 告警 = 用仓库((s) => s.告警.数据);
+  const 活动告警 = 告警?.活动 ?? [];
+  const 活跃数 = 活动告警.filter((a) => a.严重度 === "严重").length || 活动告警.length;
   const 物理 = 项目?.重力开;
   const 已冻结 = 物理 === false;
   const 跑得动 = 系统?.RTF !== undefined && 系统.RTF >= 0.95;
@@ -56,6 +59,50 @@ export function 监控视图() {
 
   return (
     <div className="space-y-2">
+      {/* 病态告警：放在最前面 —— 它是"结论"，比后面的数更有用 */}
+      {活动告警.length ? (
+        <可折叠区块
+          标题={t("监控.告警")}
+          徽标={<标签 语气="警示">{活跃数}</标签>}
+        >
+          <p className="text-dim">{t("监控.告警.说明")}</p>
+          <ul className="mt-2 space-y-1.5">
+            {活动告警.map((a, i) => (
+              <li
+                key={`${a.类型}-${a.信号}-${i}`}
+                className="面板 p-2"
+                style={{
+                  borderLeft: `3px solid ${a.严重度 === "严重" ? "var(--danger)" : "var(--warn)"}`,
+                }}
+              >
+                <div className="flex flex-wrap items-baseline gap-1.5">
+                  <标签 语气={a.严重度 === "严重" ? "警示" : "强调"}>{a.类型}</标签>
+                  <span className="min-w-0 flex-1 truncate text-[0.85em] 等宽" title={a.信号}>
+                    {String(a.信号 ?? "").split("·").pop()}
+                  </span>
+                  <span className="flex-none text-[0.78em] text-dim 等宽">
+                    {`${(a.开始秒 ?? 0).toFixed(1)}–${(a.结束秒 ?? 0).toFixed(1)}s`}
+                  </span>
+                </div>
+                <div className="mt-1 text-[0.82em]">{a.证据}</div>
+                {a.曲线?.length ? (
+                  <>
+                    <告警走势 曲线={a.曲线} />
+                    <div className="text-[0.74em] text-dim">
+                      {`${t("监控.告警.走势")} ${(a.曲线t?.[a.曲线t.length - 1] ?? 0).toFixed(1)} s`}
+                    </div>
+                  </>
+                ) : null}
+                <div className="mt-1 text-[0.8em] text-dim">{a.建议}</div>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[0.78em]" style={{ color: "var(--warn)" }}>
+            {t("监控.告警.经验")}
+          </p>
+        </可折叠区块>
+      ) : null}
+
       <可折叠区块
         标题={t("步骤.监控")}
         徽标={
@@ -87,5 +134,32 @@ export function 监控视图() {
         <p className="mt-2 text-[0.8em] text-dim">{t("监控.无趋势")}</p>
       </可折叠区块>
     </div>
+  );
+}
+
+/**
+ * 告警走势 —— 把该时段的抽样曲线画出来。
+ *
+ * ★ 为什么要在告警里画图，而不是只给一句话：
+ *   "5.0 Hz、振幅 22°" 对熟手够用，对新手不如一眼看到"这条曲线在来回抖"。
+ *   数据来自后端随告警一起发来的抽样点（12 个），不是前端自己编的形状。
+ */
+function 告警走势({ 曲线 }: { 曲线: number[] }) {
+  const 宽 = 100;
+  const 高 = 22;
+  const 大 = Math.max(...曲线, 1e-9);
+  const 小 = Math.min(...曲线, -1e-9);
+  const 幅 = 大 - 小 || 1;
+  const 路 = 曲线
+    .map((v, i) => {
+      const x = (i / Math.max(曲线.length - 1, 1)) * 宽;
+      const y = 高 - ((v - 小) / 幅) * 高;
+      return `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <svg viewBox={`0 0 ${宽} ${高}`} className="mt-1 w-full" style={{ height: 34 }} aria-hidden="true">
+      <path d={路} fill="none" stroke="var(--warn)" strokeWidth="1" />
+    </svg>
   );
 }

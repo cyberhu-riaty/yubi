@@ -237,6 +237,16 @@ const 表 = {
     "实时率、步频、内存 —— 跑得动跑不动，看这里",
     "Real-time factor, step rate, memory — whether it keeps up",
   ],
+  "监控.告警": ["病态告警", "Fault alerts"],
+  "监控.告警.说明": [
+    "这些是软件从时序数据里**判定**出的结论，不是原始数字：每条都带量化证据（频率/振幅/斜率/时段）。没检出不等于没问题，只等于没命中已知的四类。",
+    "These are conclusions the software reached from the time series, not raw numbers: each carries quantitative evidence (frequency, amplitude, slope, interval). No alert only means none of the four known patterns matched.",
+  ],
+  "监控.告警.走势": ["走势（最近）", "Trend (last)"],
+  "监控.告警.经验": [
+    "建议是按经验规则给的，不是自动整定；改完请再看一段曲线确认。",
+    "Suggestions are rule-of-thumb, not auto-tuning; re-check the curves after changing.",
+  ],
   "监控.实时率": ["实时率 RTF", "Real-time factor"],
   "监控.步频": ["物理步频", "Physics step rate"],
   "监控.内存": ["进程内存", "Process memory"],

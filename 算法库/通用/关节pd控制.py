@@ -49,6 +49,8 @@ class 关节PD控制插件(控制插件):
         self.最大误差 = 0.0
         self.界面目标 = None      # 来自界面滑杆（由 界面桥.py 每帧发过来）
         self.最后一次力矩 = np.zeros(6)
+        # 每个执行器的力矩上限（首步从模型读一次），供「饱和关节数」指标用
+        self._力矩上限 = None
 
     # ------------------------------------------------------------------
     # 兼容性预检：外壳换模型时会先问一句"这个模型你能跑吗"
@@ -90,6 +92,16 @@ class 关节PD控制插件(控制插件):
     @每步
     def 每步控制(self, event: 插件.messages.StepEvent) -> bool:
         模型, 数据 = event.model, event.data
+
+        # 首步记下执行器力矩上限（给「饱和关节数」指标用）。
+        # 只读一次即可：换模型时外壳会重建插件实例，不会读到过期值。
+        if self._力矩上限 is None:
+            try:
+                _范围 = np.asarray(getattr(模型, "actuator_ctrlrange", []), dtype=float)
+                if int(模型.nu) > 0 and _范围.size == 2 * int(模型.nu):
+                    self._力矩上限 = np.abs(_范围).reshape(-1, 2).max(axis=1)
+            except Exception:                                 # noqa: BLE001
+                self._力矩上限 = None
 
         # ★ 空场景（模型/空场景.xml）里 nq = nv = nu = 0，没有关节可控制。
         #   不判断的话下面 目标[1] 会越界 —— 实测会抛 IndexError，插件被"出错隔离"
@@ -136,9 +148,22 @@ class 关节PD控制插件(控制插件):
     def 指标(self) -> dict:
         if self.目标 is None:
             return {}
+        # ★ 「饱和关节数」是给**病态检出**用的（见 软件/观测核心.py）：
+        #   力矩顶在执行器上限时，再加增益不会有任何改善 —— 这是最容易被
+        #   误读成"还不够用力"的状态。数出来比看曲线可靠。
+        #   口径：|ctrl| ≥ 98% 的上限算饱和；模型没声明 ctrlrange 就报 0
+        #   （报 0 而不是猜：没有限位信息时我们无从判断是否饱和）。
+        饱和关节数 = 0.0
+        if self._力矩上限 is not None:
+            try:
+                比 = np.abs(self.最后一次力矩) / np.maximum(self._力矩上限, 1e-12)
+                饱和关节数 = float(np.sum(比 >= 0.98))
+            except Exception:                                 # noqa: BLE001
+                pass
         return {
             "最大误差(deg)": float(np.degrees(self.当前误差)),
             "力矩峰值(Nm)" : float(np.abs(self.最后一次力矩).max()),
+            "饱和关节数"   : 饱和关节数,
         }
 
     # ------------------------------------------------------------------

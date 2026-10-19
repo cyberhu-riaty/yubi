@@ -423,6 +423,16 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 print(f"⚠ 轨迹规划不可用（规划视图将不能规划）：{_异常}")
                 _规划器 = None
 
+            # 病态检出（观测核心）：把指标序列攒起来，判定振荡/发散/超差/饱和。
+            #   ★ 必须在循环之前建好（循环里每步都要喂它）。
+            try:
+                import 观测核心 as _观测核心
+                _观测 = _观测核心.观测核心(_发布出口)
+                print("【观测】病态检出已就绪（振荡 / 发散 / 跟踪超差 / 饱和）", flush=True)
+            except Exception as _异常:                                    # noqa: BLE001
+                print(f"⚠ 病态检出不可用（监控页不会有告警）：{_异常}")
+                _观测 = None
+
             # 部署器：导出可带走的包（**不连真机** —— 这个软件没有传输层）
             try:
                 import 部署桥 as _部署桥
@@ -960,7 +970,22 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
 
                 # 送一帧指标给界面（内部按 30 Hz 限频，不会每圈都发）
                 if 指标发布 is not None:
-                    指标发布.也许发布(注册表, float(data.time), _time.perf_counter())
+                    # ★ 只有**真的发了一帧**才喂观测核心：指标是 30 Hz 限频的，
+                    #   而物理是 500 Hz。若每步都喂，缓冲里会塞进 16 倍重复值，
+                    #   "过零次数"和"频率"会被严重低估（判定直接失效）。
+                    _真的发了 = 指标发布.也许发布(注册表, float(data.time),
+                                                 _time.perf_counter())
+                    if _真的发了 and _观测 is not None:
+                        try:
+                            _观测.记录(float(data.time), 指标发布.最近)
+                        except Exception:                                 # noqa: BLE001
+                            pass
+                # 判定（内部 1 Hz 节流；它自己不会跑赢仿真）
+                if _观测 is not None:
+                    try:
+                        _观测.判定(float(data.time), _time.perf_counter())
+                    except Exception as _e:                               # noqa: BLE001
+                        pass
                 # 系统指标（1 Hz）：RTF / 步频 / 内存。
                 #   步数用 `data.time / timestep` 反推不稳，直接用 mujoco 的累计计数；
                 #   拿不到就退回 0（宁可步频显示 0，也不编一个数）。
