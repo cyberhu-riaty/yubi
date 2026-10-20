@@ -15,16 +15,53 @@ import { 可折叠区块 } from "../组件/可折叠区块";
 import { 标签 } from "../组件/标签";
 import { 按钮 } from "../组件/按钮";
 import { 数值表, type 数值行 } from "../组件/数值表";
+import { useRef } from "react";
 import { 命令, 用仓库 } from "../数据/仓库";
+import { 解析航点文本, type 解析结果 } from "../数据/航点文件";
 import { 命令收尾, 记命令发出 } from "../数据/日志";
 import { use取 } from "./文案";
 
 export function 规划视图() {
   const t = use取();
   const 规划 = 用仓库((s) => s.规划.数据);
+  const 模型 = 用仓库((s) => s.模型.数据);
   const 连接 = 用仓库((s) => s.连接);
   const [忙, 设忙] = useState(false);
+  const [导入, 设导入] = useState<解析结果 | null>(null);
+  // 约束：空 = 用后端按模型推算的默认值（界面上写明是"估算"）。
+  //   ★ 给用户的是关节空间的量（rad/s、rad/s²），不是 s 空间的 ——
+  //     s 空间的数与实际快慢差一个路径长度，用户从界面上的数推不出会发生什么。
+  const [速度上限, 设速度上限] = useState("");
+  const [加速度上限, 设加速度上限] = useState("");
+  const 文件框 = useRef<HTMLInputElement | null>(null);
   const 可发 = 连接 === "已连接";
+
+  /** 选文件 → 解析 → 直接把航点送去规划（不落盘、不占权限面） */
+  const 读文件 = async (文件: File | undefined) => {
+    if (!文件) return;
+    设忙(true);
+    try {
+      const 文本 = await 文件.text();
+      const 果 = 解析航点文本(文本, 规划?.自由度 || 模型?.自由度);
+      设导入(果);
+      if (!果.问题) {
+        const 起于 = 记命令发出();
+        命令收尾("命令.规划", await 命令.跑规划(果.航点.map((关节) => ({ 关节 }))), 起于);
+      }
+    } finally {
+      设忙(false);
+      if (文件框.current) 文件框.current.value = "";
+    }
+  };
+
+  /** 把输入框里的单一数值铺成"每个关节一个"的上限；空/非法 → undefined（用默认） */
+  const 数们 = (文本: string) => {
+    const 值 = Number(文本);
+    const 自由度 = 规划?.自由度 || 模型?.自由度 || 0;
+    return 文本.trim() && Number.isFinite(值) && 值 > 0 && 自由度 > 0
+      ? Array.from({ length: 自由度 }, () => 值)
+      : undefined;
+  };
 
   const 跑 = async (动作: "记录航点" | "清空航点" | "规划") => {
     设忙(true);
@@ -33,7 +70,10 @@ export function 规划视图() {
       const r =
         动作 === "记录航点" ? await 命令.记录航点()
         : 动作 === "清空航点" ? await 命令.清空航点()
-        : await 命令.跑规划();
+        : await 命令.跑规划(undefined, {
+            速度上限: 数们(速度上限),
+            加速度上限: 数们(加速度上限),
+          });
       命令收尾("命令.规划", r, 起于, { 模块: "规划" });
     } finally {
       设忙(false);
@@ -107,11 +147,32 @@ export function 规划视图() {
         }
       >
         <p className="text-dim">{t("规划.说明")}</p>
+        <p className="mt-1 text-[0.8em] text-dim">{t("规划.文件说明")}</p>
 
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <按钮 种类="次" 尺寸="小" disabled={忙 || !可发} on按下={() => void 跑("记录航点")}>
             {t("规划.记录")}
           </按钮>
+          <label className="flex items-center gap-1 text-[0.8em]">
+            <span className="text-dim">{t("规划.速度上限")}</span>
+            <input
+              className="参数输入 w-[62px]"
+              value={速度上限}
+              onChange={(e) => 设速度上限(e.target.value)}
+              placeholder={t("规划.自动")}
+              inputMode="decimal"
+            />
+          </label>
+          <label className="flex items-center gap-1 text-[0.8em]">
+            <span className="text-dim">{t("规划.加速度上限")}</span>
+            <input
+              className="参数输入 w-[62px]"
+              value={加速度上限}
+              onChange={(e) => 设加速度上限(e.target.value)}
+              placeholder={t("规划.自动")}
+              inputMode="decimal"
+            />
+          </label>
           <按钮
             种类="主"
             尺寸="小"
@@ -135,6 +196,16 @@ export function 规划视图() {
               </按钮>
             )
           ) : null}
+          <input
+            ref={文件框}
+            type="file"
+            accept=".csv,.txt,text/csv,text/plain"
+            className="hidden"
+            onChange={(e) => void 读文件(e.target.files?.[0])}
+          />
+          <按钮 种类="次" 尺寸="小" disabled={忙} on按下={() => 文件框.current?.click()}>
+            {t("规划.导入")}
+          </按钮>
           {规划?.航点数 ? (
             <span className="text-[0.85em] text-dim">{`${t("规划.已记录")}: ${规划.航点数}`}</span>
           ) : null}
@@ -142,6 +213,17 @@ export function 规划视图() {
 
         {!成功 && 航点数 < 2 ? (
           <p className="mt-1.5 text-[0.82em] text-dim">{t("规划.需要航点")}</p>
+        ) : null}
+
+        {导入 ? (
+          <div
+            className="mt-2 text-[0.82em]"
+            style={{ color: 导入.问题 ? "var(--danger)" : "var(--fg-dim)" }}
+          >
+            {导入.问题
+              ? `${t("规划.导入失败")}：${导入.问题}`
+              : `${t("规划.导入成功")}：${导入.行数} 个航点 × ${导入.列数} 列（跳过 ${导入.跳过} 行注释/表头）`}
+          </div>
         ) : null}
 
         {失败 && 规划?.原因 ? (
@@ -169,6 +251,25 @@ export function 规划视图() {
               <标签 语气={余量语气(规划.加速度余量)}>{`加速度 ${((规划.加速度余量 ?? 0) * 100).toFixed(0)}%`}</标签>
               <标签 语气={余量语气(规划.加加速度余量)}>{`加加速度 ${((规划.加加速度余量 ?? 0) * 100).toFixed(0)}%`}</标签>
             </div>
+            {规划.对比 ? (
+              <div className="mt-2">
+                <div className="flex items-baseline gap-1.5">
+                  <span style={{ fontWeight: 600 }}>{t("规划.对比")}</span>
+                  <span className="flex-1" />
+                  <标签 语气={(规划.对比["时长变化%"] ?? 0) > 0 ? "警示" : "强调"}>
+                    {`${(规划.对比["时长变化%"] ?? 0) >= 0 ? "+" : ""}${(规划.对比["时长变化%"] ?? 0).toFixed(0)}%`}
+                  </标签>
+                </div>
+                <div className="text-[0.82em] text-dim">
+                  {`${(规划.对比.上次时长 ?? 0).toFixed(2)} s → ${(规划.对比.本次时长 ?? 0).toFixed(2)} s`}
+                </div>
+                {规划.对比.上次sd?.length && 规划.对比.本次sd?.length ? (
+                  <对比图 上次={规划.对比.上次sd} 本次={规划.对比.本次sd} />
+                ) : null}
+                <div className="text-[0.78em] text-dim">{t("规划.对比.说明")}</div>
+              </div>
+            ) : null}
+
             {规划.存盘路径 ? (
               <div className="mt-1 text-[0.82em]">
                 <span className="text-dim">{t("规划.存盘")}：</span>
@@ -223,6 +324,33 @@ function 包络图({ 包络, sd }: { 包络: number[]; sd: number[] }) {
     <svg viewBox={`0 0 ${宽} ${高}`} className="mt-1 w-full" style={{ height: 90 }} aria-hidden="true">
       <path d={折(包络)} fill="none" stroke="var(--border)" strokeWidth="0.6" />
       {sd.length ? <path d={折(sd)} fill="none" stroke="var(--palette-1)" strokeWidth="0.9" /> : null}
+    </svg>
+  );
+}
+
+/**
+ * 对比图 —— 灰线 = 上一次的 sd(s)，蓝线 = 本次。
+ *
+ * 横轴是路径参数 s（不是时间），所以两条线可以直接叠：
+ * **同一批航点**下几何路径是一样的，差别只在"走多快"。
+ * 这也是为什么只有航点一致时才出对比 —— 路径不同的话叠在一起没有意义。
+ */
+function 对比图({ 上次, 本次 }: { 上次: number[]; 本次: number[] }) {
+  const 宽 = 100;
+  const 高 = 30;
+  const 顶 = Math.max(...上次, ...本次, 1e-9);
+  const 折 = (组: number[]) =>
+    组
+      .map((v, i) => {
+        const x = (i / Math.max(组.length - 1, 1)) * 宽;
+        const y = 高 - (Math.max(0, v) / 顶) * 高;
+        return `${i ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
+      })
+      .join(" ");
+  return (
+    <svg viewBox={`0 0 ${宽} ${高}`} className="mt-1 w-full" style={{ height: 56 }} aria-hidden="true">
+      <path d={折(上次)} fill="none" stroke="var(--border-strong)" strokeWidth="0.9" />
+      <path d={折(本次)} fill="none" stroke="var(--accent)" strokeWidth="1" />
     </svg>
   );
 }

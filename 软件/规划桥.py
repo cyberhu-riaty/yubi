@@ -81,6 +81,10 @@ class 规划结果(messages.Snapshot):
     限位来源: str = ""           # 显式 / 估算
     时间: str = ""
     原因: str = ""
+    # ---- 换约束重规划后的对比（同一批航点、不同限位）----
+    #   每项：{上次时长, 本次时长, 时长变化%, 上次最大速度, 本次最大速度,
+    #          上次约束, 本次约束, 上次sd[], 本次sd[]}
+    对比: tuple = ()
     # ---- 离线产物与执行 ----
     存盘路径: str = ""           # 规划成功后写出的 CSV/元信息目录（空 = 没存）
     执行状态: str = "空闲"       # 空闲 / 执行中 / ✓ 完成 / ✗ 中断
@@ -232,6 +236,10 @@ class 规划器:
         self._轨迹q: np.ndarray | None = None
         self.执行时长 = 0.0
         self._下次播报 = 0.0
+        # 上一次成功的规划：用于"换约束重规划"后的逐点对比。
+        #   ★ 只有当**航点完全一致**时才对比 —— 换一批航点再比时长没有意义
+        #     （路径都不同，快慢没有可比性）。
+        self._上次规划: dict | None = None
 
     # ---- 拿模型 ----
     # ★ 方法名必须是 `收到模型`、而且**不能**加 @messages.handler：
@@ -364,6 +372,37 @@ class 规划器:
                     值["sd轴"] = tuple(float(x) for x in np.asarray(报.sd)[取])
             if 报.成功:
                 self.规划次数 += 1
+                # ---- 换约束重规划：与上一次同一批航点的结果对比 ----
+                #   只在**航点一致**时比；否则"变快了"只是路径不同，没有意义。
+                指纹 = float(np.sum(np.abs(W))) + float(W.shape[1]) * 1e3
+                同路径 = (self._上次规划 is not None
+                          and abs(self._上次规划["指纹"] - 指纹) < 1e-6
+                          and self._上次规划["航点数"] == int(W.shape[0]))
+                if 同路径 and 报.sd is not None:
+                    旧 = self._上次规划
+                    取 = np.linspace(0, np.size(报.sd) - 1, 200).astype(int)
+                    旧sd = np.asarray(旧["sd"], dtype=float)
+                    旧取 = np.linspace(0, np.size(旧sd) - 1, 200).astype(int)
+                    # ★ 契约里 `对比` 是 **object**，所以直接给 dict。
+                    #   我第一版写成了 `({...},)` —— 一个"含单个元素的元组"，
+                    #   于是前端拿到的是数组，`对比.上次时长` 全是 undefined，
+                    #   卡片上显示 "0.00 s → 0.00 s"。**结构对了内容才出得来**。
+                    值["对比"] = {
+                        "上次时长": float(旧["时长"]),
+                        "本次时长": float(报.总时长),
+                        "时长变化%": (float(报.总时长) / max(float(旧["时长"]), 1e-9) - 1.0) * 100.0,
+                        "上次最大速度": float(旧["最大速度"]),
+                        "本次最大速度": float(报.最大关节速度),
+                        "上次约束": str(旧["约束"]),
+                        "本次约束": str(来源),
+                        "上次sd": [float(x) for x in 旧sd[旧取]],
+                        "本次sd": [float(x) for x in np.asarray(报.sd)[取]],
+                    }
+                self._上次规划 = {
+                    "指纹": 指纹, "航点数": int(W.shape[0]),
+                    "时长": float(报.总时长), "最大速度": float(报.最大关节速度),
+                    "约束": str(来源), "sd": np.asarray(报.sd, dtype=float),
+                }
                 try:
                     import 模型桥 as _模型桥
                     _项目名 = str(_模型桥.读取设置("上次项目", "") or "")
