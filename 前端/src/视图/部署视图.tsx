@@ -19,6 +19,7 @@ import { 标签 } from "../组件/标签";
 import { 按钮 } from "../组件/按钮";
 import { 命令, 用仓库 } from "../数据/仓库";
 import { 命令收尾, 记命令发出 } from "../数据/日志";
+import { 数值表, type 数值行 } from "../组件/数值表";
 import { 连接键, use取 } from "./文案";
 
 export function 部署视图() {
@@ -50,6 +51,8 @@ export function 部署视图() {
 
   return (
     <div className="space-y-2">
+      <设备控制台 />
+
       <可折叠区块
         标题={t("部署.标题")}
         徽标={
@@ -119,5 +122,210 @@ export function 部署视图() {
         ) : null}
       </可折叠区块>
     </div>
+  );
+}
+
+/**
+ * 设备控制台 —— 部署页真正的"连接"部分。
+ *
+ * ★ 这一格最重要的不是按钮，是**它诚实**：
+ *   · 永远显示 `后端` 名字（现在是"模拟后端"）——不让人误以为是真机
+ *   · 遥测数字全部来自真实帧时间戳与后端统计，没有就显示"还没收到"
+ *   · 状态机画出来，"在哪一格"一眼可见；进「运行」必须人点，没有任何自动流程
+ */
+function 设备控制台() {
+  const t = use取();
+  const 设备 = 用仓库((s) => s.设备.数据);
+  const 连接 = 用仓库((s) => s.连接);
+  const [忙, 设忙] = useState(false);
+  const 可发 = 连接 === "已连接";
+
+  const 动 = async (动作: string, 参数?: Record<string, number>) => {
+    设忙(true);
+    try {
+      const 起于 = 记命令发出();
+      命令收尾("命令.设备", await 命令.设备动作(动作, 参数), 起于, { 模块: "部署" });
+    } finally {
+      设忙(false);
+    }
+  };
+
+  const 态 = 设备?.安全状态 ?? "未连接";
+  /** 状态名 → 显示文案。★ 用显式映射而不是模板字符串：
+   *  模板 key（`部署.态.${态}`）在类型上是不安全的，新增状态时编译器帮不上忙。 */
+  const 态名 = (s: string) =>
+    ({
+      未连接: t("部署.态.未连接"),
+      "已连接（未使能）": t("部署.态.已连接（未使能）"),
+      使能中: t("部署.态.使能中"),
+      运行: t("部署.态.运行"),
+      停止: t("部署.态.停止"),
+      故障: t("部署.态.故障"),
+      急停: t("部署.态.急停"),
+    })[s] ?? s;
+  const 阶 = ["未连接", "已连接（未使能）", "使能中", "运行"];
+  const 已连接 = !!设备?.已连接;
+  const 是运行 = 态 === "运行";
+  const 异常 = 态 === "故障" || 态 === "急停";
+
+  const 遥测: 数值行[] = 设备
+    ? [
+        { 键: t("部署.后端"), 值: <span className="等宽">{设备.后端 || "--"}</span> },
+        { 键: t("部署.模式"), 值: <span className="等宽">{设备.模式 || "--"}</span> },
+        { 键: t("部署.实测平均延迟"), 值: <span className="等宽">{设备.实测平均延迟 ? `${设备.实测平均延迟.toFixed(1)} ms` : t("部署.还没收到")}</span> },
+        { 键: t("部署.实测最大延迟"), 值: <span className="等宽">{设备.实测最大延迟 ? `${设备.实测最大延迟.toFixed(1)} ms` : "--"}</span> },
+        { 键: t("部署.丢包错序"), 值: <span className="等宽">{`${设备.丢包数 ?? 0} / ${设备.错序数 ?? 0}`}</span> },
+        { 键: t("部署.拒绝数"), 值: <span className="等宽">{设备.拒绝数 ?? 0}</span> },
+        {
+          键: t("部署.最近位置"),
+          值: (
+            <span className="等宽">
+              {设备.最近位置?.length
+                ? `${设备.最近位置.slice(0, 3).map((x) => x.toFixed(3)).join(", ")}…`
+                : t("部署.还没收到")}
+            </span>
+          ),
+        },
+      ]
+    : [];
+
+  return (
+    <可折叠区块
+      标题={t("部署.设备")}
+      徽标={
+        <标签 语气={异常 ? "警示" : 是运行 ? "强调" : 已连接 ? "成功" : "警示"}>
+          {态名(态)}
+        </标签>
+      }
+    >
+      <p className="text-dim">{t("部署.设备说明")}</p>
+      <p className="mt-1 text-[0.85em]" style={{ color: "var(--warn)" }}>
+        {t("部署.模拟后端")}
+      </p>
+
+      {/* 状态机：把"在哪一格"画出来，比一个词更清楚 */}
+      <ol className="mt-2 flex flex-wrap items-center gap-1 text-[0.78em]">
+        {阶.map((格, i) => {
+          const 到达 = 阶.indexOf(态) >= i && 阶.includes(态);
+          return (
+            <li key={格} className="flex items-center gap-1">
+              {i ? <span className="text-dim">→</span> : null}
+              <span
+                className="rounded px-1.5 py-0.5 等宽"
+                style={{
+                  background: 到达 ? "var(--accent)" : "var(--bg-frame)",
+                  color: 到达 ? "var(--fg-on-accent)" : "var(--fg-dim)",
+                }}
+              >
+                {态名(格)}
+              </span>
+            </li>
+          );
+        })}
+        {异常 ? (
+          <li className="flex items-center gap-1">
+            <span className="text-dim">→</span>
+            <span className="rounded px-1.5 py-0.5 等宽"
+                  style={{ background: "var(--danger)", color: "#fff" }}>
+              {态名(态)}
+            </span>
+          </li>
+        ) : null}
+      </ol>
+
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <按钮 种类="次" 尺寸="小" disabled={忙 || !可发} on按下={() => void 动("打开")}>
+          {t("部署.打开")}
+        </按钮>
+        <按钮 种类="主" 尺寸="小" disabled={忙 || !可发 || 态 !== "已连接（未使能）"}
+              on按下={() => void 动("使能")}>
+          {t("部署.使能")}
+        </按钮>
+        <按钮 种类="主" 尺寸="小" disabled={忙 || !可发 || 态 !== "使能中"}
+              on按下={() => void 动("进运行")}>
+          {t("部署.进运行")}
+        </按钮>
+        <按钮 种类="次" 尺寸="小" disabled={忙 || !可发 || !已连接}
+              on按下={() => void 动("停止")}>
+          {t("部署.停止")}
+        </按钮>
+        <按钮 种类="次" 尺寸="小" disabled={忙 || !可发 || !已连接}
+              on按下={() => void 动("急停")}>
+          {t("部署.急停")}
+        </按钮>
+        <按钮 种类="次" 尺寸="小" disabled={忙 || !可发 || !已连接}
+              on按下={() => void 动("演练断线")}>
+          {t("部署.演练")}
+        </按钮>
+        <按钮 种类="次" 尺寸="小" disabled={忙 || !可发}
+              on按下={() => void 动("导出审计")}>
+          {t("部署.导出审计")}
+        </按钮>
+      </div>
+
+      {设备 && 遥测.length ? (
+        <div className="mt-2">
+          <数值表 行={遥测} />
+        </div>
+      ) : null}
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <劣化滑块 名={t("部署.延迟")} 值={设备?.延迟毫秒 ?? 0} 上限={60} 步={1}
+                  单位="ms" 禁用={!已连接 || 忙}
+                  on改={(v) => void 动("设劣化", { 延迟毫秒: v })} />
+        <劣化滑块 名={t("部署.丢包")} 值={(设备?.丢包率 ?? 0) * 100} 上限={50} 步={1}
+                  单位="%" 禁用={!已连接 || 忙}
+                  on改={(v) => void 动("设劣化", { 丢包率: v / 100 })} />
+        <劣化滑块 名={t("部署.抖动")} 值={设备?.抖动毫秒 ?? 0} 上限={20} 步={0.5}
+                  单位="ms" 禁用={!已连接 || 忙}
+                  on改={(v) => void 动("设劣化", { 抖动毫秒: v })} />
+        <劣化滑块 名={t("部署.量化")} 值={设备?.编码器分辨率 ?? 0} 上限={0.02} 步={0.001}
+                  单位="rad" 禁用={!已连接 || 忙}
+                  on改={(v) => void 动("设劣化", { 编码器分辨率: v })} />
+      </div>
+
+      {设备?.审计?.length ? (
+        <div className="mt-2">
+          <div className="text-[0.85em] text-dim">{t("部署.审计")}</div>
+          <ul className="mt-1 max-h-[132px] space-y-0.5 overflow-y-auto">
+            {设备.审计.slice().reverse().map((条, i) => (
+              <li key={`${条.时刻}-${i}`} className="flex items-baseline gap-1.5 text-[0.78em]">
+                <span className="flex-none text-dim 等宽">{条.类别}</span>
+                <span className="min-w-0 flex-1 truncate" title={条.内容}>{条.内容}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </可折叠区块>
+  );
+}
+
+/** 劣化参数滑块：改完立刻生效（不需要"应用"按钮，便于现场演示） */
+function 劣化滑块({
+  名, 值, 上限, 步, 单位, 禁用, on改,
+}: {
+  名: string; 值: number; 上限: number; 步: number; 单位: string;
+  禁用: boolean; on改: (v: number) => void;
+}) {
+  return (
+    <label className="block text-[0.8em]">
+      <span className="flex items-baseline gap-1">
+        <span className="text-dim">{名}</span>
+        <span className="flex-1" />
+        <span className="等宽">{`${值.toFixed(步 < 1 ? 2 : 0)} ${单位}`}</span>
+      </span>
+      <input
+        type="range"
+        className="mt-0.5 w-full"
+        min={0}
+        max={上限}
+        step={步}
+        value={值}
+        disabled={禁用}
+        onChange={(e) => on改(Number(e.target.value))}
+        aria-label={名}
+      />
+    </label>
   );
 }

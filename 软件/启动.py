@@ -433,6 +433,19 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 print(f"⚠ 病态检出不可用（监控页不会有告警）：{_异常}")
                 _观测 = None
 
+            # 设备连接桥：部署页的控制端（模拟后端 + 安全层 + 审计）
+            #   ★ 界面只"请求"，进「运行」必须由人显式点按（规格 B3-8）。
+            try:
+                import 设备.连接桥 as _连接桥
+                _设备桥 = _连接桥.连接桥(_发布出口,
+                                        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                        自由度=int(getattr(model, "nq", 6) or 6))
+                注册表.加插件(_设备桥)
+                print("【设备】部署页已就绪（模拟后端；**不是真机**）", flush=True)
+            except Exception as _异常:                                    # noqa: BLE001
+                print(f"⚠ 设备连接不可用（部署页只能导出包）：{_异常}")
+                _设备桥 = None
+
             # 部署器：导出可带走的包（**不连真机** —— 这个软件没有传输层）
             try:
                 import 部署桥 as _部署桥
@@ -985,6 +998,13 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     try:
                         _观测.判定(float(data.time), _time.perf_counter())
                     except Exception as _e:                               # noqa: BLE001
+                        pass
+                # 设备链路泵：没人读状态就没有遥测，看门狗也永远不会触发。
+                #   （真机同理：控制循环停了，安全逻辑也就停了。）
+                if _设备桥 is not None:
+                    try:
+                        _设备桥.也许泵(_time.perf_counter())
+                    except Exception:                                     # noqa: BLE001
                         pass
                 # 系统指标（1 Hz）：RTF / 步频 / 内存。
                 #   步数用 `data.time / timestep` 反推不稳，直接用 mujoco 的累计计数；
