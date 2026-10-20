@@ -31,6 +31,10 @@ export function 规划视图() {
   // 约束：空 = 用后端按模型推算的默认值（界面上写明是"估算"）。
   //   ★ 给用户的是关节空间的量（rad/s、rad/s²），不是 s 空间的 ——
   //     s 空间的数与实际快慢差一个路径长度，用户从界面上的数推不出会发生什么。
+  const [笛卡尔文本, 设笛卡尔文本] = useState(
+    // 给一行示例，让用户知道格式（空着的话没人知道要填什么）
+    "0.30  0.00  0.55\n0.30  0.00  0.65\n0.38 -0.05  0.70",
+  );
   const [速度上限, 设速度上限] = useState("");
   const [加速度上限, 设加速度上限] = useState("");
   const 文件框 = useRef<HTMLInputElement | null>(null);
@@ -61,6 +65,46 @@ export function 规划视图() {
     return 文本.trim() && Number.isFinite(值) && 值 > 0 && 自由度 > 0
       ? Array.from({ length: 自由度 }, () => 值)
       : undefined;
+  };
+
+  /** 解析「每行 x y z」的笛卡尔航点文本 —— 报错带行号，不静默丢 */
+  const 解析笛卡尔 = (文本: string): { 点们: number[][]; 问题: string } => {
+    const 点们: number[][] = [];
+    const 行们 = 文本.split("\n");
+    for (let i = 0; i < 行们.length; i += 1) {
+      const 原 = 行们[i].trim();
+      if (!原 || 原.startsWith("#")) continue;
+      const 段 = 原.split(/[,;\t ]+/).filter(Boolean).map(Number);
+      if (段.length !== 3 || 段.some((x) => !Number.isFinite(x))) {
+        return { 点们, 问题: `第 ${i + 1} 行不是 3 个数字（x y z）` };
+      }
+      点们.push(段);
+    }
+    if (点们.length < 2) return { 点们, 问题: `只解析出 ${点们.length} 个点，至少 2 个` };
+    return { 点们, 问题: "" };
+  };
+
+  const 跑笛卡尔 = async () => {
+    const { 点们, 问题 } = 解析笛卡尔(笛卡尔文本);
+    if (问题) {
+      设导入({ 航点: [], 行数: 0, 列数: 0, 跳过: 0, 问题 });
+      return;
+    }
+    设导入(null);
+    设忙(true);
+    try {
+      const 起于 = 记命令发出();
+      命令收尾(
+        "命令.规划",
+        await 命令.笛卡尔规划(
+          点们.map((xyz) => ({ xyz })),
+          { 速度上限: 数们(速度上限), 加速度上限: 数们(加速度上限) },
+        ),
+        起于,
+      );
+    } finally {
+      设忙(false);
+    }
   };
 
   const 跑 = async (动作: "记录航点" | "清空航点" | "规划") => {
@@ -213,6 +257,31 @@ export function 规划视图() {
 
         {!成功 && 航点数 < 2 ? (
           <p className="mt-1.5 text-[0.82em] text-dim">{t("规划.需要航点")}</p>
+        ) : null}
+
+        <details className="mt-2">
+          <summary className="cursor-pointer text-[0.85em] text-dim">{t("规划.笛卡尔")}</summary>
+          <p className="mt-1 text-[0.8em] text-dim">{t("规划.笛卡尔.说明")}</p>
+          <textarea
+            className="参数输入 mt-1 w-full font-mono"
+            rows={3}
+            value={笛卡尔文本}
+            onChange={(e) => 设笛卡尔文本(e.target.value)}
+            spellCheck={false}
+            aria-label={t("规划.笛卡尔")}
+          />
+          <div className="mt-1">
+            <按钮 种类="次" 尺寸="小" disabled={忙} on按下={() => void 跑笛卡尔()}>
+              {t("规划.笛卡尔.算")}
+            </按钮>
+          </div>
+        </details>
+
+        {规划?.逆解 ? (
+          <div className="mt-2 text-[0.82em]">
+            <span className="text-dim">{t("规划.逆解")}：</span>
+            <span className="等宽">{规划.逆解}</span>
+          </div>
         ) : null}
 
         {导入 ? (

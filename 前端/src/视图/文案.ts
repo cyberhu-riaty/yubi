@@ -154,6 +154,13 @@ const 表 = {
     "灰线=上次，蓝线=本次；横轴是路径参数 s。只有航点相同才出对比——路径不同时比快慢没有意义。",
     "Grey = previous, blue = current; x-axis is path parameter s. Compared only when the waypoints are identical.",
   ],
+  "规划.笛卡尔": ["笛卡尔航点（逆解）", "Cartesian waypoints (IK)"],
+  "规划.笛卡尔.说明": [
+    "每行 `x y z`（米，末端执行器的世界坐标）。后端用阻尼最小二乘解成关节航点再规划；**只支持位置，姿态约束未实现**。解不出来会报第几个点。",
+    "One `x y z` per line (metres, world frame of the end effector). The backend solves it into joint waypoints with damped least squares, then plans. Position only — orientation constraints are not implemented. Failures report which point.",
+  ],
+  "规划.笛卡尔.算": ["逆解并规划", "Solve & plan"],
+  "规划.逆解": ["逆解", "IK"],
   "规划.速度上限": ["速度上限", "Speed cap"],
   "规划.加速度上限": ["加速度上限", "Accel cap"],
   "规划.自动": ["自动", "auto"],
