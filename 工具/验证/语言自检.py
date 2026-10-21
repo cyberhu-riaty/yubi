@@ -172,13 +172,22 @@ def 主() -> int:
         用例("命令行乱值被忽略（回默认）", 语言 == 文案.中文, 来源)
 
         # ---- ④ 防漏闸门：面板里不许有硬编码界面中文 ----
-        文件 = [os.path.join(面板目录, f) for f in sorted(os.listdir(面板目录)) if f.endswith(".py")]
-        文件 += [os.path.join(包根, "软件", "菜单栏.py")]
+        # ★ 发布版可能**不带**官方 ImGui 面板（自研界面不需要它们）。
+        #   目录/文件不在就跳过这一段，而不是抛 FileNotFoundError ——
+        #   校验脚本不能因为"少了一个可选前端"就整条红。
+        文件 = []
+        if os.path.isdir(面板目录):
+            文件 += [os.path.join(面板目录, f)
+                     for f in sorted(os.listdir(面板目录)) if f.endswith(".py")]
+        for 可选 in ("菜单栏.py",):
+            候选 = os.path.join(包根, "软件", 可选)
+            if os.path.exists(候选):
+                文件.append(候选)
         漏网 = []
         for 路径 in 文件:
             for 一条 in 界面中文(读(路径) or ""):
                 漏网.append(f"{os.path.basename(路径)} {一条}")
-        用例("面板里没有硬编码界面中文（必须走 文案.取）", not 漏网,
+        用例(f"{len(文件)} 个面板文件里没有硬编码界面中文（必须走 文案.取）", not 漏网,
             "；".join(漏网[:12]) + ("…" if len(漏网) > 12 else ""))
 
         # ---- ③b 面板名双语 + 字体兜底的判定逻辑 ----

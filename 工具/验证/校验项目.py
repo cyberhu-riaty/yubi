@@ -220,6 +220,67 @@ def 扫主程序未定义名(路径: str) -> list[str]:
             # 实测 `启动模型, 启动模型原因 = 决定启动模型()` 就被误报成未定义。
             模块级.update(收集赋值目标(节点))
 
+    # ★ 闭包：嵌套函数能读到**外层函数**的局部变量。
+    #   第一版只收集"本函数自己的 Store + 模块级"，于是 `主程序窗口.py` 里
+    #   嵌套的 `收到状态()` 用到外层的 `视口槽` 就被误报成"未定义"。
+    #   这里先把"每个函数的祖先链"建出来，检查时把祖先的局部名也算进来。
+    祖先: dict[int, list] = {}
+
+    def _记祖先(节点, 链):
+        for 子 in ast.iter_child_nodes(节点):
+            if isinstance(子, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                祖先[id(子)] = list(链)
+                _记祖先(子, 链 + [子])
+            elif isinstance(子, ast.ClassDef):
+                _记祖先(子, 链)          # 类体不算闭包作用域
+            else:
+                _记祖先(子, 链)
+
+    _记祖先(语法树, [])
+
+    def _遍历本层(节点):
+        """遍历本函数体，但**不进入**嵌套的函数/类/lambda。
+
+        ★ 为什么要停边界：每个嵌套函数会**单独**被检查一次；
+          如果外层也扫进去，嵌套函数的形参（如 `收到状态(快照)` 的 `快照`）
+          在外层就是"未定义" → 假红。名字解析必须是不可穿透的作用域。
+        """
+        for 子 in ast.iter_child_nodes(节点):
+            # 嵌套函数/类**本身**要 yield（它的名字是本层的局部名），
+            # 但它的**函数体**不能进（那是它自己的作用域）。
+            yield 子
+            if isinstance(子, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                continue
+            yield from _遍历本层(子)
+
+    def _本层名字(函数节点) -> set[str]:
+        """这个函数**自己**引入的名字（不含祖先）。"""
+        名: set[str] = {a.arg for a in 函数节点.args.args}
+        名 |= {a.arg for a in 函数节点.args.kwonlyargs}
+        if 函数节点.args.vararg:
+            名.add(函数节点.args.vararg.arg)
+        if 函数节点.args.kwarg:
+            名.add(函数节点.args.kwarg.arg)
+        for 子 in _遍历本层(函数节点):
+            if isinstance(子, ast.Name) and isinstance(子.ctx, ast.Store):
+                名.add(子.id)
+            if isinstance(子, ast.arg):
+                名.add(子.arg)
+            if isinstance(子, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and 子 is not 函数节点:
+                名.add(子.name)
+            if isinstance(子, (ast.Import, ast.ImportFrom)):
+                for a in 子.names:
+                    名.add((a.asname or a.name).split(".")[0])
+            if isinstance(子, ast.ExceptHandler) and 子.name:
+                名.add(子.name)
+            if isinstance(子, ast.comprehension) and isinstance(子.target, ast.Name):
+                名.add(子.target.id)
+            if isinstance(子, (ast.For, ast.AsyncFor)) and isinstance(子.target, ast.Name):
+                名.add(子.target.id)
+            if isinstance(子, ast.withitem) and isinstance(子.optional_vars, ast.Name):
+                名.add(子.optional_vars.id)
+        return 名
+
     答案: list[str] = []
     for 节点 in ast.walk(语法树):
         if not isinstance(节点, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -230,7 +291,7 @@ def 扫主程序未定义名(路径: str) -> list[str]:
         if 节点.args.kwarg:
             局部.add(节点.args.kwarg.arg)
         声明: set[str] = set()
-        for 子 in ast.walk(节点):
+        for 子 in _遍历本层(节点):
             if isinstance(子, ast.Global):
                 声明.update(子.names)
             if isinstance(子, ast.Name) and isinstance(子.ctx, ast.Store):
@@ -248,10 +309,15 @@ def 扫主程序未定义名(路径: str) -> list[str]:
                 局部.add(子.target.id)
             if isinstance(子, ast.withitem) and isinstance(子.optional_vars, ast.Name):
                 局部.add(子.optional_vars.id)
+        # 闭包：把每一层祖先函数自己引入的名字也算进"可见"
+        外层: set[str] = set()
+        for 祖 in 祖先.get(id(节点), []):
+            外层 |= _本层名字(祖)
         缺 = sorted({
-            子.id for 子 in ast.walk(节点)
+            子.id for 子 in _遍历本层(节点)
             if isinstance(子, ast.Name) and isinstance(子.ctx, ast.Load)
             and 子.id not in 局部 and 子.id not in 模块级 and 子.id not in 声明
+            and 子.id not in 外层
             and not hasattr(builtins, 子.id)
         })
         if 缺:
@@ -312,9 +378,17 @@ def main() -> int:
     # ---- ①-c 入口检查：主程序里有没有"未定义的名字"（闪退级事故的防线）----
     #   背景：`注册表 = 插件框架.安全注册表(插件)` 漏改成 `插件清单`，
     #   导致双击图标闪退；而开窗冒烟测试因为绕过 main() 而全绿。
-    主程序 = os.path.join(软件目录, "主程序.py")
-    入口问题 = 扫主程序未定义名(主程序) if os.path.exists(主程序) else ["找不到 软件/主程序.py"]
-    结.检查("主程序.py 里没有未定义的名字（会闪退）", not 入口问题, "；".join(入口问题))
+    # ★ 入口可能有多个版本（自研窗口 / 官方 ImGui；发布版可能只带其中一个）。
+    #   这里**按存在的那个查**，不写死文件名 —— 否则裁掉一个入口，整套校验就红。
+    入口候选 = ["主程序窗口.py", "主程序Web.py", "主程序.py"]
+    主程序 = next((os.path.join(软件目录, n) for n in 入口候选
+                   if os.path.exists(os.path.join(软件目录, n))), "")
+    入口名 = os.path.basename(主程序) if 主程序 else "（无入口）"
+    if not 主程序:
+        结.检查("找到至少一个启动入口", False, "软件/ 下没有 主程序*.py")
+    else:
+        入口问题 = 扫主程序未定义名(主程序)
+        结.检查(f"{入口名} 里没有未定义的名字（会闪退）", not 入口问题, "；".join(入口问题))
 
     # ---- ①-c2 每个软件模块都能 import（抓"类声明被写坏"这类问题）----
     #   为什么单独查这一条：本轮真出过一次 —— 加字段时注释插错位置，把
@@ -324,7 +398,7 @@ def main() -> int:
     import importlib
     模块名们 = sorted(
         os.path.splitext(f)[0] for f in os.listdir(软件目录)
-        if f.endswith(".py") and f != "主程序.py"      # 主程序由下面的 --冒烟 覆盖
+        if f.endswith(".py") and not f.startswith("主程序")   # 入口由下面的 --冒烟/--检查 覆盖
     )
     if 软件目录 not in sys.path:
         sys.path.insert(0, 软件目录)
@@ -343,18 +417,19 @@ def main() -> int:
     #     当初漏改变量名导致双击闪退，正是崩在这一行，而当时的自检全是绿的。
     #     `--冒烟` 会把 环境自检 → 装配 → 参数解析 → 注册表组装 → ViewerConfig
     #     全部真跑一遍，只差最后"开窗"这一步，所以闪退类缺陷无处可藏。
-    进程 = subprocess.run([sys.executable, 主程序, "--冒烟"], cwd=包根,
-                          capture_output=True, text=True, timeout=180)
-    结.检查("`主程序.py --冒烟` 能走到开窗前（exit=0）", 进程.returncode == 0,
-            (进程.stderr or 进程.stdout or "")[-500:])
-    结.检查("`主程序.py --检查` 能正常跑完（exit=0）",
-            subprocess.run([sys.executable, 主程序, "--检查"], cwd=包根,
-                          capture_output=True, text=True, timeout=120).returncode == 0,
-            "见上面输出")
-    结.检查("`主程序.py --列项目` 能正常跑完（exit=0）",
-            subprocess.run([sys.executable, 主程序, "--列项目"], cwd=包根,
-                          capture_output=True, text=True, timeout=180).returncode == 0,
-            "见上面输出")
+    # ★ 只跑**这个入口真的支持**的参数：不同入口的参数表不一样
+    #   （自研窗口有 --检查/--项目/--开重力，官方 ImGui 有 --冒烟/--列项目）。
+    #   直接套用会得到"参数不存在"的假红。
+    if 主程序:
+        _源码 = open(主程序, encoding="utf-8").read()
+        for 参数, 说明 in (("--冒烟", "能走到开窗前"), ("--检查", "能正常跑完"),
+                           ("--列项目", "能正常跑完")):
+            if 参数 not in _源码:
+                continue          # 这个入口没这个参数，跳过（不是缺陷）
+            进程 = subprocess.run([sys.executable, 主程序, 参数], cwd=包根,
+                                  capture_output=True, text=True, timeout=180)
+            结.检查(f"`{入口名} {参数}` {说明}（exit=0）", 进程.returncode == 0,
+                    (进程.stderr or 进程.stdout or "")[-500:])
 
     # ---- ② 项目文件 ----
     项目们 = 项目.列出项目()
