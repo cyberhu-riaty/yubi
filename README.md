@@ -33,36 +33,37 @@
 
 当前运行环境以 macOS 和 Python 3.10 为基线，并锁定 MuJoCo 3.13.0。
 
-**双击使用**：桌面上的 **`小软件.app`** —— 起服务并自动打开浏览器界面。
-另一个 **`小软件（原生界面）.app`** 是原来的 ImGui 原生界面（功能不变，留作对照与退路）。
-
-**命令行**：
+> ⚠️ **仓库里没有 `.app`。** 应用包是本机生成物（`*.app/` 在 `.gitignore` 里），
+> clone 下来只有源码。想双击启动，先按下面第 3 步自己打一个。
 
 ```bash
+# 1. 取代码 + 重建环境（.venv 不进库，约 190 MB，可重建）
 git clone https://github.com/cyberhu-riaty/yubi.git
 cd yubi
 bash 工具/重建环境.sh
 
-# ① Web 界面（无窗宿主：仿真在主线程，界面在浏览器）
-.venv/bin/python 软件/主程序Web.py --检查      # 产物/契约/模型/端口逐条自检
-.venv/bin/python 软件/主程序Web.py             # 起服务 + 自动开浏览器
+# 2. 直接跑（三个入口，任选）
+.venv/bin/python 软件/主程序窗口.py            # ★ 主入口：自研窗口 = React 界面 + 原生 3D
+.venv/bin/python 软件/主程序Web.py             # 浏览器界面（无原生 3D）
+.venv/bin/python 软件/主程序.py                # 官方 ImGui 界面（19 个官方面板）
 
-# ② 原生界面（官方 ImGui 窗口 + Filament 3D）
-.venv/bin/python 软件/主程序.py --检查
-.venv/bin/python 软件/主程序.py
+#    想先自检：任一入口加 --检查
+.venv/bin/python 软件/主程序窗口.py --检查
+
+# 3. 想要桌面图标：自己打 .app（会生成到包根，双击即可）
+.venv/bin/python 工具/打包应用.py --输出名 "小软件"              --主程序 软件/主程序窗口.py
+.venv/bin/python 工具/打包应用.py --输出名 "小软件（原生界面）"   --主程序 软件/主程序.py
 ```
 
-**两个入口的现状**：
+**三个入口的关系**（同一个数据层，三种前端）：
 
-| | `小软件.app`（自研窗口） | `小软件（原生界面）.app`（官方 ImGui） |
+| 入口 | 界面 | 3D |
 |---|---|---|
-| 界面 | React（Web 技术栈） | 官方 ImGui 面板 |
-| **3D 视口** | ✅ **MuJoCo 原生渲染**，实测约 58 fps，与界面左右分屏 | ✅ Filament |
-| 真物理 / 算法 / 参数 / 辨识 / 录制 | ✅ | ✅ |
-| 5 套风格 / 中英双语 | ✅ | ✅ |
-| 官方 19 个 ImGui 面板 | ❌（能力由自研界面覆盖） | ✅ |
+| `软件/主程序窗口.py` | React（自研窗口内） | ✅ **MuJoCo 原生渲染**，约 58 fps，与界面左右分屏 |
+| `软件/主程序Web.py` | 浏览器 | ❌ 无原生 3D（只有中区占位） |
+| `软件/主程序.py` | 官方 ImGui 面板 | ✅ Filament（官方渲染器） |
 
-> 3D 是**真 MuJoCo 渲染**，不是网页里画的：由宿主窗口把原生视口放在界面右侧，
+> 3D 是**真 MuJoCo 渲染**，不是网页里画的：宿主窗口把原生视口放在界面右侧，
 > 与 React 界面同级。前端**不按 URDF 自己算正运动学**——那会与物理漂移。
 
 默认使用中文界面；更多启动参数、界面说明和算法扩展方式见[使用手册](报告/05_工程规范与治理/使用手册.md)与[软件说明](软件/README.md)。
@@ -95,7 +96,9 @@ bash 工具/重建环境.sh
 | `07_历史快照/` | 历史版本说明与早期交付物（PPT 等） |
 | `08_演示与汇报/` | 演示流程与台上手卡（导师/组会现场演示） |
 
-顶层保留的仓库标准文件：`README.md`（本文件）、`LICENSE`、`CONTRIBUTING.md`、`CHANGELOG.md`、`requirements.lock`、`.gitignore`、`.github/`，以及启动入口 `小软件.app`。
+顶层保留的仓库标准文件：`README.md`（本文件）、`LICENSE`、`CONTRIBUTING.md`、`CHANGELOG.md`、`requirements.lock`、`.gitignore`、`.github/`。
+
+> `.app` 应用包**不在库里**（`.gitignore` 的 `*.app/`）——它是本机生成物，用 `工具/打包应用.py` 自己打，见「快速开始」第 3 步。
 
 ## 参与协作
 
