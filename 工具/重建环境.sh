@@ -1,9 +1,9 @@
 #!/bin/bash
-# 重建小软件的运行环境（换机器后跑一次即可）
+# 重建驭臂的运行环境（换机器后跑一次即可）
 #
 # 为什么需要它：
-#   .app 本身只含"启动器 + 图标"，不含 Python 环境（环境 300+ MB，且路径写死）。
-#   所以换台机器后，先跑这个脚本生成 .venv，再双击 .app。
+#   .venv 有 190 MB 左右，且路径写死，不能随仓库分发。
+#   换台机器后先跑这个脚本，再启动 软件/主程序窗口.py。
 #
 # 为什么不用 conda 的 robot 环境直接用：
 #   conda 渠道装的 mujoco 是"零件版"，**不含界面层和插件系统**
@@ -29,10 +29,16 @@ if [ -z "$BASE" ]; then
 fi
 echo "基础 Python：$BASE"
 "$BASE" -c "import sys; print('  版本', sys.version.split()[0])"
+"$BASE" - <<'PY'
+import sys
+if not (sys.version_info[:2] == (3, 10)):
+    print(f"  ⚠ 本机实测基线是 Python 3.10，当前是 {sys.version.split()[0]}；"
+          "其他版本可能没有对应的 mujoco wheel。")
+PY
 
 # ---------- 2. 造"叠加层"（借用基础环境的 numpy 等，但 mujoco 用新的）----------
 echo
-echo "== 1/3 创建叠加层 .venv =="
+echo "== 1/4 创建叠加层 .venv =="
 if [ -x "$PKG/.venv/bin/python" ]; then
   echo "  已存在，跳过创建（要重建就先把 .venv 删掉）"
 else
@@ -43,7 +49,7 @@ fi
 
 # ---------- 3. 装官方完整版 mujoco（优先用离线包）----------
 echo
-echo "== 2/3 安装 mujoco 3.13.0 =="
+echo "== 2/4 安装 mujoco 3.13.0 =="
 if ls "$离线依赖目录/"mujoco-*.whl >/dev/null 2>&1; then
   echo "  用离线包安装"
   "$PKG/.venv/bin/pip" install --no-index --find-links="$离线依赖目录" "mujoco==3.13.0"
@@ -54,8 +60,24 @@ fi
 
 # ---------- 4. 修 macOS 上的 glfw（不修则 mjpython 开不了窗）----------
 echo
-echo "== 3/3 修 glfw 动态库（macOS 必需）=="
+echo "== 3/4 修 glfw 动态库（macOS 必需）=="
 "$PKG/.venv/bin/pip" install --force-reinstall --no-deps "glfw==2.10.2"
+
+# ---------- 4/4 界面通信与 macOS 窗口依赖 ----------
+#   · websockets：Web 桥（前端 ↔ Python）必须
+#   · PyObjC：宿主窗口（NSWindow + WKWebView + NSOpenGLView）必须
+#   缺了它们时窗口入口会打印人话提示，浏览器入口也起不来（Web 桥依赖 websockets）。
+echo
+echo "== 4/4 安装界面依赖 =="
+"$PKG/.venv/bin/pip" install "websockets>=13" \
+    || echo "  ⚠ websockets 没装上：Web 桥不可用"
+if [ "$(uname -s)" = "Darwin" ]; then
+  "$PKG/.venv/bin/pip" install \
+      pyobjc-framework-Cocoa pyobjc-framework-WebKit pyobjc-framework-Quartz \
+      || echo "  ⚠ PyObjC 没装上：宿主窗口不可用（可改用 软件/主程序Web.py）"
+else
+  echo "  （非 macOS：跳过 PyObjC，宿主窗口不可用）"
+fi
 
 # ---------- 5. 可选：参数辨识用的依赖 ----------
 if ls "$离线依赖目录/"scipy-*.whl >/dev/null 2>&1; then
@@ -64,27 +86,14 @@ if ls "$离线依赖目录/"scipy-*.whl >/dev/null 2>&1; then
   "$PKG/.venv/bin/pip" install --no-index --find-links="$离线依赖目录" \
       scipy colorama imageio imageio-ffmpeg plotly pyyaml tabulate typing_extensions \
       || echo "  （部分依赖没装上，参数辨识可能不可用；界面和执行控制不受影响）"
-fi
-
-# ---------- 6. 可选：中文字体补丁（让面板能显示中文）----------
-#   官方 UI 字体 Atkinson Hyperlegible 是纯拉丁（362 个码位），ImGui 缺字形会回退画 '?'
-#   → 面板上任何中文都是一串问号。这个补丁把汉字字形**并进字体文件**（不碰二进制；
-#   靠的是官方用的 Dear ImGui 1.92 动态字形图集：用到哪个码位就现烘焙哪个）。
-#   ★ 生成物只写进 .venv、**不入库** —— 汉字源是 macOS 自带的 STHeiti（Apple 许可只
-#     允许在 macOS 上使用），合并后再分发有许可风险；本机现场生成就没这个问题。
-#   需要 fontTools。没有就跳过，软件照常能用（面板只画 ASCII，中文在终端正常）。
-echo
-echo "== 中文字体补丁（可选：让面板能显示中文）=="
-if "$PKG/.venv/bin/python" -c "import fontTools" 2>/dev/null; then
-  "$PKG/.venv/bin/python" "$PKG/工具/打补丁_中文字体.py" \
-      || echo "  （补丁没打上，不影响使用：面板继续只画 ASCII，终端仍是中文）"
 else
-  echo "  跳过：当前环境没有 fontTools。想要中文面板就装一下再重跑本步："
-  echo "    \"$PKG/.venv/bin/pip\" install fonttools"
-  echo "    \"$PKG/.venv/bin/python\" \"$PKG/工具/打补丁_中文字体.py\""
+  echo
+  echo "== 参数辨识依赖（可选）=="
+  echo "  离线包不在，跳过；需要辨识时手动装："
+  echo "    \"$PKG/.venv/bin/pip\" install scipy colorama imageio imageio-ffmpeg plotly pyyaml tabulate typing_extensions"
 fi
 
-# ---------- 7. 前端生成物（把契约与风格表同步到前端）----------
+# ---------- 6. 前端生成物（把契约与风格表同步到前端）----------
 #   前端是 Web 技术栈，但它**不是**运行时的必需品：
 #     · `软件/web/` 里若没有构建产物，Web 数据出口会自动回落到内置的单文件仪表盘；
 #     · 但只要前端源码在，生成物就必须与来源同步，否则前端会拿旧契约解析新数据。
@@ -97,7 +106,7 @@ echo "== 前端生成物（契约 → TS、风格表 → CSS）=="
 #   注意：**构建**前端（vite build）需要 Node，且只在"改了前端"时才需要。
 #   构建产物入库，所以普通用户双击启动不需要 Node。要重新构建见 前端/约定.md §四。
 
-# ---------- 8. 自检 ----------
+# ---------- 7. 自检 ----------
 echo
 echo "== 自检 =="
 "$PKG/.venv/bin/python" - <<'PY'
@@ -112,8 +121,21 @@ try:
     print("  ✓ 界面层与插件系统可用")
 except Exception as e:
     print("  ✗ 界面层不可用：", e); sys.exit(1)
+try:
+    import websockets
+    print("  ✓ websockets", websockets.__version__)
+except Exception as e:
+    print("  ⚠ websockets 不可用（Web 桥起不来）：", e)
+if sys.platform == "darwin":
+    try:
+        import objc, AppKit, WebKit  # noqa: F401
+        print("  ✓ PyObjC（宿主窗口可用）")
+    except Exception as e:
+        print("  ⚠ PyObjC 不可用（宿主窗口起不来，可改用 软件/主程序Web.py）：", e)
 PY
 
 echo
-echo "完成。双击启动："
-echo "  open \"$PKG/$(basename "$PKG").app\""
+echo "完成。启动："
+echo "  \"$PKG/.venv/bin/python\" \"$PKG/软件/主程序窗口.py\""
+echo "  （浏览器入口：\"$PKG/.venv/bin/python\" \"$PKG/软件/主程序Web.py\"）"
+echo "  想要双击图标：.venv/bin/python 工具/打包应用.py --主程序 软件/主程序窗口.py"

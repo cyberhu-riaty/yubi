@@ -531,7 +531,7 @@ def main(argv: list[str]) -> int:
         print(f"  ✗ {名:24s} {因[:100]}")
     print()
     print("  加载某个模型：")
-    print("    ./.venv/bin/python 软件/主程序.py --模型 模型/<标识>/<默认模型>_torque.xml")
+    print("    ./.venv/bin/python 软件/主程序窗口.py --模型 模型/<标识>/<默认模型>_torque.xml")
     return 0 if not 失败 else 1
 
 

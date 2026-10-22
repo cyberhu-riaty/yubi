@@ -142,8 +142,8 @@ def _缺东西提示(名: str | None = None) -> str:
         f"  Studio 只在官方 **pip 包**（mujoco >= 3.12 完整版）里有；\n"
         f"  conda 渠道装的 mujoco 是「零件版」，不含界面层与插件系统。\n\n"
         f"  解决：\n"
-        f"    cd \"$HOME/Desktop/驭臂\"\n"
-        f"    .venv/bin/python 软件/主程序.py\n"
+        f"    cd <仓库根目录>\n"
+        f"    .venv/bin/python 软件/主程序窗口.py\n"
         f"  （.venv 已按叠加层方式配好：include-system-site-packages = true）\n"
     )
 

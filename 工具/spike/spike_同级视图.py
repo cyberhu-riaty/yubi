@@ -2,8 +2,7 @@
 spike_同级视图.py —— P2 决定性验证：**原生渲染视图能不能和 WKWebView 同窗口并列**
 
 为什么这个 spike 必须先做（而不是先写代码再试）：
-    `报告/02_决策与架构方案/WebView与原生3D集成调研.md` 的结论是：
-    Tauri / pywebview / 自建 C++ 宿主三条路**全部收敛到同一个未知**：
+    对 Tauri / pywebview / 自建 C++ 宿主三条路的调研**全部收敛到同一个未知**：
 
         「一个 Metal/GL 原生视图，能不能作为 WKWebView 的**同级视图**
           放进同一个 NSWindow，而不出现合成瑕疵？」

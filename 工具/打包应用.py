@@ -412,11 +412,11 @@ def main(argv: list[str]) -> int:
                          "同一台机器上有两个前端时用它区分文件，显示名仍可一致")
     ap.add_argument("--附加参数", default="",
                     help="写进启动器的固定参数（双击传不了参数，所以固定参数要落在包里）")
-    ap.add_argument("--主程序", default="软件/主程序.py",
+    ap.add_argument("--主程序", default="软件/主程序窗口.py",
                     help="主程序相对于包根的路径")
     ap.add_argument("--标识", default=None,
                     help="Bundle Identifier（默认：沿用已有的；没有则按名字自动派生一个唯一 id）")
-    ap.add_argument("--版本", default="0.3", help="版本号")
+    ap.add_argument("--版本", default="0.6.0", help="版本号")
     ap.add_argument("--图标", default=None, help=".icns 路径（默认：工具/图标.icns）")
     ap.add_argument("--不刷新注册", action="store_true",
                     help="不调用 lsregister 刷新系统注册")
