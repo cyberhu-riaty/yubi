@@ -50,6 +50,20 @@ from 模型桥 import 项目状态                                              
 import Web桥 as _Web桥                                                    # noqa: E402
 
 
+class _视口状态快照:
+    """给原生 3D 与运行信息面板的线程安全数值副本。"""
+
+    __slots__ = ("state", "state_sig", "time", "qpos", "qvel", "ctrl")
+
+    def __init__(self, 快照, 数据) -> None:
+        self.state = 快照.state
+        self.state_sig = 快照.state_sig
+        self.time = float(数据.time)
+        self.qpos = 数据.qpos.copy()
+        self.qvel = 数据.qvel.copy()
+        self.ctrl = 数据.ctrl.copy()
+
+
 def 应用主题(窗口插件: list) -> None:
     """界面主题不在这里应用 —— 见下方说明。
 
@@ -649,7 +663,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                                             if 新模型路径 else "（外来模型）")
                     if 新模型路径:
                         try:
-                            _模型桥.记住模型(新模型路径)       # 启动默认②"记住上次模型"
+                            _模型桥.记住模型(新模型路径)       # 记录最近选择；普通启动仍进空场景
                         except Exception:                              # noqa: BLE001
                             pass
 
@@ -815,6 +829,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             try:
                 def 切换模型(模型=None, 路径: str = "", 通知窗口: bool = True):
                     """加载并重绑一个新模型。返回 (是否成功, 给人看的一句话)。"""
+                    nonlocal 当前模型, 当前数据
                     if 模型 is None:
                         if not 路径 or not os.path.exists(路径):
                             return False, f"模型文件不存在：{路径 or '（空路径）'}"
@@ -1029,8 +1044,9 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 #   ★ 其中第 ② 步的"推进物理"由官方的 StepControl 插件完成（见 插件系统.py 的说明），
                 #     它同时负责暂停/单步/倍速/噪声/发散后自动重置 —— 所以这里不再自己管节拍。
                 if 无窗:
-                    # 无窗模式：仿真数据就住在本地变量里，没有句柄要同步
-                    pass
+                    # 无窗宿主切换模型时，回调会替换 `当前模型/当前数据`。
+                    # 每圈在这里取回权威引用，避免 3D 已换模型、物理循环却仍跑旧模型。
+                    model, data = 当前模型, 当前数据
                 else:
                     句柄.model, 句柄.data = model, data
 
@@ -1168,7 +1184,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 # 顺手给 3D 视口（如果有）；失败绝不影响仿真主循环
                 if 状态观察者 is not None:
                     try:
-                        状态观察者(快照)
+                        状态观察者(_视口状态快照(快照, data))
                     except Exception:                                 # noqa: BLE001
                         pass
 

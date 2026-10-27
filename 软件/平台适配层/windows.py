@@ -20,6 +20,8 @@ class Windows(平台能力):
         self._视口模型标签: Any = None
         self._视口状态标签: Any = None
         self._分隔: Any = None
+        self._右分隔: Any = None
+        self._运行信息: Any = None
         self._分隔保存计时器: Any = None
         self._允许保存分栏 = False
         self._模型计时器: Any = None
@@ -80,6 +82,7 @@ class Windows(平台能力):
                 视口槽["视口"] = None
         else:
             from .windows_视口 import MuJoCo视口
+            from .windows_运行信息 import 运行信息面板
 
             模型路径 = os.environ.get("驭臂_当前模型", "")
             视口 = MuJoCo视口(模型路径, 窗口)
@@ -89,6 +92,7 @@ class Windows(平台能力):
             三维外壳 = QWidget(窗口)
             三维外壳.setObjectName("threeDPanel")
             三维外壳.setMinimumWidth(380)
+            三维外壳.setMinimumHeight(320)
             三维布局 = QVBoxLayout(三维外壳)
             三维布局.setContentsMargins(10, 10, 10, 10)
             三维布局.setSpacing(7)
@@ -154,6 +158,25 @@ class Windows(平台能力):
             # 主线程更新顶栏状态，避免后台线程直接操作窗口。
             视口.状态改变.connect(self._更新三维状态)
 
+            # 右列改为上下结构：3D 在上，状态/输入/诊断在下。
+            # 运行信息面板只读视口收到的快照，不接触控制器和仿真线程 MjData。
+            运行信息 = 运行信息面板(视口, 窗口)
+            右分隔 = QSplitter(Qt.Orientation.Vertical, 窗口)
+            右分隔.setObjectName("rightColumnSplitter")
+            右分隔.setChildrenCollapsible(False)
+            右分隔.setOpaqueResize(True)
+            右分隔.setHandleWidth(6)
+            右分隔.setStyleSheet("""
+                QSplitter::handle { background: #d9dfe6; }
+                QSplitter::handle:hover, QSplitter::handle:pressed { background: #2f6feb; }
+            """)
+            右分隔.addWidget(三维外壳)
+            右分隔.addWidget(运行信息)
+            右分隔.setStretchFactor(0, 70)
+            右分隔.setStretchFactor(1, 30)
+            右目标分栏 = self._读取右分栏(int(高))
+            右分隔.setSizes(右目标分栏)
+
             分隔 = QSplitter(Qt.Orientation.Horizontal, 窗口)
             分隔.setChildrenCollapsible(False)
             分隔.setOpaqueResize(True)
@@ -163,9 +186,9 @@ class Windows(平台能力):
                 QSplitter::handle:hover, QSplitter::handle:pressed { background: #2f6feb; }
             """)
             分隔.addWidget(网页)
-            分隔.addWidget(三维外壳)
-            分隔.setStretchFactor(0, 55)
-            分隔.setStretchFactor(1, 45)
+            分隔.addWidget(右分隔)
+            分隔.setStretchFactor(0, 40)
+            分隔.setStretchFactor(1, 60)
             目标分栏 = self._读取分栏(int(宽))
             分隔.setSizes(目标分栏)
             窗口.setCentralWidget(分隔)
@@ -174,6 +197,8 @@ class Windows(平台能力):
 
             self._视口 = 视口
             self._分隔 = 分隔
+            self._右分隔 = 右分隔
+            self._运行信息 = 运行信息
             self._视口槽 = 视口槽
             self._统计数据["3D已接入"] = True
             if 视口槽 is not None:
@@ -193,10 +218,12 @@ class Windows(平台能力):
             分隔保存计时器.setInterval(350)
             分隔保存计时器.timeout.connect(self._保存分栏)
             分隔.splitterMoved.connect(lambda *_: 分隔保存计时器.start())
+            右分隔.splitterMoved.connect(lambda *_: 分隔保存计时器.start())
             self._分隔保存计时器 = 分隔保存计时器
             # QSplitter 在窗口 show 之前还不知道最终可用宽度；显示后再应用一次比例。
             # 600 ms 之前不存盘，避免 Qt 的首次自动布局被误认成“用户拖动”。
             QTimer.singleShot(0, lambda 尺寸=目标分栏: 分隔.setSizes(尺寸))
+            QTimer.singleShot(0, lambda 尺寸=右目标分栏: 右分隔.setSizes(尺寸))
             QTimer.singleShot(600, self._启用分栏保存)
             应用.aboutToQuit.connect(视口.关闭)
 
@@ -258,17 +285,39 @@ class Windows(平台能力):
 
     @staticmethod
     def _读取分栏(总宽: int) -> list[int]:
-        默认 = [max(480, int(总宽 * 0.55)), max(380, int(总宽 * 0.45))]
+        可用默认 = max(960, int(总宽) - 6)
+        左默认 = max(480, min(可用默认 - 480, int(可用默认 * 0.40)))
+        默认 = [左默认, 可用默认 - 左默认]
         try:
             import 模型桥
-            值 = 模型桥.读取设置("Windows分栏", None)
+            # 新布局的右列包含上下两块，使用新键，避免旧的 55:45 比例覆盖新版默认值。
+            值 = 模型桥.读取设置("Windows主分栏V2", None)
             if (isinstance(值, list) and len(值) == 2
                     and all(isinstance(x, (int, float)) and x > 0 for x in 值)):
                 合计 = float(值[0]) + float(值[1])
                 if 合计 > 0:
-                    可用 = max(860, int(总宽) - 6)
-                    左 = max(480, min(可用 - 380, int(可用 * float(值[0]) / 合计)))
+                    可用 = max(960, int(总宽) - 6)
+                    左 = max(480, min(可用 - 480, int(可用 * float(值[0]) / 合计)))
                     return [左, 可用 - 左]
+        except Exception:
+            pass
+        return 默认
+
+    @staticmethod
+    def _读取右分栏(总高: int) -> list[int]:
+        可用默认 = max(490, int(总高) - 6)
+        上默认 = max(320, min(可用默认 - 170, int(可用默认 * 0.70)))
+        默认 = [上默认, 可用默认 - 上默认]
+        try:
+            import 模型桥
+            值 = 模型桥.读取设置("Windows右列分栏", None)
+            if (isinstance(值, list) and len(值) == 2
+                    and all(isinstance(x, (int, float)) and x > 0 for x in 值)):
+                合计 = float(值[0]) + float(值[1])
+                if 合计 > 0:
+                    可用 = max(490, int(总高) - 6)
+                    上 = max(320, min(可用 - 170, int(可用 * float(值[0]) / 合计)))
+                    return [上, 可用 - 上]
         except Exception:
             pass
         return 默认
@@ -278,7 +327,10 @@ class Windows(平台能力):
             return
         try:
             import 模型桥
-            模型桥.写入设置("Windows分栏", [int(x) for x in self._分隔.sizes()])
+            模型桥.写入设置("Windows主分栏V2", [int(x) for x in self._分隔.sizes()])
+            if self._右分隔 is not None:
+                模型桥.写入设置(
+                    "Windows右列分栏", [int(x) for x in self._右分隔.sizes()])
         except Exception as 异常:
             print(f"⚠ 保存 Windows 分栏失败：{type(异常).__name__}: {异常}", flush=True)
 

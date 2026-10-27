@@ -34,6 +34,7 @@ class MuJoCo视口(QWidget):
         self.切换中 = True
         self.错误 = ""
         self._模型路径 = ""
+        self._状态文字 = "正在加载…"
         self._画面: QImage | None = None
         self._拖拽点 = None
         self._平移中 = False
@@ -104,6 +105,19 @@ class MuJoCo视口(QWidget):
     def 统计(self) -> dict:
         return dict(self._统计)
 
+    def 运行信息(self) -> dict:
+        """供 Qt 右下信息面板读取；只返回快照副本，不暴露渲染线程对象。"""
+        with self._最新锁:
+            快照 = self.最新状态
+        return {
+            "模型": os.path.basename(self._模型路径) if self._模型路径 else "",
+            "仿真时间": getattr(快照, "time", None) if 快照 is not None else None,
+            "qpos": getattr(快照, "qpos", ()) if 快照 is not None else (),
+            "qvel": getattr(快照, "qvel", ()) if 快照 is not None else (),
+            "ctrl": getattr(快照, "ctrl", ()) if 快照 is not None else (),
+            "状态": self._状态文字,
+        }
+
     # ---------- Qt 主线程：显示与输入 ----------
     @Slot(object)
     def _接收帧(self, 图像: QImage) -> None:
@@ -113,6 +127,7 @@ class MuJoCo视口(QWidget):
 
     @Slot(str)
     def _接收状态(self, 文字: str) -> None:
+        self._状态文字 = str(文字 or "")
         self.setToolTip(文字)
         self.update()
 

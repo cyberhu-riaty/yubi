@@ -54,9 +54,13 @@ import 项目 as 项目清单
 
 
 def _找模型() -> tuple[str, str]:
-    """与 `主程序Web.py` 同一套顺序（两个入口行为必须一致）。"""
+    """明确指定时加载指定模型，否则先进入有地面和灯光的空场景。"""
     if 模型 := os.environ.get("驭臂_模型", "").strip():
         return 模型, "命令行/环境变量指定"
+    空场景 = os.path.join(os.path.dirname(本目录), "模型", "空场景.xml")
+    if os.path.exists(空场景):
+        return 空场景, "启动默认空场景（请在模型库中选择机器人）"
+    # 空场景文件意外缺失时才回退到已有模型，避免整个程序无法启动。
     try:
         import 模型桥
         上次 = 模型桥.读取上次模型()
@@ -73,9 +77,6 @@ def _找模型() -> tuple[str, str]:
                 return 绝对, f"项目「{名字}」声明的模型"
     except Exception:  # noqa: BLE001, S110
         pass
-    空场景 = os.path.join(os.path.dirname(本目录), "模型", "空场景.xml")
-    if os.path.exists(空场景):
-        return 空场景, "空场景（没有可用模型）"
     return "", "一个模型都没找到"
 
 
@@ -83,6 +84,8 @@ def _选项目(模型路径: str, 指名: str | None) -> str:
     try:
         if 指名:
             return str(指名)
+        if os.path.basename(模型路径) == "空场景.xml":
+            return ""
         import 模型桥
         上次 = 模型桥.读取设置("上次项目", "")
         return str(上次) if 上次 else (项目清单.按模型找项目(模型路径) if 模型路径 else "")

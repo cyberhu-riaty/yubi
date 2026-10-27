@@ -190,7 +190,8 @@ function 分隔条({
 
 export function App() {
   const [步骤, 设步骤] = useState<步骤id>("定义");
-  const [控制台开, 设控制台开] = useState(true);
+  // Windows/macOS 宿主的右下区域承担常看信息；完整 Web 控制台仍可随时展开。
+  const [控制台开, 设控制台开] = useState(false);
   const [页签, 设页签] = useState<控制台页签>("输出");
   const [视口宽, 设视口宽] = useState(() => (typeof window === "undefined" ? 1440 : window.innerWidth));
 
