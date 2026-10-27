@@ -23,7 +23,7 @@ import { 起连接 } from "../数据/仓库";
 import { 起日志 } from "../数据/日志";
 import { 活动栏 } from "./活动栏";
 import { 侧栏 } from "./侧栏";
-import { 中区 } from "./中区";
+import { 中区, 仿真工具栏 } from "./中区";
 import { 控制台, 控制台召回, type 控制台页签 } from "./控制台";
 import { 状态栏 } from "./状态栏";
 import { 提示区 } from "./提示区";
@@ -322,6 +322,15 @@ export function App() {
       className="flex h-full min-h-0 flex-col overflow-hidden"
       style={{ background: "var(--bg)" }}
     >
+      {/* 全局运行控制不能放在会随可用宽度隐藏的“中区”里。
+          固定顶栏始终可见，状态仍只认后端返回的 `仿真状态`。 */}
+      <div
+        className="flex flex-none items-center px-2.5 py-1.5"
+        style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-title)" }}
+      >
+        <仿真工具栏 />
+      </div>
+
       {/* ★ 结构说明（为了让"控制台横跨整个左面板下方"这件事成立）：
        *
        *   外壳行：  [活动栏] [ 外壳列 ....................... ]

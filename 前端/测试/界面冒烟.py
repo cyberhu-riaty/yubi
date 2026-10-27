@@ -36,7 +36,25 @@ import urllib.request
 
 import websockets
 
-CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+def 找浏览器() -> str:
+    """测试工具也要跨平台：优先环境变量，其次查 PATH 和常见安装位置。"""
+    候选 = [
+        os.environ.get("驭臂_测试浏览器", ""),
+        shutil.which("google-chrome") or "",
+        shutil.which("chrome") or "",
+        shutil.which("msedge") or "",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ]
+    for 路径 in 候选:
+        if 路径 and os.path.isfile(路径):
+            return 路径
+    return "chrome"
+
+
+CHROME = 找浏览器()
 调试端口 = 9333
 # 端口可用环境变量改（与假后端共用同一个变量）：真后端正在 8712 上跑时不必抢端口。
 端口 = int(os.environ.get("驭臂_测试端口", "8712"))
@@ -161,6 +179,92 @@ async def 主(输出目录: str) -> int:
             #   而真正要验的恰恰是"真后端的数据有没有画出来"。
             if "显示名" not in (await P.文本()):
                 失败.append("定义视图里没看到模型「显示名」行")
+
+            # 全局仿真控制：Pause 保持时间，Run 继续累加，Reset 才归零。
+            if not all(x in 文 for x in ("运行", "暂停", "复位")):
+                失败.append("中区没有完整的 Run / Pause / Reset 控件")
+            elif not await P.执行("""
+            (() => {
+              const 组 = [...document.querySelectorAll('[role=group]')]
+                .find(e => (e.getAttribute('aria-label') || '').includes('仿真控制'));
+              const 按钮 = 组 && [...组.querySelectorAll('button')]
+                .find(e => (e.textContent || '').trim() === '运行');
+              if (!按钮) return false;
+              按钮.click(); return true;
+            })()
+            """):
+                失败.append("点不到仿真「运行」")
+            else:
+                await asyncio.sleep(0.8)
+                运行前 = await P.执行("window.驭臂.取状态().仿真.数据.仿真时间")
+                await asyncio.sleep(0.8)
+                运行后 = await P.执行("window.驭臂.取状态().仿真.数据.仿真时间")
+                if not isinstance(运行前, (int, float)) or not isinstance(运行后, (int, float)) or 运行后 <= 运行前:
+                    失败.append(f"Run 后 data.time 没有增加（{运行前} → {运行后}）")
+                if not await P.点("暂停"):
+                    失败.append("点不到仿真「暂停」")
+                else:
+                    await asyncio.sleep(0.5)
+                    暂停前 = await P.执行("window.驭臂.取状态().仿真.数据.仿真时间")
+                    await asyncio.sleep(0.7)
+                    暂停后 = await P.执行("window.驭臂.取状态().仿真.数据.仿真时间")
+                    if abs(float(暂停后) - float(暂停前)) > 0.05:
+                        失败.append(f"Pause 后 data.time 仍在增加（{暂停前} → {暂停后}）")
+                if not await P.点("复位"):
+                    失败.append("点不到仿真「复位」")
+                else:
+                    await asyncio.sleep(0.5)
+                    复位态 = await P.执行("""
+                    (() => {
+                      const x = window.驭臂.取状态().仿真.数据;
+                      return {状态:x.状态, 时间:x.仿真时间, 次数:x.复位次数};
+                    })()
+                    """)
+                    if not 复位态 or 复位态.get("状态") != "暂停" or float(复位态.get("时间", 1)) > 0.05 or int(复位态.get("次数", 0)) < 1:
+                        失败.append(f"Reset 后状态不正确：{复位态}")
+
+            # 算法配置闭环：选择只产生“待应用”，临时应用后后端回灌“当前生效”，
+            # 再保存时只落盘，不应要求用户重新勾一次。
+            if "算法库" not in 文 or "当前生效" not in 文 or "未保存" not in 文:
+                失败.append("定义视图没有显示算法库的生效/存盘状态")
+            选中 = await P.执行("""
+            (() => {
+              const 名 = [...document.querySelectorAll('label span.font-semibold')]
+                .find(e => (e.textContent || '').trim() === 'OSC');
+              const 框 = 名 && 名.closest('label')?.querySelector('input[type=checkbox]');
+              if (!框 || 框.checked) return false;
+              框.click(); return true;
+            })()
+            """)
+            await asyncio.sleep(0.3)
+            if not 选中 or "待启用" not in (await P.文本()):
+                失败.append("算法勾选没有进入待应用状态")
+            elif not await P.点("临时应用"):
+                失败.append("点不到算法「临时应用」")
+            else:
+                await asyncio.sleep(0.8)
+                osc生效 = await P.执行("""
+                (() => {
+                  const s = window.驭臂 && window.驭臂.取状态();
+                  const 们 = (s && s.插件 && s.插件.数据 && s.插件.数据.插件) || [];
+                  const x = 们.find(e => e.插件 === 'osc');
+                  return !!(x && x.当前启用);
+                })()
+                """)
+                if not osc生效:
+                    失败.append("算法临时应用后没有回灌当前生效状态")
+                if not await P.点("保存到项目"):
+                    失败.append("临时应用后点不到「保存到项目」")
+                else:
+                    await asyncio.sleep(0.8)
+                    已存盘 = await P.执行("""
+                    (() => {
+                      const s = window.驭臂 && window.驭臂.取状态();
+                      return !!(s && s.项目 && s.项目.数据 && s.项目.数据.已存盘);
+                    })()
+                    """)
+                    if not 已存盘:
+                        失败.append("算法保存后仍显示未存盘")
 
             # 曲线真的在长：直接问仓库"一共收到多少个曲线点"。
             #   ★ 不去正则匹配页面数字 —— 那会随排版失效（实测踩过两次：

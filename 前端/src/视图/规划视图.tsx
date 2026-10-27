@@ -190,11 +190,8 @@ export function 规划视图() {
           : <标签>{t("规划.尚无航点")}</标签>
         }
       >
-        <p className="text-dim">{t("规划.说明")}</p>
-        <p className="mt-1 text-[0.8em] text-dim">{t("规划.文件说明")}</p>
-
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <按钮 种类="次" 尺寸="小" disabled={忙 || !可发} on按下={() => void 跑("记录航点")}>
+        <div className="flex flex-wrap items-center gap-2">
+          <按钮 种类="次" 尺寸="小" disabled={忙 || !可发} title={t("规划.需要航点")} on按下={() => void 跑("记录航点")}>
             {t("规划.记录")}
           </按钮>
           <label className="flex items-center gap-1 text-[0.8em]">
@@ -247,7 +244,7 @@ export function 规划视图() {
             className="hidden"
             onChange={(e) => void 读文件(e.target.files?.[0])}
           />
-          <按钮 种类="次" 尺寸="小" disabled={忙} on按下={() => 文件框.current?.click()}>
+          <按钮 种类="次" 尺寸="小" disabled={忙} title={t("规划.文件说明")} on按下={() => 文件框.current?.click()}>
             {t("规划.导入")}
           </按钮>
           {规划?.航点数 ? (

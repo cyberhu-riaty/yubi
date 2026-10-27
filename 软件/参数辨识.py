@@ -33,6 +33,7 @@ import time
 import numpy as np
 
 import mujoco
+import 模型加载
 
 # ---------------------------------------------------------------------------
 # 数据结构
@@ -136,7 +137,7 @@ def 采数据(模型路径: str, 时长: float = 2.0, 质量覆盖: dict | None 
     为什么要闭环：开环大力矩激励会让机械臂 2 秒内甩到几百度外（实测），
                   闭环 PD 跟踪平滑轨迹才能得到有界且信息量足够的数据。
     """
-    spec = mujoco.MjSpec.from_file(模型路径)
+    spec = 模型加载.加载规格(mujoco, 模型路径)
     for 连杆, 质量 in (质量覆盖 or {}).items():
         spec.body(连杆).mass = float(质量)
     模型 = spec.compile()
@@ -163,7 +164,7 @@ def 采数据(模型路径: str, 时长: float = 2.0, 质量覆盖: dict | None 
 # ---------------------------------------------------------------------------
 def _造模型(模型路径: str, 值: dict, 参数们: list[参数定义]) -> mujoco.MjModel:
     """按参数值造模型（带边界夹取，避免非法模型让编译器抛错）。"""
-    spec = mujoco.MjSpec.from_file(模型路径)
+    spec = 模型加载.加载规格(mujoco, 模型路径)
     for p in 参数们:
         v = float(np.clip(值[p.名称], p.下界, p.上界))
         _写参数(spec, p.目标, v)

@@ -47,7 +47,7 @@ export function 可折叠区块({
   const 内容id = useId();
 
   return (
-    <section className="段">
+    <section className={`段 ${当前开 ? "段-展开" : ""}`}>
       <div className="flex items-stretch">
         <button
           type="button"
@@ -67,7 +67,7 @@ export function 可折叠区块({
         {右侧 ? <div className="flex items-center gap-1 px-1">{右侧}</div> : null}
       </div>
       {当前开 ? (
-        <div id={内容id} className="px-3 py-2">
+        <div id={内容id} className="段内容 px-3 py-2">
           {children}
         </div>
       ) : null}

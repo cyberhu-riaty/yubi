@@ -20,8 +20,7 @@ export function 外观视图() {
   return (
     <div>
       <可折叠区块 标题={t("外观.皮肤")} 徽标={<span className="等宽">{风格表.length}</span>}>
-        <p className="text-dim">{t("外观.皮肤说明", { 数量: 风格表.length })}</p>
-        <ul className="mt-2 space-y-1">
+        <ul className="space-y-1">
           {风格表.map((s) => {
             const 选中 = s.名 === 当前;
             return (
@@ -53,7 +52,6 @@ export function 外观视图() {
             );
           })}
         </ul>
-        <p className="mt-2 text-[0.85em] text-dim">{t("外观.快捷键")}</p>
         <details className="装配详情 mt-2">
           <summary>{t("外观.高级")}</summary>
           <p className="mt-1 text-[0.8em] text-dim">{t("外观.高级说明")}</p>
@@ -61,9 +59,7 @@ export function 外观视图() {
       </可折叠区块>
 
       <可折叠区块 标题={t("外观.语言")} 徽标={<标签>{语言名[语]}</标签>}>
-        <p className="text-dim">{t("外观.语言说明")}</p>
-        <p className="mt-1 text-[0.8em] text-dim">{t("外观.语言当前", { 语: 语言名[语] })}</p>
-        <div className="mt-2 flex gap-1.5">
+        <div className="flex gap-1.5" title={t("外观.语言说明")}>
           <按钮 种类={语 === "zh" ? "主" : "次"} 已按下={语 === "zh"} on按下={() => 设语言("zh")}>
             中文
           </按钮>

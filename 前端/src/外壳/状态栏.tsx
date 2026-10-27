@@ -6,8 +6,8 @@
  * 不放行号/编码/缩进/Prettier 这类"仿编辑器"的装饰。每一个数字都必须能追到
  * 一个真字段：
  *
- *   物理     ← `项目状态.重力开`；点它是**发真命令**（`命令.重力`）并等回执
- *   仿真时间 ← `系统.仿真时间`（仿真侧 data.time，1 Hz），**不是**连接后的墙钟
+ *   物理     ← `仿真状态.状态`；这里只读显示，控制按钮常驻在 3D 区上方
+ *   仿真时间 ← `仿真状态.仿真时间`（仿真侧 data.time），**不是**连接后的墙钟
  *   实时倍率 ← `系统.RTF` = 仿真时间增量 ÷ 墙钟增量
  *   指标帧率 ← `指标` 主题最近一秒**实测**收到的帧数（没有就是 0，不编）
  *   连接     ← WebSocket 连接状态
@@ -15,31 +15,23 @@
  * 项目名/模型名/语言不在这里：它们分别属于「定义」「外观」，塞进同一条状态栏
  * 只会把它撑成两行（实测 576px 宽时旧版就换行了）。语言开关放在「外观」页。
  */
-import { 命令, 用仓库 } from "../数据/仓库";
-import { 命令收尾, 记命令发出 } from "../数据/日志";
+import { 用仓库 } from "../数据/仓库";
 import { 连接键, use取, 数, 时长 } from "../视图/文案";
 
 export function 状态栏() {
   const t = use取();
   const 连接 = 用仓库((s) => s.连接);
-  const 项目 = 用仓库((s) => s.项目.数据);
+  const 仿真 = 用仓库((s) => s.仿真.数据);
   const 系统 = 用仓库((s) => s.系统.数据);
   const 指标速率 = 用仓库((s) => s.主题速率["指标"] ?? 0);
 
-  const 物理 = 项目?.重力开;
-  const 仿真秒 = 系统?.仿真时间;
+  const 运行中 = 仿真?.状态 === "运行";
+  const 仿真秒 = 仿真?.仿真时间 ?? 系统?.仿真时间;
   const RTF = 系统?.RTF;
   // 冻结时 RTF 天然是 0，不算"跑不动"；只有推进中且明显掉速才提示。
-  const RTF警示 = 物理 === true && RTF !== undefined && RTF < 0.95;
+  const RTF警示 = 运行中 && RTF !== undefined && RTF < 0.95;
   const 连接色 =
     连接 === "已连接" ? "var(--ok)" : 连接 === "连接中" ? "var(--warn)" : "var(--danger)";
-
-  const 切物理 = async () => {
-    if (typeof 物理 !== "boolean") return;
-    const 主题 = "命令.重力";
-    const 起于 = 记命令发出();
-    命令收尾(主题, await 命令.开物理(!物理), 起于);
-  };
 
   return (
     <footer
@@ -48,20 +40,9 @@ export function 状态栏() {
     >
       <span className="状态栏项" title={t("状态栏.提示.物理")}>
         <span className="状态栏标签">{t("状态栏.物理")}</span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={typeof 物理 === "boolean" ? 物理 : "mixed"}
-          disabled={typeof 物理 !== "boolean"}
-          onClick={() => void 切物理()}
-          className="状态开关 等宽"
-        >
-          {typeof 物理 === "boolean"
-            ? 物理
-              ? t("状态栏.物理.开")
-              : t("状态栏.物理.关")
-            : t("状态栏.物理.未知")}
-        </button>
+        <span className="等宽">
+          {仿真 ? t(运行中 ? "状态栏.物理.开" : "状态栏.物理.关") : t("状态栏.物理.未知")}
+        </span>
       </span>
 
       <格

@@ -32,6 +32,9 @@ import sys
 本目录 = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, 本目录)
 
+import 控制台                          # noqa: E402
+控制台.准备输出()
+
 import 插件系统 as 插件框架            # noqa: E402
 import 启动                            # noqa: E402
 import 文案                          # noqa: E402

@@ -24,6 +24,7 @@ import { 监控视图 } from "../视图/监控视图";
 import { 诊断视图 } from "../视图/诊断视图";
 import { 插件视图 } from "../视图/插件视图";
 import { 外观视图 } from "../视图/外观视图";
+import { 帮助视图 } from "../视图/帮助视图";
 import { 关于视图 } from "../视图/关于视图";
 
 export interface 侧栏参数 {
@@ -52,6 +53,8 @@ function 画视图(步骤: 步骤id) {
       return <插件视图 />;
     case "外观":
       return <外观视图 />;
+    case "帮助":
+      return <帮助视图 />;
     case "关于":
       return <关于视图 />;
     default:
@@ -118,7 +121,11 @@ export function 侧栏({ 步骤, 开, on收起 }: 侧栏参数) {
       <上下文条 />
       {/* ★ 卡片化之后这里必须有间距：段与段紧贴时，圆角边框会互相"咬"在一起，
              看起来比不分卡片还乱。8px + 左右内边距 = 图二那种"卡片浮在桌面上的"感觉。 */}
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
+      <div
+        className={`侧栏内容滚动 flex min-h-0 flex-1 flex-col gap-2 p-2 ${
+          步骤 === "定义" ? "overflow-hidden" : "overflow-y-auto"
+        }`}
+      >
         {画视图(步骤)}
       </div>
     </aside>

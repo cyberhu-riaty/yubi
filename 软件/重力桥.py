@@ -100,6 +100,23 @@ class 重力状态(messages.Snapshot):
     重力开: bool = False
 
 
+@dataclasses.dataclass(frozen=True)
+class 仿真控制命令(messages.Snapshot):
+    """自研工作台的全局运行命令；与控制算法本身无关。"""
+
+    动作: str = "暂停"          # 运行 / 暂停 / 复位
+
+
+@dataclasses.dataclass(frozen=True)
+class 仿真状态(messages.Snapshot):
+    """仿真侧确认过的真实运行状态，供工具栏和状态栏显示。"""
+
+    状态: str = "暂停"          # 运行 / 暂停
+    仿真时间: float = 0.0        # MuJoCo data.time
+    复位次数: int = 0
+    说明: str = ""
+
+
 # ---------------------------------------------------------------------------
 # 仿真侧：内置的"重力/冻结"应用器（常驻，不随算法加载与否变化）
 # ---------------------------------------------------------------------------
@@ -116,8 +133,13 @@ class 重力应用器:
     接管控制 = False           # 不写 ctrl[:]，不参与"抢方向盘"
     说明 = "【Display】左上角开关：勾上施用重力，取消则回到默认位置并冻结。"
 
-    def __init__(self, 复位回调: Callable | None = None) -> None:
+    def __init__(self, 复位回调: Callable | None = None,
+                 仿真复位回调: Callable | None = None,
+                 状态回调: Callable | None = None) -> None:
         self._复位回调 = 复位回调        # 外壳注入：把模型摆回默认姿态（复用 _重置姿态）
+        # 显式 Reset 要连当前算法实例一起重新初始化；这个动作只有外壳能完成。
+        self._仿真复位回调 = 仿真复位回调
+        self._状态回调 = 状态回调
         self._模型 = None
         self._数据 = None
         self._模型路径 = ""
@@ -125,6 +147,8 @@ class 重力应用器:
         self._用户暂停 = False           # 用户自己在官方 Simulation 面板上的暂停意图
         self._已复位 = 0
         self._已冻结 = 0
+        self._最近动作 = "模型加载后暂停"
+        self._快照参数 = {"speed": 1.0, "noise_scale": 0.0, "noise_rate": 0.0}
         self._记住的姿态 = None          # 没有 home 关键帧时的兜底姿态
         # ★ 重入保护（这里是踩过的真坑）：
         #   冻结时要"补发一条 PAUSED 快照"给官方 StepControl，而补发走的是
@@ -177,6 +201,18 @@ class 重力应用器:
     def 重力开(self) -> bool:
         """物理现在跑不跑。界面用它判断"要不要提示用户勾加载重力"。"""
         return bool(self._重力开)
+
+    @property
+    def 运行中(self) -> bool:
+        return bool(self._重力开)
+
+    @property
+    def 复位次数(self) -> int:
+        return int(self._已复位)
+
+    @property
+    def 最近动作(self) -> str:
+        return str(self._最近动作)
 
     def 设重力开(self, 开: bool) -> None:
         """供外壳/面板直接置位（面板上那个「启用物理」按钮走这条路）。
@@ -231,6 +267,68 @@ class 重力应用器:
             self._冻结到默认位置(原因="取消加载重力")
         return False
 
+    @messages.handler
+    def 收仿真控制(self, 命令: 仿真控制命令) -> bool:
+        """Run / Pause / Reset 的唯一落点。
+
+        Pause 只关掉步进闸门，保持 qpos、qvel、ctrl 和 data.time；Reset 才调用
+        外壳重新装配当前算法并清理 MuJoCo 状态。两者分开后，GUI 不再用一个
+        “加载重力”开关同时表达三个动作。
+        """
+        动作 = str(getattr(命令, "动作", "暂停") or "暂停")
+        if 动作 in ("运行", "run"):
+            self._重力开 = True
+            self._用户暂停 = False
+            设界面重力(True)
+            self._发官方暂停(False)
+            self._最近动作 = "继续运行"
+            print("【仿真】运行：从当前状态继续推进", flush=True)
+        elif 动作 in ("暂停", "pause"):
+            self._重力开 = False
+            self._用户暂停 = True
+            设界面重力(False)
+            self._发官方暂停(True)
+            self._最近动作 = "暂停在当前状态"
+            print("【仿真】暂停：保持当前姿态与仿真时间", flush=True)
+        elif 动作 in ("复位", "reset"):
+            self._重力开 = False
+            self._用户暂停 = True
+            设界面重力(False)
+            self._发官方暂停(True)
+            说明 = ""
+            if self._仿真复位回调 is not None:
+                try:
+                    说明 = str(self._仿真复位回调() or "")
+                except Exception as 异常:                              # noqa: BLE001
+                    print(f"⚠ 仿真复位回调失败（改用物理状态复位）："
+                          f"{type(异常).__name__}: {异常}", flush=True)
+            if 说明:
+                self._已复位 += 1
+                self._已冻结 += 1
+            else:
+                self._冻结到默认位置(原因="GUI Reset")
+            self._最近动作 = "已复位并暂停"
+            print(f"【仿真】复位完成，保持暂停{f'：{说明}' if 说明 else ''}", flush=True)
+        self._报状态()
+        return False
+
+    def _发官方暂停(self, 暂停: bool) -> None:
+        """同步官方 StepControl，避免外壳闸门打开后它仍停在旧暂停状态。"""
+        try:
+            self._补发(messages.StepControlSnapshot(
+                pause_state=(sim.PauseState.NORMAL_PAUSED if 暂停 else sim.PauseState.UNPAUSED),
+                **self._快照参数))
+        except Exception as 异常:                                      # noqa: BLE001
+            print(f"⚠ 同步官方暂停状态失败：{type(异常).__name__}: {异常}", flush=True)
+
+    def _报状态(self) -> None:
+        if self._状态回调 is None:
+            return
+        try:
+            self._状态回调()
+        except Exception:                                             # noqa: BLE001
+            pass
+
     # ------------------------------------------------------------------
     # 官方每帧发的暂停快照：冻结时把它改写成"暂停"再放行
     #   ★ 这是本模块最关键的一处。为什么不能"直接调 set_pause_state"：
@@ -250,6 +348,8 @@ class 重力应用器:
             return False
         try:
             self._用户暂停 = (事件.pause_state != sim.PauseState.UNPAUSED)
+            self._快照参数 = dict(speed=事件.speed, noise_scale=事件.noise_scale,
+                                  noise_rate=事件.noise_rate)
         except Exception:                                                # noqa: BLE001
             pass
         if self._重力开:
@@ -376,3 +476,32 @@ class 发布器:
         两个入口永远不会互相覆盖。
         """
         self.也许发布(界面重力开, 墙钟)
+
+
+class 仿真状态发布器:
+    """把运行/暂停与 data.time 作为独立状态发给自研 GUI（默认 5 Hz）。"""
+
+    def __init__(self, 发送函数, 频率: float = 5.0) -> None:
+        self._发 = 发送函数
+        self._间隔 = 1.0 / max(频率, 1e-6)
+        self._下次 = 0.0
+        self._上次: tuple | None = None
+
+    def 发布(self, 应用器: 重力应用器, 仿真时间: float, 强制: bool = False) -> bool:
+        内容 = (bool(应用器.运行中), float(仿真时间), int(应用器.复位次数), 应用器.最近动作)
+        if not 强制 and 内容 == self._上次:
+            return False
+        self._上次 = 内容
+        self._发(仿真状态(
+            状态="运行" if 应用器.运行中 else "暂停",
+            仿真时间=float(仿真时间),
+            复位次数=int(应用器.复位次数),
+            说明=应用器.最近动作,
+        ))
+        return True
+
+    def 也许发布(self, 应用器: 重力应用器, 仿真时间: float, 墙钟: float) -> bool:
+        if 墙钟 < self._下次:
+            return False
+        self._下次 = 墙钟 + self._间隔
+        return self.发布(应用器, 仿真时间)

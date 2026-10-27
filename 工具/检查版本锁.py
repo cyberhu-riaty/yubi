@@ -35,6 +35,15 @@ def 解析锁文件(路径: str) -> tuple[dict[str, str], dict[str, str]]:
             continue
         if not 行:
             continue
+        # requirements 的 `; sys_platform == "..."` 是平台条件，不是版本号。
+        # 只检查当前平台实际应该安装的条目，避免 macOS 把 PySide6 报成缺失、
+        # Windows 又把 PyObjC 报成缺失。
+        if ";" in 行:
+            条目, 条件 = (部分.strip() for 部分 in 行.split(";", 1))
+            平台条件 = re.fullmatch(r"sys_platform\s*==\s*['\"]([^'\"]+)['\"]", 条件)
+            if 平台条件 and sys.platform != 平台条件.group(1):
+                continue
+            行 = 条目
         匹配 = re.match(r"^([A-Za-z0-9_.\-]+)==([^\s#]+)", 行)
         if 匹配:
             当前[匹配.group(1)] = 匹配.group(2)

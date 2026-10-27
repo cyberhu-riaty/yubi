@@ -1,8 +1,8 @@
 /**
  * 活动栏.tsx —— 最左边那条窄图标列（VS Code 的位置）。
  *
- * 十项按三组排：**流程**（定义→规划→验证→辨识→部署）、**运行**（监控/诊断/插件）、
- * **信息**（外观/关于）。图标全是**内联 SVG**（没有图标库依赖）：
+ * 十一项按三组排：**流程**（定义→规划→验证→辨识→部署）、**运行**（监控/诊断/插件）、
+ * **信息**（外观/帮助/关于）。图标全是**内联 SVG**（没有图标库依赖）：
  *   · 描边用 `currentColor`，所以按钮本身的 `color` 决定图标颜色 —— 换肤自动跟随
  *   · 每个按钮都是真 `<button>`，Tab 能到、有 `title`（含快捷键提示）
  *   · 当前步骤用 `aria-current="step"` + 左侧色条 + 底色三重表示（不靠颜色一种手段）
@@ -110,6 +110,14 @@ function 图标({ 名 }: { 名: 步骤id }) {
           <circle cx="5.2" cy="6.4" r="0.9" fill="currentColor" stroke="none" />
           <circle cx="8.4" cy="4.8" r="0.9" fill="currentColor" stroke="none" />
           <circle cx="11" cy="7.6" r="0.9" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "帮助": // 问号
+      return (
+        <svg {...公共}>
+          <circle cx="8" cy="8" r="6.2" />
+          <path d="M5.9 6.1A2.2 2.2 0 0 1 8.2 4c1.5 0 2.5.8 2.5 2.1 0 1.1-.6 1.6-1.5 2.2-.8.5-1.2 1-1.2 2" />
+          <circle cx="8" cy="12.5" r="0.7" fill="currentColor" stroke="none" />
         </svg>
       );
     case "关于": // i

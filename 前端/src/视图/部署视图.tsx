@@ -73,13 +73,12 @@ export function 部署视图() {
             <标签 语气="警告">{t("部署.真机未接入")}</标签>
           </span>
         </div>
-        <p className="mt-2 text-dim">{t("部署.说明")}</p>
         <p className="mt-1 text-[0.85em]" style={{ color: "var(--warn)" }}>
           {t("部署.没有连接")}
         </p>
 
         <div className="mt-2 flex items-center gap-2">
-          <按钮 种类="主" disabled={忙 || 导出中 || !可发} on按下={() => void 导出()}>
+          <按钮 种类="主" disabled={忙 || 导出中 || !可发} title={t("部署.说明")} on按下={() => void 导出()}>
             {导出中 ? t("部署.导出中") : t("部署.导出")}
           </按钮>
           <span className="text-[0.85em] text-dim">
@@ -198,7 +197,6 @@ function 设备控制台() {
         </标签>
       }
     >
-      <p className="text-dim">{t("部署.设备说明")}</p>
       <p className="mt-1 text-[0.85em]" style={{ color: "var(--warn)" }}>
         {t("部署.模拟后端")}
       </p>

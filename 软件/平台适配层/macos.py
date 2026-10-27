@@ -33,7 +33,7 @@ class MacOS(平台能力):
         return True, ""
 
     def 起(self, *, 地址: str, 标题: str, 宽: float, 高: float,
-           命令队列: list | None = None, 无3D: bool = False,
+           命令队列: Any = None, 无3D: bool = False,
            视口槽: dict | None = None) -> int:
         可用, 原因 = self.可用()
         if not 可用:

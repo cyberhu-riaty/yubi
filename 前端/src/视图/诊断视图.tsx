@@ -65,10 +65,8 @@ export function 诊断视图() {
           )
         }
       >
-        <p className="text-dim">{t("诊断.说明")}</p>
-
-        <div className="mt-2 flex items-center gap-2">
-          <按钮 种类="主" on按下={() => void 跑一遍()} disabled={忙 || !!报告?.运行中 || 连接 !== "已连接"}>
+        <div className="flex items-center gap-2">
+          <按钮 种类="主" title={t("诊断.说明")} on按下={() => void 跑一遍()} disabled={忙 || !!报告?.运行中 || 连接 !== "已连接"}>
             {报告?.运行中 ? t("诊断.运行中") : t("诊断.开始")}
           </按钮>
           {报告?.运行中 && 已用时 !== undefined ? (
