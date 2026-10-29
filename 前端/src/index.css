@@ -429,6 +429,41 @@
     border-top: 1px solid var(--border);
   }
 
+  /* 活动栏和页面标题固定；滚轮只在当前页面内容里消费。
+     stable 避免滚动条出现/消失时卡片左右跳动。 */
+  .侧栏内容滚动 {
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  /* “定义”页不整体滚动：五个区块标题固定，一次只展开一块。
+     展开内容独占剩余高度，过长时只滚动该区块内部。 */
+  .定义页固定 {
+    display: flex;
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 8px;
+    overflow: hidden;
+  }
+  .定义页固定 > .段 {
+    display: flex;
+    min-height: 0;
+    flex: 0 0 auto;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .定义页固定 > .段-展开 {
+    flex: 1 1 0;
+  }
+  .定义页固定 > .段-展开 > .段内容 {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
   /* 窗口改成"左 Web / 右 3D"之后，Web 面板只有 40% 宽（约 520~760px）。
    * 这么窄再塞"中区仪表盘"会挤成一团 —— 而中区本来就是"3D 没地方放时的替代品"，
    * 现在 3D 就在右边，它没有存在意义了，直接收掉。

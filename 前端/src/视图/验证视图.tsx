@@ -245,9 +245,7 @@ export function 验证视图() {
           </span>
         }
       >
-        <p className="text-dim">{t("验证.曲线.说明")}</p>
-        <p className="mt-1 text-[0.8em] text-dim">{t("验证.单位说明")}</p>
-        <div className="mt-1.5 面板" style={{ background: "var(--plot-bg)", borderRadius: "var(--radius)" }}>
+        <div className="面板" title={t("验证.曲线.说明")} style={{ background: "var(--plot-bg)", borderRadius: "var(--radius)" }}>
           <曲线 数据={曲线数} 显示={显示} 窗口={窗口秒} 高={190} on暂停={设暂停} />
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1 text-[0.85em] text-dim">
@@ -292,7 +290,6 @@ export function 验证视图() {
           </div>
         )}
 
-        <p className="mt-2 text-[0.85em] text-dim">{t("曲线.说明")}</p>
       </可折叠区块>
 
       <可折叠区块
@@ -303,8 +300,7 @@ export function 验证视图() {
           </>
         }
       >
-        <p className="text-dim">{t("验证.参数.说明")}</p>
-        <div className="mt-1 text-dim text-[0.9em]">{t("验证.参数.可编辑")}</div>
+        <div className="text-dim text-[0.9em]" title={t("验证.参数.说明")}>{t("验证.参数.可编辑")}</div>
         {参数项们.length ? (
           <div className="mt-2">
             {/* ★ 一张表列全部参数，而不是"每个插件一张小表"。

@@ -32,9 +32,16 @@ export interface 握手 {
 }
 
 export interface 回执 {
+  /** 与发出命令一一对应；旧后端可能没有，所以保持可选。 */
+  请求?: string;
   主题: string;
   通过: boolean;
   说明: string;
+}
+
+interface 待回执项 {
+  主题: string;
+  完成: (r: 回执) => void;
 }
 
 export type 连接状态 = "连接中" | "已连接" | "已断开";
@@ -61,7 +68,9 @@ export class 连接 {
   private 重试 = 0;
   private 关掉了 = false;
   private 定时器: number | null = null;
-  private 待回执 = new Map<string, (r: 回执) => void>();
+  /** 请求号 → 等待项。不能按主题存：同类命令并发时会互相覆盖。 */
+  private 待回执 = new Map<string, 待回执项>();
+  private 请求序号 = 0;
   private 监听 = new Set<(e: 连接事件) => void>();
   /** 每个主题收了多少帧 —— 界面上直接显示，一眼看出哪条链路没通 */
   readonly 计数: Record<string, number> = {};
@@ -88,6 +97,13 @@ export class 连接 {
         // 一个订阅者出错不能拖垮整条连接
         console.error("[连接] 订阅者出错", 异常);
       }
+    }
+  }
+
+  private 结束全部待回执(说明: string): void {
+    for (const [请求, 项] of this.待回执) {
+      this.待回执.delete(请求);
+      项.完成({ 请求, 主题: 项.主题, 通过: false, 说明 });
     }
   }
 
@@ -130,10 +146,15 @@ export class 连接 {
       }
       if (帧.主题 === "__回执__") {
         const r = 帧.数据 as unknown as 回执;
-        const 等 = this.待回执.get(r.主题);
+        let 键 = typeof r.请求 === "string" && r.请求 ? r.请求 : "";
+        // 兼容旧后端：没有请求号时，只能按发送顺序找同主题的第一条。
+        if (!键) {
+          键 = Array.from(this.待回执.entries()).find(([, 项]) => 项.主题 === r.主题)?.[0] ?? "";
+        }
+        const 等 = 键 ? this.待回执.get(键) : undefined;
         if (等) {
-          this.待回执.delete(r.主题);
-          等(r);
+          this.待回执.delete(键);
+          等.完成(r);
         }
         this.广播({ 回执: r });
         return;
@@ -145,6 +166,8 @@ export class 连接 {
 
     套.onclose = () => {
       this.套接字 = null;
+      // 旧连接上的命令不可能再收到回执；立即失败比让每条命令各等 4 秒更诚实。
+      this.结束全部待回执("连接已断开，命令没有收到回执");
       if (!this.关掉了) {
         this.广播({ 状态: "已断开" });
         this.排重连();
@@ -183,26 +206,31 @@ export class 连接 {
   /** 发一条命令，等回执（超时算失败 —— 不能无限等） */
   发命令(主题: 下行主题名 | string, 数据: Record<string, unknown>, 超时毫秒 = 4000): Promise<回执> {
     return new Promise((兑现) => {
+      this.请求序号 += 1;
+      const 请求 = `${Date.now().toString(36)}-${this.请求序号.toString(36)}`;
       const 套 = this.套接字;
       if (!套 || 套.readyState !== WebSocket.OPEN) {
-        兑现({ 主题, 通过: false, 说明: "还没连上后端" });
+        兑现({ 请求, 主题, 通过: false, 说明: "还没连上后端" });
         return;
       }
       const 兜底 = window.setTimeout(() => {
-        if (this.待回执.delete(主题)) {
-          兑现({ 主题, 通过: false, 说明: "等回执超时（后端可能没在转发命令）" });
+        if (this.待回执.delete(请求)) {
+          兑现({ 请求, 主题, 通过: false, 说明: "等回执超时（后端可能没在转发命令）" });
         }
       }, 超时毫秒);
-      this.待回执.set(主题, (r) => {
-        window.clearTimeout(兜底);
-        兑现(r);
+      this.待回执.set(请求, {
+        主题,
+        完成: (r) => {
+          window.clearTimeout(兜底);
+          兑现(r);
+        },
       });
       try {
-        套.send(JSON.stringify({ 主题, 数据 }));
+        套.send(JSON.stringify({ 请求, 主题, 数据 }));
       } catch (异常) {
         window.clearTimeout(兜底);
-        this.待回执.delete(主题);
-        兑现({ 主题, 通过: false, 说明: `发送失败：${String(异常)}` });
+        this.待回执.delete(请求);
+        兑现({ 请求, 主题, 通过: false, 说明: `发送失败：${String(异常)}` });
       }
     });
   }
@@ -217,6 +245,7 @@ export class 连接 {
 
   关(): void {
     this.关掉了 = true;
+    this.结束全部待回执("连接已关闭，命令没有收到回执");
     if (this.速率定时器 !== null) window.clearInterval(this.速率定时器);
     this.速率定时器 = null;
     try {

@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import os
+import queue
 import sys
 import threading
 import traceback
@@ -34,6 +35,7 @@ if _软件目录 not in sys.path:
 
 import 插件系统 as 插件框架                                              # noqa: E402
 import 项目 as _项目                                                      # noqa: E402
+import 模型加载 as _模型加载                                              # noqa: E402
 
 # `模型桥` 同时被界面侧和仿真侧用，这里在模块级导入一次：
 # `_装配项目()` 与主循环都要发 `项目状态`（方案 C：算法列表随项目变化）。
@@ -46,6 +48,20 @@ from 模型桥 import 项目状态                                              
 # ★ 它是**只读旁路**：官方面板照旧收消息，Web 只是多一个订阅者。
 #   起不来（端口被占 / 库缺失）也只打一行字，不影响界面与仿真。
 import Web桥 as _Web桥                                                    # noqa: E402
+
+
+class _视口状态快照:
+    """给原生 3D 与运行信息面板的线程安全数值副本。"""
+
+    __slots__ = ("state", "state_sig", "time", "qpos", "qvel", "ctrl")
+
+    def __init__(self, 快照, 数据) -> None:
+        self.state = 快照.state
+        self.state_sig = 快照.state_sig
+        self.time = float(数据.time)
+        self.qpos = 数据.qpos.copy()
+        self.qvel = 数据.qvel.copy()
+        self.ctrl = 数据.ctrl.copy()
 
 
 def 应用主题(窗口插件: list) -> None:
@@ -64,12 +80,73 @@ def 应用主题(窗口插件: list) -> None:
 # ---------------------------------------------------------------------------
 # 宿主窗口（P3）用的命令队列
 # ---------------------------------------------------------------------------
-# ★ 为什么放在模块级：无窗模式下"Web 命令 → 仿真"靠一个本地队列传递，
-#   而**塞命令的人**（`宿主窗口` 的每帧回调，主线程）与**排空它的人**
-#   （仿真循环，后台线程）不在同一处。让两边指向同一个列表对象即可 ——
-#   加锁都不用：CPython 的 list.append / 整体替换是原子的，且这里没有"读一半"的风险
-#   （命令是独立的小对象）。
-命令队列: list = []
+# ★ 宿主窗口和仿真循环不在同一个线程。以前这里用普通 list，并采用
+#   "先复制、再 clear"的方式排空；如果另一个线程恰好在两步之间 append，
+#   新命令就可能被 clear 掉。Queue 把这个边界交给标准库处理。
+命令队列: queue.Queue = queue.Queue()
+
+
+def _本地入队(消息) -> None:
+    命令队列.put_nowait(消息)
+
+
+def _排空本地队列() -> list:
+    结果 = []
+    while True:
+        try:
+            结果.append(命令队列.get_nowait())
+        except queue.Empty:
+            return 结果
+
+
+# ---------------------------------------------------------------------------
+# 当前运行会话：让窗口能等待“真的初始化完成”，也能在退出时要求仿真停稳
+# ---------------------------------------------------------------------------
+class _运行会话:
+    def __init__(self, 停止: threading.Event) -> None:
+        self.停止 = 停止
+        self.就绪 = threading.Event()
+        self.线程: threading.Thread | None = None
+        self.错误: BaseException | None = None
+
+
+_会话锁 = threading.Lock()
+_当前会话: _运行会话 | None = None
+
+
+def _登记会话(会话: _运行会话) -> None:
+    global _当前会话
+    with _会话锁:
+        _当前会话 = 会话
+
+
+def 等待就绪(超时: float = 15.0) -> tuple[bool, str]:
+    """等待仿真完成模型和插件初始化；供宿主窗口启动前调用。"""
+    with _会话锁:
+        会话 = _当前会话
+    if 会话 is None:
+        return False, "仿真会话还没有创建"
+    if not 会话.就绪.wait(max(0.0, float(超时))):
+        return False, f"等待仿真就绪超时（{超时:g} 秒）"
+    if 会话.错误 is not None:
+        异常 = 会话.错误
+        return False, f"仿真初始化失败：{type(异常).__name__}: {异常}"
+    return True, "ok"
+
+
+def 请求停止(超时: float = 3.0) -> tuple[bool, str]:
+    """请求当前仿真停止并等待线程退出；重复调用也是安全的。"""
+    with _会话锁:
+        会话 = _当前会话
+    if 会话 is None:
+        return True, "没有运行中的仿真"
+    会话.停止.set()
+    线程 = 会话.线程
+    if 线程 is not None and 线程 is not threading.current_thread() and 线程.is_alive():
+        线程.join(timeout=max(0.0, float(超时)))
+    if 线程 is not None and 线程.is_alive():
+        return False, f"仿真线程在 {超时:g} 秒内没有退出"
+    return True, "ok"
 
 # ---------------------------------------------------------------------------
 # 状态观察者（P3 的 3D 视口用）
@@ -152,7 +229,7 @@ class _发送出口:
 发送出口 = _发送出口()
 
 
-def 取命令队列() -> list:
+def 取命令队列() -> queue.Queue:
     """给宿主窗口用：拿到仿真循环每圈排空的那个队列。"""
     return 命令队列
 
@@ -186,6 +263,9 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
     # 直接 import mujoco.experimental.* 已被断言禁止（见 工具/验证/官方层自检.py）。
     from 官方层 import launch_native, launch_thread, messages, viewer_handle
 
+    # 同一进程内再次启动（主要用于自检）时，不能把上一次残留消息带进新模型。
+    _排空本地队列()
+
     # ★ 把"这次加载哪个模型"告诉外面（放进环境变量）：
     #   宿主窗口的 **3D 视口**需要自己再装一份模型（渲染在自己的线程/上下文里，
     #   不与仿真线程共享 MjData —— 见 `工具/spike/spike_验收.py` 的教训）。
@@ -211,7 +291,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
         #     `[type(消息).__name__ → 主题]` 的映射：那样两边迟早不一致，
         #     而且白名单也会分叉。水龙头那套已经处理好了"哪些消息给界面"。
         def _发到队列(消息) -> None:
-            命令队列.append(消息)
+            _本地入队(消息)
 
         try:
             # ⚠️ 这里**不要再写 `import Web桥 as _Web桥`**！模块顶部已经有
@@ -231,7 +311,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
 
                 @staticmethod
                 def send_to_viewer(消息) -> None:                     # noqa: N805
-                    命令队列.append(消息)
+                    _本地入队(消息)
 
             _龙头, _ = _Web桥.安装水龙头(_本地目标())
             发送出口.装(_龙头)
@@ -241,12 +321,10 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             发送出口.装(_发到队列)
 
         def 排空收件() -> list:
-            出 = list(命令队列)
-            命令队列.clear()
-            return 出
+            return _排空本地队列()
 
         def 收件数() -> int:
-            return len(命令队列)
+            return 命令队列.qsize()
     else:
         查看端点, 仿真端点 = launch_thread.make_thread_endpoints()
 
@@ -312,10 +390,13 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
         句柄 = viewer_handle.ViewerHandle(仿真端点)
 
     停止 = threading.Event()
+    会话 = _运行会话(停止)
+    _登记会话(会话)
     出错 = {}
 
     # ---- 3. 仿真线程 ----
     def 仿真循环():
+        会话.线程 = threading.current_thread()
         try:
             import time as _time
             import numpy as _np
@@ -338,13 +419,15 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             项目发布 = None
             模型应用器 = None
             重力应用器 = None            # 内置件，注册在下面；这里先占位给 `_装配项目` 用
+            仿真状态发布 = None
             当前算法信息: list = []
+            当前算法配置: list[str] = []  # 模块名且保留执行顺序；Reset 用它重建同一组算法
             当前控盘 = ""            # 真正驱动机械臂的那个算法（界面显示用）
             当前被覆盖: list = []      # 输出被整体盖掉的算法（界面显示用）
             当前已存盘 = True            # 当前这组算法是否与项目文件一致（界面 Save 按钮用）
             当前算法库: list = []        # 算法库里全部可选算法（算法变化时才重算，见 装配前刷新）
 
-            model = mujoco.MjModel.from_xml_path(模型路径)
+            model = _模型加载.加载模型(mujoco, 模型路径)
             data = mujoco.MjData(model)
             当前模型, 当前数据 = model, data
             关键字 = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
@@ -458,7 +541,8 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
 
             def _装配项目(新项目名: str, 新模型, 新数据, 新模型路径: str,
                           算法覆盖: list | None = None, 落盘: bool = False,
-                          重置姿态: bool = False) -> list[str]:
+                          重置姿态: bool = False,
+                          保持存盘状态: bool | None = None) -> list[str]:
                 """按项目清单重新装配算法，装进注册表并通知各插件。
 
                 返回给人看的报告行（会打进终端）。**这个函数必须在仿真线程里调用** ——
@@ -472,10 +556,16 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     ★ 这一条是"换算法后机器人回不到默认位置"的解药，见下面 `_重置姿态()`。
                 """
                 nonlocal 插件列表, 当前项目名, 项目发布, 当前算法信息, 当前已存盘
+                nonlocal 当前算法配置
                 nonlocal 当前控盘, 当前被覆盖, 重力应用器
                 import 装配器 as _装配器
 
                 数据 = _项目.读项目(新项目名) if 新项目名 else None
+                if 算法覆盖 is not None:
+                    本次配置 = [str(x) for x in 算法覆盖 if str(x).strip()]
+                else:
+                    本次配置 = [str(x.get("插件", "")) for x in _项目.解析算法(数据)
+                            if isinstance(x, dict) and str(x.get("插件", "")).strip()]
 
                 # ★ 重置必须在**装配之前**：多数算法的设计是"拿第一次看到的位置当基准"
                 #   （关节pd控制的 `目标`、正弦摆动的 `基准`）。先把机器人摆回默认姿态，
@@ -544,10 +634,11 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 插件列表 = 新实例
                 当前项目名 = str(新项目名 or "")
                 当前算法信息 = 算法信息
+                当前算法配置 = 本次配置
                 _项目.保存上次项目(当前项目名)
 
                 # ★ "这一组算法和项目文件一致吗" —— 界面上的 Save 按钮靠它决定是否可用
-                当前已存盘 = 算法覆盖 is None
+                当前已存盘 = (算法覆盖 is None) if 保持存盘状态 is None else bool(保持存盘状态)
                 if 落盘 and 算法覆盖 is not None and 数据 is not None:
                     # 【Save】：把界面上选的那组写回项目文件（只动 `算法` 字段，别的字段原样）
                     写回 = dict(数据)
@@ -572,7 +663,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                                             if 新模型路径 else "（外来模型）")
                     if 新模型路径:
                         try:
-                            _模型桥.记住模型(新模型路径)       # 启动默认②"记住上次模型"
+                            _模型桥.记住模型(新模型路径)       # 记录最近选择；普通启动仍进空场景
                         except Exception:                              # noqa: BLE001
                             pass
 
@@ -667,13 +758,35 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 复用 `_重置姿态()`，这样"换算法时重置"和"取消加载重力时复位"
                 走的是**同一套代码** —— 否则同一个概念会长出两种行为。
                 """
-                新模型 = getattr(句柄, "model", None)
-                新数据 = getattr(句柄, "data", None)
+                新模型, 新数据 = model, data
                 if 新模型 is None or 新数据 is None:
                     return ""
                 return _重置姿态(新模型, 新数据)
 
-            重力应用器 = _重力桥.重力应用器(复位回调=_重置姿态回调)
+            def _仿真复位回调() -> str:
+                """Reset = 清 MuJoCo 状态 + 用同一配置重建当前算法实例。"""
+                原存盘状态 = 当前已存盘
+                当前路径 = (模型应用器.当前路径 if 模型应用器 is not None
+                         else str(模型路径 or ""))
+                报告 = _装配项目(
+                    当前项目名, model, data, 当前路径,
+                    算法覆盖=list(当前算法配置),
+                    重置姿态=True,
+                    保持存盘状态=原存盘状态,
+                )
+                return next((行 for 行 in 报告 if "重置到默认姿态" in 行), "已重建当前算法")
+
+            仿真状态发布 = _重力桥.仿真状态发布器(_发布出口)
+
+            def _仿真状态变了() -> None:
+                if 仿真状态发布 is not None and 重力应用器 is not None:
+                    仿真状态发布.发布(重力应用器, float(getattr(data, "time", 0.0)), 强制=True)
+
+            重力应用器 = _重力桥.重力应用器(
+                复位回调=_重置姿态回调,
+                仿真复位回调=_仿真复位回调,
+                状态回调=_仿真状态变了,
+            )
             注册表.加插件(重力应用器)          # 让它收到 重力状态
             重力应用器.登记到注册表(注册表)     # ★ 登记"世界冻结"判据 —— 冻结靠这个生效
                                                 #   （不能用"改暂停快照"实现：官方不发快照）
@@ -716,12 +829,13 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             try:
                 def 切换模型(模型=None, 路径: str = "", 通知窗口: bool = True):
                     """加载并重绑一个新模型。返回 (是否成功, 给人看的一句话)。"""
+                    nonlocal 当前模型, 当前数据
                     if 模型 is None:
                         if not 路径 or not os.path.exists(路径):
                             return False, f"模型文件不存在：{路径 or '（空路径）'}"
                         起点 = _time.perf_counter()
                         try:
-                            模型 = mujoco.MjModel.from_xml_path(路径)
+                            模型 = _模型加载.加载模型(mujoco, 路径)
                         except Exception as 异常:                          # noqa: BLE001
                             # ★ 加载失败绝不能影响正在跑的旧模型（用户可能只是选错了文件）
                             return False, f"加载失败（已保留原模型）：{type(异常).__name__}: {异常}"
@@ -920,14 +1034,19 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             except Exception as 异常:                                     # noqa: BLE001
                 print(f"⚠ 系统桥不可用（监控视图将没有数据）：{异常}")
                 系统发布 = None
+
+            # 到这里模型、插件和内置发布器都已完成初始化。宿主窗口等的是这个
+            # 明确信号，而不是猜“睡 1.2 秒应该够了”。
+            会话.就绪.set()
             while not 停止.is_set():
                 # 官方 ViewerHandle.sync 做了三件事，我们拆开自己做，好插入出错隔离：
                 #   ① 处理 viewer 发来的事件/快照  ② 派发 StepEvent  ③ 回发状态快照
                 #   ★ 其中第 ② 步的"推进物理"由官方的 StepControl 插件完成（见 插件系统.py 的说明），
                 #     它同时负责暂停/单步/倍速/噪声/发散后自动重置 —— 所以这里不再自己管节拍。
                 if 无窗:
-                    # 无窗模式：仿真数据就住在本地变量里，没有句柄要同步
-                    pass
+                    # 无窗宿主切换模型时，回调会替换 `当前模型/当前数据`。
+                    # 每圈在这里取回权威引用，避免 3D 已换模型、物理循环却仍跑旧模型。
+                    model, data = 当前模型, 当前数据
                 else:
                     句柄.model, 句柄.data = model, data
 
@@ -1018,21 +1137,10 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     系统发布.也许发布(
                         float(data.time), _步数, float(model.opt.timestep),
                         len(getattr(注册表, "_目标", [])), _time.perf_counter())
-                # 周期性送"可调参数表"给界面（10 Hz 够了，滑杆不需要更密）
-                if 参数发布 is not None:
-                    参数发布.也许发布(注册表, float(data.time), _time.perf_counter())
-                # 系统指标（1 Hz）：RTF / 步频 / 内存。
-                #   步数用 `data.time / timestep` 反推不稳，直接用 mujoco 的累计计数；
-                #   拿不到就退回 0（宁可步频显示 0，也不编一个数）。
-                if 系统发布 is not None:
-                    _步数 = 0
-                    try:
-                        _步数 = int(getattr(data, "time", 0.0) / max(model.opt.timestep, 1e-9))
-                    except Exception:                                     # noqa: BLE001
-                        _步数 = 0
-                    系统发布.也许发布(
-                        float(data.time), _步数, float(model.opt.timestep),
-                        len(getattr(注册表, "_目标", [])), _time.perf_counter())
+                # 仿真控制状态（5 Hz）：Run/Pause/Reset 工具栏的权威数据源。
+                if 仿真状态发布 is not None and 重力应用器 is not None:
+                    仿真状态发布.也许发布(
+                        重力应用器, float(data.time), _time.perf_counter())
                 # 周期性送"可调参数表"给界面（10 Hz 够了，滑杆不需要更密）
                 if 参数发布 is not None:
                     参数发布.也许发布(注册表, float(data.time), _time.perf_counter())
@@ -1076,7 +1184,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 # 顺手给 3D 视口（如果有）；失败绝不影响仿真主循环
                 if 状态观察者 is not None:
                     try:
-                        状态观察者(快照)
+                        状态观察者(_视口状态快照(快照, data))
                     except Exception:                                 # noqa: BLE001
                         pass
 
@@ -1094,10 +1202,14 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             print("\n【仿真线程】收到 Ctrl+C，正在退出…", flush=True)
         except Exception as 异常:                             # noqa: BLE001
             出错["异常"] = 异常
+            会话.错误 = 异常
+            会话.就绪.set()
             print(f"\n✗ 仿真线程出错：{type(异常).__name__}: {异常}")
             traceback.print_exc(limit=6)
         finally:
             停止.set()
+            # 初始化阶段出错时也要唤醒等待者，让窗口立即得到失败原因。
+            会话.就绪.set()
             if not 无窗:
                 try:
                     句柄.close()
@@ -1115,6 +1227,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
         if 后台线程:
             print("【无窗模式】仿真在后台线程运行（主线程留给宿主窗口）。", flush=True)
             线程 = threading.Thread(target=仿真循环, daemon=True, name="仿真线程")
+            会话.线程 = 线程
             线程.start()
             return 0
         print("【无窗模式】仿真在主线程运行；界面请用浏览器打开上面的地址。", flush=True)
@@ -1129,6 +1242,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
         return 0
 
     线程 = threading.Thread(target=仿真循环, daemon=True, name="仿真线程")
+    会话.线程 = 线程
     线程.start()
 
     # ---- 4. 主线程跑窗口（这一步必须在主线程，否则 macOS 直接拒绝）----

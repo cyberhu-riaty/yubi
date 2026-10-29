@@ -91,6 +91,13 @@ _导入()
 mujoco: ModuleType | None = globals().get("mujoco")
 
 
+def _环境命令(参数: str) -> str:
+    """给当前平台返回仓库虚拟环境中的 Python 命令。"""
+    if sys.platform == "win32":
+        return rf".\.venv\Scripts\python.exe {参数}"
+    return f".venv/bin/python {参数}"
+
+
 def _取(名: str) -> ModuleType:
     """取子模块；拿不到就抛人话版异常（绝大多数调用点应该永远走不到这里）。"""
     模块 = globals().get(名)
@@ -121,10 +128,11 @@ def __getattr__(属性: str):
                 模块 = __import__("mujoco.experimental.dear_imgui.dear_imgui",
                                   fromlist=["dear_imgui"])
         except ImportError as 异常:
+            检查命令 = _环境命令('-c "from 官方层 import ux; print(ux)"')
             raise SystemExit(
                 f"\n✗ 取不到 {属性}（{异常}）。\n"
                 f"  它属于官方 experimental 子模块；当前 mujoco 可能不是完整 pip 包。\n"
-                f"  检查：.venv/bin/python -c \"from 官方层 import ux; print(ux)\"\n") from 异常
+                f"  检查：{检查命令}\n") from 异常
         globals()[属性] = 模块
         return 模块
     raise AttributeError(f"官方层 里没有 {属性!r}")
@@ -134,6 +142,7 @@ def _缺东西提示(名: str | None = None) -> str:
     '''拼一段"缺什么 + 为什么 + 怎么修"的人话。'''
     版本 = getattr(mujoco, "__version__", "未知") if mujoco else "未知"
     头 = ("缺少：" + 名) if 名 else ""
+    启动命令 = _环境命令("软件/主程序窗口.py")
     return (
         f"\n✗ 当前 Python 环境里没有可用的 Studio 插件系统：{头}\n\n"
         f"  你现在用的是：{sys.executable}\n"
@@ -143,8 +152,8 @@ def _缺东西提示(名: str | None = None) -> str:
         f"  conda 渠道装的 mujoco 是「零件版」，不含界面层与插件系统。\n\n"
         f"  解决：\n"
         f"    cd <仓库根目录>\n"
-        f"    .venv/bin/python 软件/主程序窗口.py\n"
-        f"  （.venv 已按叠加层方式配好：include-system-site-packages = true）\n"
+        f"    {启动命令}\n"
+        f"  （请确认 VS Code 也选中了仓库里的 .venv 解释器。）\n"
     )
 
 

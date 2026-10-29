@@ -32,6 +32,9 @@ import sys
 本目录 = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, 本目录)
 
+import 控制台                          # noqa: E402
+控制台.准备输出()
+
 import 插件系统 as 插件框架            # noqa: E402
 import 启动                            # noqa: E402
 import 文案                          # noqa: E402
@@ -49,12 +52,15 @@ def _找模型() -> tuple[str, str]:
 
     顺序（与 `主程序窗口.py` 一致，免得两个入口行为不一样）：
       ① 命令行 --模型
-      ② `输出/设置.json` 里记住的"上次用的"     ← 用户上次选的，最符合直觉
-      ③ 项目文件里第一个声明的模型
-      ④ 空场景
+      ② 空场景（地面、灯光、背景；机器人由用户在模型库中主动选择）
+      ③ 空场景文件缺失时，才回退到上次模型或项目模型
     """
     if 模型 := os.environ.get("驭臂_模型", "").strip():
         return 模型, "命令行/环境变量指定"
+    空场景 = os.path.join(os.path.dirname(本目录), "模型", "空场景.xml")
+    if os.path.exists(空场景):
+        return 空场景, "启动默认空场景（请在模型库中选择机器人）"
+    # 空场景文件意外缺失时才回退到已有模型，避免整个程序无法启动。
     try:
         import 模型桥
         上次 = 模型桥.读取上次模型()
@@ -71,9 +77,6 @@ def _找模型() -> tuple[str, str]:
                 return 绝对, f"项目「{名字}」声明的模型"
     except Exception:                                                 # noqa: BLE001
         pass
-    空场景 = os.path.join(os.path.dirname(本目录), "模型", "空场景.xml")
-    if os.path.exists(空场景):
-        return 空场景, "空场景（没有可用模型）"
     return "", "一个模型都没找到"
 
 
@@ -82,6 +85,8 @@ def _选项目(模型路径: str, 指名: str | None) -> str:
     try:
         if 指名:
             return str(指名)
+        if os.path.basename(模型路径) == "空场景.xml":
+            return ""
         import 模型桥
         上次 = 模型桥.读取设置("上次项目", "")
         if 上次:

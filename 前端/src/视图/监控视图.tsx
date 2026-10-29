@@ -19,13 +19,12 @@ import { use取 } from "./文案";
 export function 监控视图() {
   const t = use取();
   const 系统 = 用仓库((s) => s.系统.数据);
+  const 仿真 = 用仓库((s) => s.仿真.数据);
   const 连接 = 用仓库((s) => s.连接);
-  const 项目 = 用仓库((s) => s.项目.数据);
   const 告警 = 用仓库((s) => s.告警.数据);
   const 活动告警 = 告警?.活动 ?? [];
   const 活跃数 = 活动告警.filter((a) => a.严重度 === "严重").length || 活动告警.length;
-  const 物理 = 项目?.重力开;
-  const 已冻结 = 物理 === false;
+  const 已冻结 = 仿真?.状态 === "暂停";
   const 跑得动 = 系统?.RTF !== undefined && 系统.RTF >= 0.95;
 
   /** 冻结时 RTF=0 不是告警；只有推进中掉速才告警 */
@@ -113,7 +112,6 @@ export function 监控视图() {
           )
         }
       >
-        <p className="text-dim">{t("监控.说明")}</p>
         {已冻结 ? (
           <p className="mt-1 text-[0.85em]" style={{ color: "var(--warn)" }}>{t("监控.冻结")}</p>
         ) : null}
@@ -131,7 +129,6 @@ export function 监控视图() {
             {系统.出错}
           </div>
         ) : null}
-        <p className="mt-2 text-[0.8em] text-dim">{t("监控.无趋势")}</p>
       </可折叠区块>
     </div>
   );

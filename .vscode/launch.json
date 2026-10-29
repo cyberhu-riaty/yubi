@@ -1,0 +1,38 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Yubi Windows 主窗口（含 3D）",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/软件/主程序窗口.py",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Yubi Windows 主窗口（无 3D 排查）",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/软件/主程序窗口.py",
+            "args": ["--无3D"],
+            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Yubi Windows 环境自检",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/软件/主程序窗口.py",
+            "args": ["--检查"],
+            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

@@ -1,0 +1,15 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+    "python.terminal.activateEnvironment": true,
+    "code-runner.runInTerminal": true,
+    "code-runner.executorMap": {
+        "python": "& \"$workspaceRoot\\.venv\\Scripts\\python.exe\" -u $fullFileName"
+    },
+    "python-envs.pythonProjects": [
+        {
+            "path": ".",
+            "envManager": "ms-python.python:venv",
+            "packageManager": "ms-python.python:pip"
+        }
+    ]
+}

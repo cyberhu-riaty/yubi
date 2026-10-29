@@ -16,10 +16,12 @@
  *   · 不把"关节状态"编出来：没有关节角数据源，浮层里就写"还没有指标序列"，
  *     而不是画一排看起来像关节角的数字
  */
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { 标签 } from "../组件/标签";
+import { 按钮 } from "../组件/按钮";
 import { 数值表, 数值文本, type 数值行 } from "../组件/数值表";
-import { 用仓库 } from "../数据/仓库";
+import { 命令, 用仓库 } from "../数据/仓库";
+import { 命令收尾, 记命令发出 } from "../数据/日志";
 import type { 采样点 } from "../数据/连接";
 import { 契约版本, 协议版本 } from "@生成/契约";
 import { 用风格 } from "../生成/外观";
@@ -74,13 +76,10 @@ export function 中区({ 条数上限 = 12 }: 中区参数) {
              说明文字没有删掉，收进了右上角浮层与「关于」页 —— 需要看的人依然找得到。*/}
         <div className="flex h-full flex-col gap-2 p-3">
           <div
-            className="面板 flex flex-none items-center gap-2 px-3 py-2"
+            className="面板 flex flex-none flex-wrap items-center gap-2 px-3 py-2"
             style={{ background: "var(--bg-panel)" }}
           >
-            <标签 语气="警示">{t("通用.未接入")}</标签>
-            <span className="truncate text-[0.9em]">{t("中区.未接入")}</span>
-            <span className="flex-1" />
-            <span className="text-[0.82em] text-dim">{t("中区.操作提示")}</span>
+            <span className="min-w-0 truncate text-[0.82em] text-dim">{t("中区.未接入")}</span>
           </div>
 
           <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-y-auto">
@@ -134,6 +133,68 @@ export function 中区({ 条数上限 = 12 }: 中区参数) {
         <span className="等宽">{`${t("定义.自由度")}: ${模型?.自由度 ?? "--"}`}</span>
         <span className="flex-1" />
       </div>
+    </div>
+  );
+}
+
+/** 常驻全局控制：按钮发命令，状态只认后端返回的「仿真状态」。 */
+export function 仿真工具栏() {
+  const t = use取();
+  const 状态 = 用仓库((s) => s.仿真.数据);
+  const 连接 = 用仓库((s) => s.连接);
+  const 模型 = 用仓库((s) => s.模型.数据);
+  const [忙, 设忙] = useState<"运行" | "暂停" | "复位" | null>(null);
+
+  const 已运行 = 状态?.状态 === "运行";
+  const 已暂停 = 状态?.状态 === "暂停";
+  const 可发 = 连接 === "已连接" && !!模型 && !!状态;
+
+  const 执行 = async (动作: "运行" | "暂停" | "复位") => {
+    设忙(动作);
+    try {
+      const 起于 = 记命令发出();
+      命令收尾("命令.仿真", await 命令.控制仿真(动作), 起于, { 模块: `仿真·${动作}` });
+    } finally {
+      设忙(null);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t("仿真控制.标题")}>
+      <span className="mr-0.5 font-semibold">{t("仿真控制.标题")}</span>
+      <标签 语气={已运行 ? "成功" : 已暂停 ? "强调" : "警示"}>
+        {状态 ? t(已运行 ? "仿真控制.运行中" : "仿真控制.已暂停") : t("仿真控制.等待")}
+      </标签>
+      <按钮
+        种类="主"
+        尺寸="小"
+        disabled={!可发 || !!忙 || 已运行}
+        title={t("仿真控制.运行说明")}
+        on按下={() => void 执行("运行")}
+      >
+        {忙 === "运行" ? "…" : t("仿真控制.运行")}
+      </按钮>
+      <按钮
+        种类="次"
+        尺寸="小"
+        disabled={!可发 || !!忙 || 已暂停}
+        title={t("仿真控制.暂停说明")}
+        on按下={() => void 执行("暂停")}
+      >
+        {忙 === "暂停" ? "…" : t("仿真控制.暂停")}
+      </按钮>
+      <按钮
+        种类="次"
+        尺寸="小"
+        disabled={!可发 || !!忙}
+        title={t("仿真控制.复位说明")}
+        on按下={() => void 执行("复位")}
+      >
+        {忙 === "复位" ? "…" : t("仿真控制.复位")}
+      </按钮>
+      <span className="等宽 text-[0.8em] text-dim" title={状态?.说明}>
+        {`t=${状态?.仿真时间?.toFixed(2) ?? "--"} s`}
+      </span>
     </div>
   );
 }

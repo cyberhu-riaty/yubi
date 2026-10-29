@@ -29,15 +29,16 @@
   <asset>
     <texture type="skybox" builtin="gradient" rgb1="0.12 0.16 0.22" rgb2="0.04 0.05 0.07"
              width="256" height="256"/>
-    <texture name="grid" type="2d" builtin="checker" width="512" height="512"
-             rgb1="0.16 0.17 0.19" rgb2="0.22 0.23 0.26"/>
-    <material name="grid" texture="grid" texrepeat="6 6" reflectance="0.08"/>
+    <texture name="ground_tex" type="2d" builtin="checker" width="512" height="512"
+             rgb1="0.18 0.36 0.58" rgb2="0.78 0.87 0.95"/>
+    <material name="ground_mat" texture="ground_tex" texrepeat="8 8"
+              texuniform="true" reflectance="0.10"/>
   </asset>
 
   <worldbody>
-    <light pos="0 0 3" dir="0 0 -1" directional="true" diffuse="0.8 0.8 0.8" specular="0.2 0.2 0.2"/>
-    <!-- 地面：给个参照物，否则空白窗口里连"上下左右"都看不出来 -->
-    <geom name="floor" type="plane" size="3 3 0.1" material="grid"
+    <light name="scene_light" pos="0 0 3" dir="0 0 -1" directional="true"
+           diffuse="0.85 0.85 0.85" specular="0.20 0.20 0.20"/>
+    <geom name="floor" type="plane" size="3 3 0.1" material="ground_mat"
           contype="1" conaffinity="1" condim="3" friction="1 0.005 0.0001"/>
   </worldbody>
 </mujoco>

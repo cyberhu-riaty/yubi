@@ -6,10 +6,10 @@
     可用, 原因 = 平台.可用()         # **起窗口之前**就能问
     平台.起(地址=..., 标题=..., 宽=..., 高=...)
 
-四个能力（+ 主循环）的约定见 `契约.py`；macOS 实现在 `macos.py`。
+四个能力（+ 主循环）的约定见 `契约.py`；各平台实现在同目录的独立模块里。
 
-★ 本层只做"翻译"，真正的窗口逻辑在 `软件/宿主窗口.py`。
-  这样 P3-a 换来的那些教训（60 fps、状态一步不漏）不会因为抽象而丢失。
+★ macOS 实现继续委托 `软件/宿主窗口.py`；Windows 实现使用 PySide6。
+  两边都遵守同一契约，入口和仿真业务不需要知道窗口由什么技术实现。
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ _缓存: dict[str, 平台能力] = {}
 
 def 可用平台() -> list[str]:
     """返回当前系统上**登记过**的平台名（不代表它现在能用，见 `可用()`）。"""
-    return ["macos"]
+    return ["macos", "windows"]
 
 
 def 取实现() -> 平台能力:
@@ -40,10 +40,13 @@ def 取实现() -> 平台能力:
     if 键 == "darwin":
         from .macos import MacOS
         实例: 平台能力 = MacOS()
+    elif 键 == "win32":
+        from .windows import Windows
+        实例 = Windows()
     else:
         raise 无可用平台(
             f"当前系统 {sys.platform!r} 还没有窗口实现。\n"
-            f"  已实现：macOS（darwin）\n"
+            f"  已实现：macOS（darwin）、Windows（win32）\n"
             f"  要加一个平台：在 `软件/平台适配层/` 里仿照 macos.py 实现"
             f"`契约.平台能力` 的那几个方法即可（只有五个：建窗口/挂网页/"
             f"取视口矩形/同级组合/进主循环）。\n"

@@ -5,16 +5,16 @@
 
     | 入口 | 窗口 | 界面 | 3D |
     |---|---|---|---|
-    | **`主程序窗口.py`** | **我们自己的 NSWindow** | **窗口内 WKWebView 里的 React** | **✅ 原生 OpenGL 视口** |
+    | **`主程序窗口.py`** | **平台原生窗口** | **窗口内网页视图里的 React** | **macOS / Windows 均已接入** |
     | `主程序Web.py`   | 无（外部浏览器打开） | 浏览器里的 React | ❌ 无原生 3D |
 
 为什么要有它：
-    界面不再依赖官方 Studio 的窗口，也不再依赖外部浏览器；而 3D 仍然是
-    **真原生渲染**（不是浏览器里的运动学回放）。P2 验证过"原生视图 + WKWebView
-    同级并列"成立（见 `工具/spike/` 的验收脚本），这里就是把那个结论变成产品。
+    界面不再依赖官方 Studio 的窗口，也不再依赖外部浏览器。macOS 的 3D 仍然是
+    **MuJoCo 渲染**（不是浏览器里的运动学回放）；Windows 由 Qt 同级放置网页工作台
+    与 3D 视口，两边都复用同一个仿真与消息后端。
 
 线程排法（沿用既有约束，没有新花样）：
-    AppKit 占主线程（窗口 + 3D 视口）→ 仿真回后台线程。
+    平台窗口事件循环占主线程（macOS AppKit / Windows Qt）→ 仿真回后台线程。
     两边通过 Web 桥的消息队列通信，**不共享 MjData**（视口有自己那份）。
 
 当前边界（诚实清单）：
@@ -32,19 +32,20 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import threading
-import time
 
 本目录 = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, 本目录)
 
-import 插件系统 as 插件框架            # noqa: E402
-import 启动                            # noqa: E402
-import 文案                          # noqa: E402
-import Web桥                          # noqa: E402
-import 重力桥                          # noqa: E402
-import 项目 as 项目清单                  # noqa: E402
-import 装配器                          # noqa: E402
+import 控制台
+
+控制台.准备输出()
+
+import Web桥
+import 启动
+import 插件系统 as 插件框架
+import 装配器
+
+import 项目 as 项目清单
 
 软件名 = "小软件"
 
@@ -53,15 +54,19 @@ import 装配器                          # noqa: E402
 
 
 def _找模型() -> tuple[str, str]:
-    """与 `主程序Web.py` 同一套顺序（两个入口行为必须一致）。"""
+    """明确指定时加载指定模型，否则先进入有地面和灯光的空场景。"""
     if 模型 := os.environ.get("驭臂_模型", "").strip():
         return 模型, "命令行/环境变量指定"
+    空场景 = os.path.join(os.path.dirname(本目录), "模型", "空场景.xml")
+    if os.path.exists(空场景):
+        return 空场景, "启动默认空场景（请在模型库中选择机器人）"
+    # 空场景文件意外缺失时才回退到已有模型，避免整个程序无法启动。
     try:
         import 模型桥
         上次 = 模型桥.读取上次模型()
         if 上次 and os.path.exists(上次):
             return 上次, "上次用过的模型"
-    except Exception:                                                 # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110
         pass
     try:
         for 名字 in sorted(项目清单.列出项目() or []):
@@ -70,11 +75,8 @@ def _找模型() -> tuple[str, str]:
             绝对 = 项目清单.绝对路径(路径) if 路径 else ""
             if 绝对 and os.path.exists(绝对):
                 return 绝对, f"项目「{名字}」声明的模型"
-    except Exception:                                                 # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110
         pass
-    空场景 = os.path.join(os.path.dirname(本目录), "模型", "空场景.xml")
-    if os.path.exists(空场景):
-        return 空场景, "空场景（没有可用模型）"
     return "", "一个模型都没找到"
 
 
@@ -82,6 +84,8 @@ def _选项目(模型路径: str, 指名: str | None) -> str:
     try:
         if 指名:
             return str(指名)
+        if os.path.basename(模型路径) == "空场景.xml":
+            return ""
         import 模型桥
         上次 = 模型桥.读取设置("上次项目", "")
         return str(上次) if 上次 else (项目清单.按模型找项目(模型路径) if 模型路径 else "")
@@ -230,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
     print("=" * 76, flush=True)
     print(f"  {软件名} · 机器人仿真工作台（宿主窗口）", flush=True)
     print("=" * 76, flush=True)
-    print(f"  界面地址 : {地址}（显示在窗口内的 WKWebView 里）", flush=True)
+    print(f"  界面地址 : {地址}（显示在窗口内的网页视图里）", flush=True)
     print(f"  模型     : {os.path.basename(模型路径)}（{说明}）", flush=True)
     print(f"  项目     : {项目名 or '（无 → 不挂算法，进去是静止的）'}", flush=True)
     print(f"  算法     : {len(插件清单)} 个", flush=True)
@@ -263,14 +267,21 @@ def main(argv: list[str] | None = None) -> int:
     启动.设状态观察者(收到状态)
     启动.设模型观察者(收到模型事件)
 
-    结果 = {}
-    def 跑仿真():
-        结果["码"] = 启动.启动外壳(配置, 模型路径, None, 插件清单, 注册表,
-                                 插件框架.通知模型加载, 项目名=项目名,
-                                 无窗=True, 后台线程=True)
-    线程 = threading.Thread(target=跑仿真, daemon=True, name="仿真线程")
-    线程.start()
-    time.sleep(1.2)          # 让装配先走完（视口一上来就有状态可跟）
+    # `启动外壳(...后台线程=True)` 自己负责创建仿真线程。这里不再额外包一层
+    # “启动线程”，也不猜固定等待时间；模型和插件真正就绪后会发出事件。
+    启动码 = 启动.启动外壳(
+        配置, 模型路径, None, 插件清单, 注册表,
+        插件框架.通知模型加载, 项目名=项目名,
+        无窗=True, 后台线程=True)
+    if 启动码 != 0:
+        Web桥.关闭()
+        return int(启动码)
+    已就绪, 就绪说明 = 启动.等待就绪(15.0)
+    if not 已就绪:
+        print(f"✗ {就绪说明}", flush=True)
+        启动.请求停止()
+        Web桥.关闭()
+        return 1
 
     if 要开重力:
         # 装配完成后再开（见上面 `要开重力` 的说明）。
@@ -291,13 +302,26 @@ def main(argv: list[str] | None = None) -> int:
                   flush=True)
 
     # ---- 4. 起窗口（这一步必须在主线程）----
+    窗口码 = 0
     try:
         # 视口槽交给平台层：它建好原生渲染面后回填，状态观察者据此把每步状态喂进去。
-        return 平台.起(地址=地址, 标题=args.标题, 宽=args.宽, 高=args.高,
-                      命令队列=启动.取命令队列(), 无3D=args.无3D, 视口槽=视口槽)
+        窗口码 = 平台.起(
+            地址=地址, 标题=args.标题, 宽=args.宽, 高=args.高,
+            命令队列=启动.取命令队列(), 无3D=args.无3D, 视口槽=视口槽)
     except KeyboardInterrupt:
         print("\n收到 Ctrl+C，正在退出…", flush=True)
-        return 0
+        窗口码 = 0
+    finally:
+        # 关闭顺序：先断开观察者，防止再给已销毁的视口送帧；再停仿真；
+        # 最后关闭本地 Web 服务，释放端口。重复关闭也是安全的。
+        启动.设状态观察者(None)
+        启动.设模型观察者(None)
+        已停止, 停止说明 = 启动.请求停止(3.0)
+        if not 已停止:
+            print(f"⚠ {停止说明}", flush=True)
+            窗口码 = 1
+        Web桥.关闭()
+    return int(窗口码)
 
 
 if __name__ == "__main__":

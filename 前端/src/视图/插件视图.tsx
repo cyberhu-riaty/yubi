@@ -8,48 +8,26 @@
  *
  * 它真做的事：
  *   · 列出 `算法库/` 下的插件，元信息（版本/说明/作者）来自**真文件**（后端 AST 读取）
- *   · 标出"当前项目是否启用"，点一下就在当前项目里启用/停用（走 `命令.应用算法`，有回执）
+ *   · 标出"当前项目是否启用"；真正的选择、应用与保存统一放在「定义」页
  *   · 标出"被哪些项目用到"（反查 项目/*.json）
  *
  * 想做真正的市场，至少得先有：远端清单 + 校验和 + 安装到本地 + 版本冲突处理。
  * 那是另一件事，界面上已如实写明"未实现"。
  */
-import { useState } from "react";
 import { 可折叠区块 } from "../组件/可折叠区块";
 import { 标签 } from "../组件/标签";
 import { 按钮 } from "../组件/按钮";
-import { 命令, 用仓库 } from "../数据/仓库";
-import { 命令收尾, 记命令发出 } from "../数据/日志";
+import { 用仓库 } from "../数据/仓库";
+import { 请求跳步 } from "../外壳/跳步";
 import { use取 } from "./文案";
 
 export function 插件视图() {
   const t = use取();
   const 目录 = 用仓库((s) => s.插件.数据);
   const 项目 = 用仓库((s) => s.项目.数据);
-  const [忙, 设忙] = useState(false);
   const 不兼容报告 = (项目?.报告 ?? []).filter((行) => 行.includes("不兼容"));
 
   const 项们 = 目录?.插件 ?? [];
-  // ★ 启用序必须用**模块名**（`关节pd控制`），不能用界面上的显示名
-  //   （`关节 PD 位置控制`）—— 后端装配认的是模块名，传显示名会"装不上且不报错"。
-  //   顺序取「已完成装配的那份清单」：目录里标了 当前启用 的，按目录顺序。
-  const 启用序 = 项们.filter((x) => x.当前启用 && x.插件).map((x) => x.插件 as string);
-
-  const 切换 = async (插件名: string, 已启用: boolean) => {
-    设忙(true);
-    try {
-      const 目标 = 已启用
-        ? 启用序.filter((n) => n !== 插件名)
-        : [...启用序, 插件名];            // 新加的排最后（= 最后写 ctrl，最容易看到效果）
-      const 起于 = 记命令发出();
-      命令收尾("命令.应用算法", await 命令.应用算法(目标), 起于, {
-        模块: "插件",
-        插件: 插件名,
-      });
-    } finally {
-      设忙(false);
-    }
-  };
 
   return (
     <div className="space-y-2">
@@ -57,11 +35,15 @@ export function 插件视图() {
         标题={t("步骤.插件")}
         徽标={项们.length ? <标签>{项们.length}</标签> : <标签 语气="警示">{t("通用.待接入")}</标签>}
       >
-        <p className="text-dim">{t("插件.说明")}</p>
-        <p className="mt-1 text-[0.85em]" style={{ color: "var(--warn)" }}>
+        <p className="text-[0.85em]" style={{ color: "var(--warn)" }}>
           {t("插件.没有远端")}
         </p>
-        <p className="mt-1 text-[0.8em] text-dim">{t("插件.兼容性未判定")}</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[0.82em] text-dim">
+          <span>{t("插件.只读说明")}</span>
+          <按钮 尺寸="小" 种类="幽灵" on按下={() => 请求跳步("定义")}>
+            {t("插件.去定义")}
+          </按钮>
+        </div>
 
         {项们.length ? (
           <ul className="mt-2 space-y-1">
@@ -99,15 +81,6 @@ export function 插件视图() {
                     <div className="mt-1 text-[0.8em]" style={{ color: "var(--danger)" }}>{t("插件.不兼容说明")}</div>
                   ) : null}
                   <div className="mt-1 flex items-center gap-2">
-                    <按钮
-                      种类={已启用 ? "次" : "主"}
-                      尺寸="小"
-                      disabled={忙 || (不兼容 && !已启用)}
-                      title={不兼容 && !已启用 ? t("插件.不兼容说明") : undefined}
-                      on按下={() => void 切换(名, 已启用)}
-                    >
-                      {已启用 ? t("插件.停用") : t("插件.启用")}
-                    </按钮>
                     {x.作者 ? <span className="text-[0.8em] text-dim">{`${t("插件.作者")}: ${x.作者}`}</span> : null}
                   </div>
                 </li>
