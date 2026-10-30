@@ -86,6 +86,7 @@ export function 定义视图() {
   const 项目 = 用仓库((s) => s.项目.数据);
   const 插件目录 = 用仓库((s) => s.插件.数据);
   const 插件帧号 = 用仓库((s) => s.插件.帧号);
+  const 控制 = 用仓库((s) => s.控制.数据);
   const 连接状态 = 用仓库((s) => s.连接);
 
   const [路径, 设路径] = useState("");
@@ -94,10 +95,13 @@ export function 定义视图() {
   const [算法忙, 设算法忙] = useState<"应用" | "保存" | null>(null);
   const [回执条, 设回执条] = useState<回执 | null>(null);
   const [算法回执, 设算法回执] = useState<回执 | null>(null);
+  const [目标回执, 设目标回执] = useState<回执 | null>(null);
+  const [目标忙, 设目标忙] = useState(false);
+  const [目标草稿, 设目标草稿] = useState<string[]>([]);
   const [报告开, 设报告开] = useState(false);
   // 定义页采用固定式手风琴：区块标题始终可见，一次只展开一个内容区。
   // 内容较长时只在展开区内部滚动，避免整个“定义”页面上下移动。
-  type 定义区 = "模型" | "项目" | "资产" | "算法" | "换模型";
+  type 定义区 = "模型" | "项目" | "控制" | "资产" | "算法" | "换模型";
   const [当前区, 设当前区] = useState<定义区 | null>("模型");
   const 控制区 = (区: 定义区) => ({
     开: 当前区 === 区,
@@ -105,6 +109,32 @@ export function 定义视图() {
       设当前区(开 ? 区 : null);
     },
   });
+
+  const 后端目标键 = (控制?.目标 ?? []).join("|");
+  useEffect(() => {
+    设目标草稿((控制?.目标 ?? []).map((值) => Number(值).toFixed(4)));
+  }, [后端目标键]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const 用当前位置 = () => {
+    设目标草稿((控制?.当前位置 ?? []).map((值) => Number(值).toFixed(4)));
+  };
+
+  const 提交控制目标 = async () => {
+    const 数值 = 目标草稿.map((值) => Number(值));
+    if (!数值.length || 数值.some((值) => !Number.isFinite(值))) {
+      记注意("控制台", t("定义.控制目标.数值错误"));
+      return;
+    }
+    设目标忙(true);
+    try {
+      const 起于 = 记命令发出();
+      const r = 命令收尾("命令.控制目标", await 命令.设置控制目标(数值), 起于,
+        { 模块: "定义·关节目标" });
+      设目标回执(r);
+    } finally {
+      设目标忙(false);
+    }
+  };
 
   // ★ GUI → MuJoCo 的算法配置先放在本地「待选集」里；只有点应用/保存才发给后端。
   //   这里以插件模块名为准，显示名只用于给人看，避免把显示名误当成文件名。
@@ -342,6 +372,77 @@ export function 定义视图() {
           </>
         ) : (
           <div className="text-dim">{t("定义.没项目")}</div>
+        )}
+      </可折叠区块>
+
+      <可折叠区块
+        标题={t("定义.控制目标")}
+        {...控制区("控制")}
+        徽标={
+          <span className="flex items-center gap-1.5">
+            <span className="等宽 text-[0.78em]">{控制?.关节名?.length ?? 0} DoF</span>
+            {项目?.控盘 ? <标签 语气="成功">{项目.控盘}</标签> : <标签 语气="警告">{t("定义.控制目标.无算法")}</标签>}
+          </span>
+        }
+      >
+        {控制?.关节名?.length ? (
+          <>
+            <div className="mb-2 text-[0.8em] text-dim">
+              {t("定义.控制目标.说明")} · {t("定义.控制目标.来源", { 来源: 控制.目标来源 ?? "--" })}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-[0.82em]">
+                <thead>
+                  <tr>
+                    <th className="border-b px-1 py-1 text-left font-normal text-dim">{t("定义.控制目标.关节")}</th>
+                    <th className="border-b px-1 py-1 text-right font-normal text-dim">{t("定义.控制目标.当前位置")}</th>
+                    <th className="border-b px-1 py-1 text-right font-normal text-dim">{t("定义.控制目标.目标")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {控制.关节名.map((名, i) => (
+                    <tr key={`${名}-${i}`}>
+                      <td className="border-b px-1 py-1 truncate" title={名}>{名}</td>
+                      <td className="border-b px-1 py-1 text-right 等宽">{控制.当前位置?.[i]?.toFixed(4) ?? "--"}</td>
+                      <td className="border-b px-1 py-1 text-right">
+                        <input
+                          className="输入 等宽 w-[7.5em] text-right"
+                          type="number"
+                          step="0.01"
+                          value={目标草稿[i] ?? ""}
+                          aria-label={`${名} ${t("定义.控制目标.目标")}`}
+                          onChange={(e) => 设目标草稿((旧) => {
+                            const 新 = [...旧];
+                            新[i] = e.target.value;
+                            return 新;
+                          })}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <按钮 尺寸="小" 种类="次" on按下={用当前位置}>{t("定义.控制目标.取当前")}</按钮>
+              <按钮
+                尺寸="小"
+                种类="主"
+                disabled={目标忙 || 连接状态 !== "已连接" || 目标草稿.length !== 控制.关节名.length}
+                on按下={() => void 提交控制目标()}
+              >
+                {目标忙 ? "…" : t("定义.控制目标.应用")}
+              </按钮>
+              <span className="text-[0.78em] text-dim">{控制.说明}</span>
+            </div>
+            {目标回执 ? (
+              <div className="mt-1 text-[0.8em] 等宽" style={{ color: 目标回执.通过 ? "var(--ok)" : "var(--danger)" }}>
+                {目标回执.通过 ? "✓" : "✗"} {目标回执.说明 || t("日志.无说明")}
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <div className="text-dim">{t("定义.控制目标.无关节")}</div>
         )}
       </可折叠区块>
 

@@ -13,12 +13,17 @@ export function 上下文条() {
   const t = use取();
   const 项目 = 用仓库((s) => s.项目.数据);
   const 模型 = 用仓库((s) => s.模型.数据);
+  const 实验 = 用仓库((s) => s.实验.数据);
 
   const 项目名 = 项目?.项目 || "--";
   const 模型名 = 模型?.当前显示名 || 模型?.当前路径 || "--";
 
   return (
     <div className="上下文条" aria-label={t("侧栏.上下文")}>
+      <span className="上下文项" title={`${t("状态栏.实验")}：${实验?.名称 || "--"}`}>
+        <span className="上下文标签">{t("状态栏.实验")}</span>
+        <span className="truncate">{实验?.名称 || "--"}</span>
+      </span>
       <span className="上下文项" title={`${t("状态栏.项目")}：${项目名}`}>
         <span className="上下文标签">{t("状态栏.项目")}</span>
         <span className="truncate">{项目名}</span>

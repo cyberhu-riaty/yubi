@@ -1,51 +1,11 @@
-"""
-重力桥.py —— 【Display】左上角开关的通道：**加载重力 / 回到默认位置并冻结**
+"""仿真运行与重力设置的内置通道。
 
-它解决什么问题（用户需求，两次演进的最终形态）
-----------------------------------------------------------------------------
-最初的需求是"展示时别让模型掉下来"。现在的需求是**进入任何模型都先静止**：
+两个概念刻意分开：
+  * 运行 / 暂停决定是否派发物理步进，暂停保持当前状态；
+  * 重力开 / 关只在 ``model.opt.gravity`` 与零向量之间切换。
 
-    ① 打开软件 / 点开任意模型 → **静止在默认位置**（物理冻结，不加载任何控制算法）
-    ② 左上角勾上【加载重力】   → 重力开始作用，模型自然下落
-    ③ 取消勾选                 → 回到默认位置并重新冻结
-    ④ 只有用户在【Algorithms】面板选定算法并 Apply 之后，才开始运动控制
-
-所以这个开关现在是**总闸**：它管的是"物理跑不跑"，与"挂不挂算法"完全无关。
-
-★ 为什么"把重力设成 0"是不够的（本模块存在的唯一理由）：
-    重力是**逐帧积分**进去的。你在"掉到一半"时把重力设 0 —— 机械臂就停在半空那个歪姿上，
-    各关节还带着速度继续滑。要的是"**回到默认姿态并定住**"，所以必须两件事一起做：
-        ① 数据复位到默认姿态（`mj_resetDataKeyframe(home)`）
-        ② **把物理暂停**（官方 `sim.StepControl` 的 `NORMAL_PAUSED`）
-    实测（本机 UR5e）：暂停后连打 500 次 `advance()`，`qpos` 变化 **0.0** —— 真的冻住。
-    这也正好满足需求 ①："不加载算法时进去是静止的"，因为物理根本不推进。
-
-★ 冻结是怎么做到的（踩过一个大坑，最终方案很朴素）
-    曾经的做法是"在派发 `StepControlSnapshot` 时把它改写成 PAUSED"。
-    那条路**依赖官方 ViewerApp 每帧发快照**，而实测在真实运行里
-    **6 秒内收到 0 条快照** —— 冻结从未生效，现象是"一进模型就掉到偏离默认位置
-    0.5~0.8 rad 的地方"。更坑的是：单独写小程序手工构造快照时它是"通过"的。
-    现在的做法**不依赖任何外部消息**：向 `安全注册表` 登记一个"世界是否冻结"的判据
-    （`加冻结判据`，见 插件系统.py 的契约例外 ③）。冻结时注册表**不派发 StepEvent**，
-    官方 StepControl 收不到步进事件、也就不调 advance() —— 物理一步都不走。
-    实测：冻结状态下跑 300 帧，`qpos` 位移 0.000000、`data.time` 不动。
-
-★ 为什么机制在本文件、而不是写成"算法"（这是本轮的重要改动）
-    它曾经是 `算法库/通用/展示姿态.py` 里的一个算法插件，靠项目文件声明才会加载。
-    问题：需求是"**所有模型进去都静止**"，而那取决于"恰好装了那个算法" ——
-    一旦用户把算法列表清空（正是现在要做的），开关就**静默失效**（勾选框还在、没人接）。
-    所以它是一个**外壳级的总闸**，属于内置件，和 `模型应用器` / `参数应用器` 同一类：
-        · 由 `启动.py` 用 `注册表.加插件(重力应用器(...))` 常驻注册
-        · **不进** `_用户插件` 那本账 → 不会出现在算法列表里、不会被换算法时换掉
-        · `接管控制 = False`（不写 ctrl）→ 不会被"抢方向盘"检查误报
-
-★ 两者会打架吗？不会：
-    官方 ViewerApp 每帧发一条 `StepControlSnapshot(pause_state=用户在官方面板上的选择)`，
-    官方 StepControl 收下就 apply。我们的做法是在**派发快照阶段**把这条快照改写成
-    "暂停"再放行（见 `改暂停状态()`），并且记住用户自己在官方暂停键上的意图。
-    于是：
-        · 用户没碰官方暂停键 → 快照每帧都是 UNPAUSED，我们拉回 PAUSED，冻结保持
-        · 用户自己按了官方暂停键 → 那个意图被记下来，"加载重力"时会尊重它
+因此关闭重力不会自动暂停或复位，按 Run 也不会偷偷打开重力。Reset 才会恢复
+默认姿态、清理状态并保持暂停。该模块是外壳内置件，不属于控制算法，也不写 data.ctrl。
 """
 from __future__ import annotations
 
@@ -71,7 +31,7 @@ from 官方层 import messages, sim     # 全部走适配层，见 软件/官方
 #
 # 解决办法：界面侧只保留**一份**状态，两个面板都读写它。
 #   谁改都先改它、再发消息；发布器永远读它 → 不可能互相打架。
-界面重力开 = False
+界面重力开 = True
 
 
 def 设界面重力(开: bool) -> None:
@@ -85,26 +45,17 @@ def 设界面重力(开: bool) -> None:
 # ---------------------------------------------------------------------------
 @dataclasses.dataclass(frozen=True)
 class 重力状态(messages.Snapshot):
-    """要不要**施用重力**（也就是物理跑不跑）。
+    """是否施用模型 XML 声明的重力；不表达运行/暂停。"""
 
-    ★ 语义（2026-09-24 反转，别再按老代码理解）：
-        `重力开 = True`  → 物理正常推进：重力生效，模型会自然下落 / 被算法驱动
-        `重力开 = False` → **冻结在默认位置**：物理暂停，模型一动不动
-      旧名字叫 `关闭`（"关重力"），语义是反的。改名的理由：界面上写的是
-      "加载重力"，代码里如果还叫"关闭"，读代码的人一定会绕错。
-
-    ★ 必须是 @dataclasses.dataclass，否则 pybind 侧的字段访问拿不到值
-      （和 `界面桥.面板目标消息` 同一个坑，实测踩过）。
-    """
-
-    重力开: bool = False
+    重力开: bool = True
 
 
 @dataclasses.dataclass(frozen=True)
 class 仿真控制命令(messages.Snapshot):
     """自研工作台的全局运行命令；与控制算法本身无关。"""
 
-    动作: str = "暂停"          # 运行 / 暂停 / 复位
+    动作: str = "暂停"          # 运行 / 暂停 / 复位 / 设置速度
+    倍率: float = 1.0            # 只在“设置速度”时使用；不修改 model.opt.timestep
 
 
 @dataclasses.dataclass(frozen=True)
@@ -112,8 +63,10 @@ class 仿真状态(messages.Snapshot):
     """仿真侧确认过的真实运行状态，供工具栏和状态栏显示。"""
 
     状态: str = "暂停"          # 运行 / 暂停
+    重力开: bool = True          # 与运行状态独立：暂停时也可以保持重力开启
     仿真时间: float = 0.0        # MuJoCo data.time
     复位次数: int = 0
+    速度倍率: float = 1.0        # 目标墙钟速度；实际达到多少仍看系统.RTF
     说明: str = ""
 
 
@@ -121,17 +74,13 @@ class 仿真状态(messages.Snapshot):
 # 仿真侧：内置的"重力/冻结"应用器（常驻，不随算法加载与否变化）
 # ---------------------------------------------------------------------------
 class 重力应用器:
-    """把"加载重力"开关落成两件事：**复位到默认位置** + **暂停/恢复物理**。
-
-    它是**内置件**（`接管控制 = False`，不写 `ctrl`），由 `启动.py` 常驻注册，
-    所以与项目文件里挂不挂算法完全无关 —— 这正是"进去就静止"能对所有模型成立的原因。
-    """
+    """管理独立的步进闸门与重力参数；不写 ``data.ctrl``。"""
 
     名称 = "重力开关"          # 有名字 → 会出现在状态行，便于排查
     版本 = "2.0"
     英文名 = "Gravity switch"
     接管控制 = False           # 不写 ctrl[:]，不参与"抢方向盘"
-    说明 = "【Display】左上角开关：勾上施用重力，取消则回到默认位置并冻结。"
+    说明 = "重力开关只改模型重力；Run/Pause/Reset 另由仿真控制命令管理。"
 
     def __init__(self, 复位回调: Callable | None = None,
                  仿真复位回调: Callable | None = None,
@@ -143,10 +92,13 @@ class 重力应用器:
         self._模型 = None
         self._数据 = None
         self._模型路径 = ""
-        self._重力开 = False             # 默认：**冻结**（需求 ①：进去是静止的）
+        self._运行中 = False             # 步进闸门：默认暂停
+        self._重力开 = True              # 物理参数：默认使用模型 XML 里的重力
+        self._原始重力 = None
         self._用户暂停 = False           # 用户自己在官方 Simulation 面板上的暂停意图
         self._已复位 = 0
         self._已冻结 = 0
+        self._速度倍率 = 1.0
         self._最近动作 = "模型加载后暂停"
         self._快照参数 = {"speed": 1.0, "noise_scale": 0.0, "noise_rate": 0.0}
         self._记住的姿态 = None          # 没有 home 关键帧时的兜底姿态
@@ -170,9 +122,10 @@ class 重力应用器:
           所以这里必须重置开关状态，不能沿用上一个模型的。
         """
         新路径 = str(getattr(event, "path", "") or "")
-        换了模型 = (新路径 != self._模型路径) or (self._模型 is None)
+        新模型 = getattr(event, "model", None)
+        换了模型 = (新路径 != self._模型路径) or (self._模型 is not 新模型)
 
-        self._模型 = getattr(event, "model", None)
+        self._模型 = 新模型
         self._数据 = getattr(event, "data", None)
         if 新路径:
             self._模型路径 = 新路径
@@ -182,9 +135,15 @@ class 重力应用器:
         #   换算法不该动重力开关；"换算法前把姿态复位"由外壳的 `_装配项目` 负责。
         if not 换了模型:
             return
-        self._重力开 = False             # ← 换模型 → 回到冻结
+        self._运行中 = False             # 换模型先暂停，避免加载瞬间运动
+        self._重力开 = True              # 新模型默认采用 XML 中声明的重力
         self._用户暂停 = False
         self._记住的姿态 = None
+        try:
+            self._原始重力 = self._模型.opt.gravity.copy()
+        except Exception:                                        # noqa: BLE001
+            self._原始重力 = None
+        self._应用重力()
         if self._数据 is not None:
             try:
                 self._记住的姿态 = self._数据.qpos.copy()
@@ -194,40 +153,41 @@ class 重力应用器:
         self._冻结到默认位置(原因="模型已加载")
 
     def 插件状态(self) -> dict:
-        return {"重力": "开（物理运行）" if self._重力开 else "关（已冻结在默认位置）",
+        return {"运行": "运行" if self._运行中 else "暂停",
+                "重力": "开" if self._重力开 else "关",
                 "复位": self._已复位}
 
     @property
     def 重力开(self) -> bool:
-        """物理现在跑不跑。界面用它判断"要不要提示用户勾加载重力"。"""
+        """当前模型是否使用 XML 中的重力向量。"""
         return bool(self._重力开)
 
     @property
     def 运行中(self) -> bool:
-        return bool(self._重力开)
+        return bool(self._运行中)
 
     @property
     def 复位次数(self) -> int:
         return int(self._已复位)
 
     @property
+    def 速度倍率(self) -> float:
+        return float(self._速度倍率)
+
+    @property
     def 最近动作(self) -> str:
         return str(self._最近动作)
 
     def 设重力开(self, 开: bool) -> None:
-        """供外壳/面板直接置位（面板上那个「启用物理」按钮走这条路）。
-
-        为什么不复用 `收状态()`：那个方法带"没变化就早退"的语义，而"强制开启"
-        要从任意状态都能生效（包括已经开着时再点一次，用户期待有反馈）。
-        """
+        """供外壳/面板直接设置重力；运行状态保持不变。"""
         开 = bool(开)
         if 开 == self._重力开:
             return
         self._重力开 = 开
-        if 开:
-            print("【重力】已加载重力 → 物理开始推进（界面按钮）", flush=True)
-        else:
-            self._冻结到默认位置(原因="界面按钮：取消加载重力")
+        设界面重力(开)
+        self._应用重力()
+        print(f"【重力】已{'开启' if 开 else '关闭'}；仿真运行状态不变", flush=True)
+        self._报状态()
 
     # ------------------------------------------------------------------
     # 向注册表登记"冻结判据"（这就是冻结生效的唯一机制）
@@ -248,7 +208,7 @@ class 重力应用器:
 
     def _该冻结(self) -> bool:
         """注册表问的就是这一句：现在要不要冻结物理？"""
-        return not self._重力开
+        return not self._运行中
 
     # ------------------------------------------------------------------
     # 界面来的开关
@@ -259,12 +219,10 @@ class 重力应用器:
         if 重力开 == self._重力开:
             return False                 # 没变化 → 早退（这条消息每帧都到）
         self._重力开 = 重力开
-        if 重力开:
-            print(f"【重力】已加载重力 → 物理开始推进"
-                  f"{'（用户此前按过官方面板的暂停键，仍保持暂停）' if self._用户暂停 else ''}",
-                  flush=True)
-        else:
-            self._冻结到默认位置(原因="取消加载重力")
+        设界面重力(重力开)
+        self._应用重力()
+        print(f"【重力】已{'开启' if 重力开 else '关闭'}；仿真运行状态不变", flush=True)
+        self._报状态()
         return False
 
     @messages.handler
@@ -277,23 +235,20 @@ class 重力应用器:
         """
         动作 = str(getattr(命令, "动作", "暂停") or "暂停")
         if 动作 in ("运行", "run"):
-            self._重力开 = True
+            self._运行中 = True
             self._用户暂停 = False
-            设界面重力(True)
             self._发官方暂停(False)
             self._最近动作 = "继续运行"
             print("【仿真】运行：从当前状态继续推进", flush=True)
         elif 动作 in ("暂停", "pause"):
-            self._重力开 = False
+            self._运行中 = False
             self._用户暂停 = True
-            设界面重力(False)
             self._发官方暂停(True)
             self._最近动作 = "暂停在当前状态"
             print("【仿真】暂停：保持当前姿态与仿真时间", flush=True)
         elif 动作 in ("复位", "reset"):
-            self._重力开 = False
+            self._运行中 = False
             self._用户暂停 = True
-            设界面重力(False)
             self._发官方暂停(True)
             说明 = ""
             if self._仿真复位回调 is not None:
@@ -309,6 +264,12 @@ class 重力应用器:
                 self._冻结到默认位置(原因="GUI Reset")
             self._最近动作 = "已复位并暂停"
             print(f"【仿真】复位完成，保持暂停{f'：{说明}' if 说明 else ''}", flush=True)
+        elif 动作 in ("设置速度", "speed"):
+            # 这里只保存并回传权威状态；真正的等待节拍由“实时固定步进”处理。
+            # 改倍率不会改 timestep，因此控制器看到的 dt 与物理精度保持不变。
+            self._速度倍率 = max(0.25, min(4.0, float(getattr(命令, "倍率", 1.0))))
+            self._最近动作 = f"仿真速度已设为 {self._速度倍率:g}×"
+            print(f"【仿真】目标速度：{self._速度倍率:g}×（物理步长不变）", flush=True)
         self._报状态()
         return False
 
@@ -352,8 +313,8 @@ class 重力应用器:
                                   noise_rate=事件.noise_rate)
         except Exception:                                                # noqa: BLE001
             pass
-        if self._重力开:
-            return False                 # 重力开：原样放行（谁暂停听官方的）
+        if self._运行中:
+            return False                 # 运行中：原样放行
         # 冻结：发一条"暂停"的快照覆盖它
         #   （dataclass 是 frozen，不能原地改，只能照原值重建一条）
         try:
@@ -395,6 +356,18 @@ class 重力应用器:
     def _有home(self) -> bool:
         if self._模型 is None:
             return False
+
+    def _应用重力(self) -> None:
+        """只修改重力参数，不启动、暂停或复位仿真。"""
+        if self._模型 is None or self._原始重力 is None:
+            return
+        try:
+            self._模型.opt.gravity[:] = self._原始重力 if self._重力开 else 0.0
+            if self._数据 is not None:
+                import mujoco
+                mujoco.mj_forward(self._模型, self._数据)
+        except Exception as 异常:                                      # noqa: BLE001
+            print(f"⚠ 应用重力参数失败：{type(异常).__name__}: {异常}", flush=True)
         try:
             import mujoco
             return mujoco.mj_name2id(self._模型, mujoco.mjtObj.mjOBJ_KEY, "home") >= 0
@@ -403,6 +376,7 @@ class 重力应用器:
 
     def _冻结到默认位置(self, 原因: str = "") -> None:
         """把模型摆回默认姿态并冻结。优先用外壳注入的回调（保证与"换算法时重置"同一套行为）。"""
+        self._运行中 = False
         怎么做的 = ""
         if self._复位回调 is not None:
             try:
@@ -488,14 +462,17 @@ class 仿真状态发布器:
         self._上次: tuple | None = None
 
     def 发布(self, 应用器: 重力应用器, 仿真时间: float, 强制: bool = False) -> bool:
-        内容 = (bool(应用器.运行中), float(仿真时间), int(应用器.复位次数), 应用器.最近动作)
+        内容 = (bool(应用器.运行中), bool(应用器.重力开), float(仿真时间),
+              int(应用器.复位次数), float(应用器.速度倍率), 应用器.最近动作)
         if not 强制 and 内容 == self._上次:
             return False
         self._上次 = 内容
         self._发(仿真状态(
             状态="运行" if 应用器.运行中 else "暂停",
+            重力开=bool(应用器.重力开),
             仿真时间=float(仿真时间),
             复位次数=int(应用器.复位次数),
+            速度倍率=float(应用器.速度倍率),
             说明=应用器.最近动作,
         ))
         return True

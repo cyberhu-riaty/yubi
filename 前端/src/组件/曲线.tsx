@@ -7,7 +7,7 @@
  * 这个组件只做四件事，多一件都不做：
  *   ① 多序列同图，每条一个颜色（颜色取自皮肤的 `--palette-N`，换肤自动变）
  *   ② Y 轴**按当前窗口内的真实数据自动缩放**（不写死 0..1，也不外推）
- *   ③ X 轴固定 120 秒墙钟窗口（仓库的淘汰窗口就是 120 秒，两边对齐）
+ *   ③ X 轴最多显示 120 秒；起步数据不足时自动收缩，与鼠标查询共用范围
  *   ④ 鼠标悬停暂停刷新并画十字线，读数取**最近的真实采样点**（不插值编数）
  *
  * ⚠️ 这里**不做**平滑、不做外推、不做滤波：图上的每一个像素都必须能追到一个真实采样点。
@@ -34,9 +34,49 @@ export function 取配色(名序: number): string {
 }
 
 interface 悬停 {
-  x: number;
-  y: number;
   时间: number;
+}
+
+interface 时间范围 {
+  最早: number;
+  最晚: number;
+  跨度: number;
+}
+
+/**
+ * 绘图和鼠标查询必须共用这一份时间范围。
+ * 旧实现绘图会把刚起步的 120 s 窗口收缩成 10 s，鼠标却仍按 120 s 换算，
+ * 因此十字线在右边、标点却跑到中间。
+ */
+function 取时间范围(数据: Record<string, 采样点[]>, 曲线名: string[], 窗口: number): 时间范围 | null {
+  let 最晚 = 0;
+  for (const 名 of 曲线名) {
+    const 点 = 数据[名];
+    if (点?.length) 最晚 = Math.max(最晚, 点[点.length - 1].t);
+  }
+  if (!最晚) return null;
+
+  let 跨度 = 窗口;
+  for (const 名 of 曲线名) {
+    const 点 = 数据[名];
+    if (点?.length) 跨度 = Math.min(跨度, Math.max(10, 最晚 - 点[0].t));
+  }
+  return { 最早: 最晚 - 跨度, 最晚, 跨度 };
+}
+
+/** 二分查找距离指定时刻最近的真实采样点。 */
+function 最近真实点(点: 采样点[], 时间: number): 采样点 | null {
+  if (!点.length) return null;
+  let 左 = 0;
+  let 右 = 点.length - 1;
+  while (左 < 右) {
+    const 中 = Math.floor((左 + 右) / 2);
+    if (点[中].t < 时间) 左 = 中 + 1;
+    else 右 = 中;
+  }
+  const 后 = 点[左];
+  const 前 = 左 > 0 ? 点[左 - 1] : null;
+  return 前 && Math.abs(前.t - 时间) <= Math.abs(后.t - 时间) ? 前 : 后;
 }
 
 export function 曲线({ 数据, 显示, 窗口 = 120, 高 = 200, on暂停 }: 曲线参数) {
@@ -109,13 +149,9 @@ export function 曲线({ 数据, 显示, 窗口 = 120, 高 = 200, on暂停 }: �
       笔.fillStyle = 取v("--plot-bg", "#000");
       笔.fillRect(0, 0, 宽, 图高);
 
-      // ---- 时间范围：窗口右端 = 所有序列里最新的那个点 ----
-      let 最晚 = 0;
-      for (const n of 要画的) {
-        const 点 = 数据[n];
-        if (点 && 点.length) 最晚 = Math.max(最晚, 点[点.length - 1].t);
-      }
-      if (!最晚) {
+      // ---- 时间范围：绘图与鼠标换算共用同一个结果 ----
+      const 时间范围 = 取时间范围(数据, 要画的, 窗口);
+      if (!时间范围) {
         // 一个点都没有：坐标轴照画，但用文案明确写"尚无指标帧"。
         // 工程师反馈"图表空白，用户只能从旁边文字推断"——坐标系本身是信息，
         // 关键是别让它看起来像"有数据只是没画出来"。
@@ -152,12 +188,7 @@ export function 曲线({ 数据, 显示, 窗口 = 120, 高 = 200, on暂停 }: �
        * 看着像"信号是脉冲"，其实是"窗口开太大"。所以取 min(窗口, 真实跨度)，
        * 但留一个 10 秒下限，免得刚收到两个点就横轴抖成一条线。
        */
-      let 跨度 = 窗口;
-      for (const n of 要画的) {
-        const 点 = 数据[n];
-        if (点 && 点.length) 跨度 = Math.min(跨度, Math.max(10, 最晚 - 点[0].t));
-      }
-      const 最早 = 最晚 - 跨度;
+      const { 最早, 最晚, 跨度 } = 时间范围;
 
       // ---- Y 范围：只看窗口内的真实点 ----
       let 大 = -Infinity;
@@ -253,11 +284,13 @@ export function 曲线({ 数据, 显示, 窗口 = 120, 高 = 200, on暂停 }: �
 
       // ---- 十字线 + 最近真实点 ----
       if (悬) {
+        // 十字线吸附到真实采样时刻，不再画在原始鼠标 x 上却读取另一个时刻。
+        const 悬x = X(悬.时间);
         笔.strokeStyle = 取v("--plot-cross", "#888");
         笔.setLineDash([3, 3]);
         笔.beginPath();
-        笔.moveTo(悬.x, 上);
-        笔.lineTo(悬.x, 上 + 图高2);
+        笔.moveTo(悬x, 上);
+        笔.lineTo(悬x, 上 + 图高2);
         笔.stroke();
         笔.setLineDash([]);
         笔.font = "10px " + 取v("--font-mono", "monospace");
@@ -271,19 +304,9 @@ export function 曲线({ 数据, 显示, 窗口 = 120, 高 = 200, on暂停 }: �
           if (!要画的.includes(n)) continue;
           const 点 = 数据[n];
           if (!点 || !点.length) continue;
-          // 找离 悬.时间 最近的**真实**点（不插值：图上读到的每个数都是后端报来的）
-          let 最 = 点[点.length - 1];
-          let 距 = Infinity;
-          for (let i = 点.length - 1; i >= 0; i -= 1) {
-            const d = Math.abs(点[i].t - 悬.时间);
-            if (d < 距) {
-              距 = d;
-              最 = 点[i];
-            } else if (d > 距) {
-              // 越过最近点后距离只会变大（点按时间递增）
-              break;
-            }
-          }
+          // 找离 悬.时间 最近的**真实**点（不插值）。
+          const 最 = 最近真实点(点, 悬.时间);
+          if (!最) continue;
           const y = Y(最.v);
           笔.fillStyle = 取v(`--palette-${(颜色序 % 8) + 1}`, "#888");
           笔.beginPath();
@@ -306,13 +329,24 @@ export function 曲线({ 数据, 显示, 窗口 = 120, 高 = 200, on暂停 }: �
     const 左 = 52;
     const 图宽 = Math.max(10, r.width - 左 - 8);
     const 比例 = Math.min(1, Math.max(0, (x - 左) / 图宽));
-    let 最晚 = 0;
-    for (const n of 名们) {
-      const 点 = 数据[n];
-      if (点 && 点.length) 最晚 = Math.max(最晚, 点[点.length - 1].t);
+    const 时间范围 = 取时间范围(数据, 要画的, 窗口);
+    if (!时间范围) return;
+    const 目标时间 = 时间范围.最早 + 比例 * 时间范围.跨度;
+
+    // 在所有可见曲线中选距离鼠标最近的真实采样时刻。
+    // 当前指标是同一帧同时发布的，因此各曲线标点会与十字线共线。
+    let 吸附时间 = 目标时间;
+    let 最小距离 = Infinity;
+    for (const n of 要画的) {
+      const 最近 = 最近真实点(数据[n] ?? [], 目标时间);
+      if (!最近) continue;
+      const 距离 = Math.abs(最近.t - 目标时间);
+      if (距离 < 最小距离) {
+        最小距离 = 距离;
+        吸附时间 = 最近.t;
+      }
     }
-    if (!最晚) return;
-    设悬({ x, y: e.clientY - r.top, 时间: 最晚 - (1 - 比例) * 窗口 });
+    设悬({ 时间: 吸附时间 });
   };
 
   return (

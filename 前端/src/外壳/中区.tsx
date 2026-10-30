@@ -16,7 +16,7 @@
  *   · 不把"关节状态"编出来：没有关节角数据源，浮层里就写"还没有指标序列"，
  *     而不是画一排看起来像关节角的数字
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { 标签 } from "../组件/标签";
 import { 按钮 } from "../组件/按钮";
 import { 数值表, 数值文本, type 数值行 } from "../组件/数值表";
@@ -141,13 +141,37 @@ export function 中区({ 条数上限 = 12 }: 中区参数) {
 export function 仿真工具栏() {
   const t = use取();
   const 状态 = 用仓库((s) => s.仿真.数据);
+  const 实验 = 用仓库((s) => s.实验.数据);
   const 连接 = 用仓库((s) => s.连接);
   const 模型 = 用仓库((s) => s.模型.数据);
   const [忙, 设忙] = useState<"运行" | "暂停" | "复位" | null>(null);
+  const [重力忙, 设重力忙] = useState(false);
+  const [速度忙, 设速度忙] = useState(false);
+  const [实验忙, 设实验忙] = useState(false);
+  const [所选实验, 设所选实验] = useState("");
+  const 实验选项签名 = (实验?.可选 ?? []).map((item) => item.注册名 ?? "").join("|");
+
+  useEffect(() => {
+    const next = 实验?.当前 || 实验?.可选?.[0]?.注册名 || "";
+    if (next) 设所选实验(next);
+  }, [实验?.当前, 实验选项签名]);
 
   const 已运行 = 状态?.状态 === "运行";
   const 已暂停 = 状态?.状态 === "暂停";
+  const 重力开 = 状态?.重力开 ?? true;
   const 可发 = 连接 === "已连接" && !!模型 && !!状态;
+  const 实验完成 = !!实验?.当前 && 实验?.状态 === "完成";
+
+  const 加载实验 = async () => {
+    if (!所选实验) return;
+    设实验忙(true);
+    try {
+      const 起于 = 记命令发出();
+      命令收尾("命令.实验", await 命令.加载实验(所选实验), 起于, { 模块: "仿真·实验" });
+    } finally {
+      设实验忙(false);
+    }
+  };
 
   const 执行 = async (动作: "运行" | "暂停" | "复位") => {
     设忙(动作);
@@ -159,8 +183,61 @@ export function 仿真工具栏() {
     }
   };
 
+  const 切重力 = async () => {
+    设重力忙(true);
+    try {
+      const 起于 = 记命令发出();
+      命令收尾("命令.重力", await 命令.开物理(!重力开), 起于, { 模块: "仿真·重力" });
+    } finally {
+      设重力忙(false);
+    }
+  };
+
+  const 改速度 = async (倍率: number) => {
+    设速度忙(true);
+    try {
+      const 起于 = 记命令发出();
+      命令收尾("命令.仿真", await 命令.设置仿真速度(倍率), 起于, { 模块: "仿真·速度" });
+    } finally {
+      设速度忙(false);
+    }
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t("仿真控制.标题")}>
+      <span className="font-semibold">{t("仿真控制.实验")}</span>
+      <select
+        className="控件 max-w-[190px] px-1.5 py-1 text-[0.82em]"
+        value={所选实验}
+        disabled={实验忙 || 已运行 || !(实验?.可选?.length)}
+        title={实验?.说明 || t("仿真控制.实验说明")}
+        onChange={(e) => 设所选实验(e.target.value)}
+      >
+        {!实验?.可选?.length ? <option value="">{t("仿真控制.无实验")}</option> : null}
+        {(实验?.可选 ?? []).map((item) => (
+          <option key={item.注册名} value={item.注册名} disabled={!!item.错误}>
+            {item.名称 || item.注册名}
+          </option>
+        ))}
+      </select>
+      <按钮
+        种类="次"
+        尺寸="小"
+        disabled={!可发 || 实验忙 || 已运行 || !所选实验 || 所选实验 === 实验?.当前}
+        title={t("仿真控制.加载实验说明")}
+        on按下={() => void 加载实验()}
+      >
+        {实验忙 ? "…" : t("仿真控制.加载实验")}
+      </按钮>
+      <标签 语气={实验?.状态 === "完成" ? "成功" : 实验?.状态 === "运行中" ? "强调" : "中性"}>
+        {实验?.状态 || t("仿真控制.未选择实验")}
+      </标签>
+      {实验?.当前 ? (
+        <span className="等宽 text-[0.78em] text-dim" title={实验.结果目录 || 实验.说明}>
+          {`${(实验.已运行秒 ?? 0).toFixed(2)}/${(实验.停止秒 ?? 0).toFixed(2)} s`}
+        </span>
+      ) : null}
+      <span className="mx-0.5 h-4 w-px" style={{ background: "var(--border)" }} aria-hidden="true" />
       <span className="mr-0.5 font-semibold">{t("仿真控制.标题")}</span>
       <标签 语气={已运行 ? "成功" : 已暂停 ? "强调" : "警示"}>
         {状态 ? t(已运行 ? "仿真控制.运行中" : "仿真控制.已暂停") : t("仿真控制.等待")}
@@ -168,8 +245,8 @@ export function 仿真工具栏() {
       <按钮
         种类="主"
         尺寸="小"
-        disabled={!可发 || !!忙 || 已运行}
-        title={t("仿真控制.运行说明")}
+        disabled={!可发 || !!忙 || 已运行 || 实验完成}
+        title={实验完成 ? t("仿真控制.实验完成说明") : t("仿真控制.运行说明")}
         on按下={() => void 执行("运行")}
       >
         {忙 === "运行" ? "…" : t("仿真控制.运行")}
@@ -192,6 +269,31 @@ export function 仿真工具栏() {
       >
         {忙 === "复位" ? "…" : t("仿真控制.复位")}
       </按钮>
+      <span className="mx-0.5 h-4 w-px" style={{ background: "var(--border)" }} aria-hidden="true" />
+      <按钮
+        种类="次"
+        尺寸="小"
+        已按下={重力开}
+        disabled={!可发 || 重力忙}
+        title={t("仿真控制.重力说明")}
+        on按下={() => void 切重力()}
+      >
+        {重力忙 ? "…" : t(重力开 ? "仿真控制.重力开" : "仿真控制.重力关")}
+      </按钮>
+      <label className="flex items-center gap-1 text-[0.82em] text-dim">
+        <span>{t("仿真控制.速度")}</span>
+        <select
+          className="控件 px-1.5 py-1 等宽"
+          value={状态?.速度倍率 ?? 1}
+          disabled={!可发 || 速度忙}
+          title={t("仿真控制.速度说明")}
+          onChange={(e) => void 改速度(Number(e.target.value))}
+        >
+          {[0.25, 0.5, 1, 2, 4].map((倍率) => (
+            <option key={倍率} value={倍率}>{`${倍率}×`}</option>
+          ))}
+        </select>
+      </label>
       <span className="等宽 text-[0.8em] text-dim" title={状态?.说明}>
         {`t=${状态?.仿真时间?.toFixed(2) ?? "--"} s`}
       </span>

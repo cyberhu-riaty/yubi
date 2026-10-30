@@ -42,6 +42,7 @@ import Web桥                          # noqa: E402
 import 重力桥                          # noqa: E402
 import 项目 as 项目清单                  # noqa: E402
 import 装配器                          # noqa: E402
+import experiment_cli                  # noqa: E402
 
 软件名 = "小软件"
 软件名英文 = "XiaoRuanJian Studio"
@@ -177,11 +178,18 @@ def main(argv: list[str] | None = None) -> int:
                     help="只起服务，不自动打开浏览器")
     ap.add_argument("--项目", default=None, help="挂哪个项目的算法组")
     ap.add_argument("--模型", default=None, help="加载哪个模型（.xml）")
+    experiment_cli.add_experiment_argument(ap)
     ap.add_argument("--开重力", "--gravity", dest="开重力", action="store_true",
                     help="启动时就推进物理（默认冻结在默认位置，与原生界面一致）")
     ap.add_argument("--检查", action="store_true", help="不开服务，只做自检")
     ap.add_argument("--标题", default=f"{软件名} · 机器人仿真（基于 MuJoCo）")
     args = ap.parse_args(argv)
+
+    try:
+        当前实验 = experiment_cli.apply_experiment(args)
+    except Exception as 异常:                                         # noqa: BLE001
+        print(f"✗ 实验加载失败：{异常}", flush=True)
+        return 2
 
     if args.模型:
         os.environ["驭臂_模型"] = args.模型
@@ -248,6 +256,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"  【模型】{os.path.basename(模型路径)}（{说明}）", flush=True)
     print(f"  【项目】{项目名 or '（无）'}", flush=True)
+    if 当前实验 is not None:
+        print(f"  【实验】{当前实验.key}（{当前实验.name}）", flush=True)
 
     # ---- 4. 装配并开跑（无窗模式：仿真在主线程）----
     #   装配方式与 `主程序窗口.py` **完全一致** —— 同一个 `装配器.按项目装配`、
@@ -270,12 +280,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {行}", flush=True)
     print(f"【算法】{len(插件清单)} 个", flush=True)
 
-    注册表 = 插件框架.安全注册表(插件清单)
+    # 浏览器工作台也是无窗仿真宿主：使用明确的实时单步节拍，
+    # 不依赖官方 Viewer 是否在发布刷新快照。
+    注册表 = 插件框架.安全注册表(
+        插件清单, 步进插件=插件框架.实时固定步进())
     配置 = 插件框架.viewer_protocol.ViewerConfig(
         title=args.标题, width=1200, height=800, gfx=os.environ.get("驭臂_gfx", ""))
 
+    # 同步浏览器入口会在启动函数开头清理旧队列，因此把已校验的实验消息显式
+    # 交给启动函数，让它在清理之后再预置；桌面入口则在“已就绪”后直接入队。
+    预置消息 = experiment_cli.initial_messages(当前实验)
     return 启动.启动外壳(配置, 模型路径, None, 插件清单, 注册表,
-                        插件框架.通知模型加载, 项目名=项目名, 无窗=True)
+                        插件框架.通知模型加载, 项目名=项目名, 无窗=True,
+                        预置消息=预置消息,
+                        实验名=(当前实验.key if 当前实验 is not None else ""))
 
 
 if __name__ == "__main__":

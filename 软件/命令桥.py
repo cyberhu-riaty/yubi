@@ -46,6 +46,8 @@ import 契约 as _契约                                                      # 
 源模块 = {
     "重力状态": "重力桥",
     "仿真控制命令": "重力桥",
+    "实验命令": "实验桥",
+    "控制目标命令": "控制桥",
     "参数消息": "参数桥",
     "换模型命令": "模型桥",
     "应用算法命令": "模型桥",
@@ -174,12 +176,6 @@ def _同步界面侧共享状态(主题名: str, 负载: dict) -> None:
         try:
             import 重力桥
             重力桥.设界面重力(bool(负载.get("重力开", False)))
-        except Exception:                                             # noqa: BLE001
-            pass
-    elif 主题名 == "命令.仿真":
-        try:
-            import 重力桥
-            重力桥.设界面重力(str(负载.get("动作", "暂停")) in ("运行", "run"))
         except Exception:                                             # noqa: BLE001
             pass
 

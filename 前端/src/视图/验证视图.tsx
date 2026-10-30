@@ -10,7 +10,7 @@
  *   · 参数表：**可编辑** —— 走下限主题里的 `命令.改参数`，等回执后参数表回灌最新值。
  *     所以这里是只读的真值，而不是一个按了没反应的滑块。
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { 曲线, 取配色 } from "../组件/曲线";
 import { 可折叠区块 } from "../组件/可折叠区块";
 import { 按钮 } from "../组件/按钮";
@@ -26,18 +26,97 @@ import { use取 } from "./文案";
 /** `s.曲线` 的环形缓冲窗口（`数据/仓库.ts` 里就是 120 秒） */
 const 窗口秒 = 120;
 
+/**
+ * 参数编辑框保留一份本地文本：输入过程中不发命令，避免参数表回灌把尚未输完的
+ * 内容覆盖。Enter / 失焦提交，Escape 恢复后端确认过的值。
+ */
+function 参数编辑框({
+  全名,
+  值,
+  最小,
+  最大,
+  步长,
+  禁用,
+  提示,
+  on提交,
+}: {
+  全名: string;
+  值: number | undefined;
+  最小: number | undefined;
+  最大: number | undefined;
+  步长: number | undefined;
+  禁用: boolean;
+  提示: string;
+  on提交: (文本: string) => Promise<boolean>;
+}) {
+  const [草稿, 设草稿] = useState(值 === undefined ? "" : String(值));
+  const 编辑中 = useRef(false);
+  const 取消提交 = useRef(false);
+
+  // 后端参数变化时刷新；用户正在键入时不覆盖本地草稿。
+  useEffect(() => {
+    if (!编辑中.current) 设草稿(值 === undefined ? "" : String(值));
+  }, [值]);
+
+  const 提交 = async () => {
+    编辑中.current = false;
+    if (取消提交.current) {
+      取消提交.current = false;
+      设草稿(值 === undefined ? "" : String(值));
+      return;
+    }
+    const 成功 = await on提交(草稿);
+    if (!成功) 设草稿(值 === undefined ? "" : String(值));
+  };
+
+  return (
+    <input
+      type="number"
+      inputMode="decimal"
+      className="参数输入"
+      aria-label={`${全名} ${提示}`}
+      title={提示}
+      value={草稿}
+      min={最小}
+      max={最大}
+      step={typeof 步长 === "number" && 步长 > 0 ? 步长 : "any"}
+      disabled={禁用}
+      onFocus={(e) => {
+        编辑中.current = true;
+        取消提交.current = false;
+        e.currentTarget.select();
+      }}
+      onChange={(e) => 设草稿(e.target.value)}
+      onBlur={() => void 提交()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          e.currentTarget.blur();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          取消提交.current = true;
+          设草稿(值 === undefined ? "" : String(值));
+          e.currentTarget.blur();
+        }
+      }}
+    />
+  );
+}
+
 export function 验证视图() {
   const t = use取();
   const 曲线数 = 用仓库((s) => s.曲线);
   const 参数 = 用仓库((s) => s.参数.数据);
   const 参数帧号 = 用仓库((s) => s.参数.帧号);
+  const 仿真运行 = 用仓库((s) => s.仿真.数据?.状态 === "运行");
   const 节拍 = 用节拍();
 
   const 名们 = useMemo(() => Object.keys(曲线数).sort(), [曲线数]);
   const [隐藏, 设隐藏] = useState<Set<string>>(new Set());
   const [暂停, 设暂停] = useState(false);
 
-  // 后端停止发帧时，窗口会一直往前推，旧数据会跑到窗口外 —— 这是真的，要说出来
+  // 曲线停在最后一个真实指标点；“多少秒前”只用本地时钟更新文字，
+  // 不会为了让横轴移动而伪造重复数据点。
   const 最新时刻 = useMemo(() => {
     let 最晚 = 0;
     for (const n of 名们) {
@@ -145,13 +224,24 @@ export function 验证视图() {
 
   // 改参数：走契约里的 `命令.改参数`，等回执再刷新（`参数表` 会自己回灌最新值）
   const [改中, 设改中] = useState<string | null>(null);
-  async function 提交参数(全名: string, 原值: number | undefined, 新文本: string) {
+  async function 提交参数(全名: string, 原值: number | undefined, 新文本: string): Promise<boolean> {
     const 新值 = Number(新文本);
-    if (!Number.isFinite(新值) || 新值 === 原值) return;
+    if (新文本.trim() === "" || !Number.isFinite(新值)) {
+      提示错误(t("验证.参数.数值错误"));
+      return false;
+    }
+    if (新值 === 原值) return true;
     设改中(全名);
-    const 回执 = await 命令.改参数({ [全名]: 新值 });
-    设改中(null);
-    if (!回执.通过) 提示错误(回执.说明);
+    try {
+      const 回执 = await 命令.改参数({ [全名]: 新值 });
+      if (!回执.通过) {
+        提示错误(回执.说明);
+        return false;
+      }
+      return true;
+    } finally {
+      设改中(null);
+    }
   }
 
   const 参数列: 列[] = [
@@ -179,16 +269,15 @@ export function 验证视图() {
         const 最大 = 范围边(行 as unknown as 参数项, 1);
         const 步 = (行 as unknown as 参数项).步长;
         return (
-          <input
-            type="number"
-            className="参数输入"
-            aria-label={`${全名} ${t("验证.参数.值")}`}
-            value={值 ?? ""}
-            min={最小}
-            max={最大}
-            step={typeof 步 === "number" && 步 > 0 ? 步 : "any"}
-            disabled={改中 === 全名}
-            onChange={(e) => void 提交参数(全名, 值, e.target.value)}
+          <参数编辑框
+            全名={全名}
+            值={值}
+            最小={最小}
+            最大={最大}
+            步长={typeof 步 === "number" ? 步 : undefined}
+            禁用={改中 === 全名}
+            提示={t("验证.参数.输入提示")}
+            on提交={(文本值) => 提交参数(全名, 值, 文本值)}
           />
         );
       },
@@ -255,7 +344,11 @@ export function 验证视图() {
           <span>{t("曲线.轴时间")}</span>
           <span aria-hidden="true">·</span>
           <span className="等宽">
-            {最近年龄 === undefined ? t("验证.从未收到") : t("验证.最近更新", { 秒: 最近年龄.toFixed(0) })}
+            {最近年龄 === undefined
+              ? t("验证.从未收到")
+              : !仿真运行
+                ? t("验证.采集已暂停")
+                : t("验证.最近更新", { 秒: 最近年龄.toFixed(0) })}
           </span>
           {暂停 ? <标签 语气="强调">{t("验证.暂停中")}</标签> : null}
           {窗口外 > 0 ? <标签 语气="警示">{t("验证.超出窗口", { 条: 窗口外 })}</标签> : null}
@@ -313,7 +406,7 @@ export function 验证视图() {
             <小表格
               列={参数列}
               行={参数项们.map(([全名, 项]) => 摊开(全名, 项))}
-              行键={(r) => String(r.名)}
+              行键={(r) => String(r.全名)}
             />
           </div>
         ) : (

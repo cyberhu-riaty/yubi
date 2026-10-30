@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 import traceback
 
 # ---------------------------------------------------------------------------
@@ -66,6 +67,10 @@ def _导入官方():
 
 (mujoco, messages, step_control, viewer_app, viewer_protocol,
  launch_native, launch_thread, viewer_handle, endpoints) = _导入官方()
+
+# 全局仿真速度命令属于工作台外壳，不属于用户控制器。放在实时步进器里处理，
+# 这样倍率只改变每个物理步之间的墙钟等待，不会改 MuJoCo timestep。
+from 重力桥 import 仿真控制命令                                      # noqa: E402
 
 每步 = messages.handler                      # 贴标签：让这个方法参与每一步仿真
 
@@ -305,6 +310,64 @@ def 取注册表():
 #       .venv/bin/python 软件/零改动自检.py --建立
 # 刷新哈希基准，并在 CHANGELOG 记一行"为什么改、删了什么"。
 # ---------------------------------------------------------------------------
+class 固定一步:
+    """每次 StepEvent 恰好推进一个物理步；供离线批处理实验使用。
+
+    无界面批处理实验不需要等待墙钟时间，但必须保持
+    “一次控制计算对应一个物理步”，所以不能简单把实时倍率调得很大。
+    """
+
+    @messages.handler(priority=messages.Priority.INTERNAL)
+    def 推进一步(self, event: messages.StepEvent) -> bool:
+        mujoco.mj_step(event.model, event.data)
+        return False
+
+
+class 实时固定步进:
+    """无窗工作台的实时物理节拍器。
+
+    每条 StepEvent 只执行一次 ``mj_step``，并按模型 timestep 等待；
+    因此“一次控制计算 = 一个物理步”，且仿真时间大致跟墙钟时间一致。
+    暂停由安全注册表的“世界冻结闸门”处理，本类只负责步进与节拍。
+    """
+
+    def __init__(self):
+        self._下一步时刻: float | None = None
+        self._模型标识: int | None = None
+        self._速度倍率 = 1.0
+
+    @messages.handler
+    def 设置速度(self, 命令: 仿真控制命令) -> bool:
+        动作 = str(getattr(命令, "动作", "") or "")
+        if 动作 not in ("设置速度", "speed"):
+            return False
+        self._速度倍率 = max(0.25, min(4.0, float(getattr(命令, "倍率", 1.0))))
+        # 重新从当前墙钟对齐，防止切换倍率后追赶旧节拍而突然连跑。
+        self._下一步时刻 = None
+        return False
+
+    @messages.handler(priority=messages.Priority.INTERNAL)
+    def 推进一步(self, event: messages.StepEvent) -> bool:
+        当前 = time.perf_counter()
+        物理步长 = max(float(event.model.opt.timestep), 1e-6)
+        墙钟步长 = 物理步长 / self._速度倍率
+
+        # 换模型、刚启动或暂停较久后，从“现在”重新对齐；
+        # 否则会为了追赶旧时刻而瞬间连跑很多步。
+        if (self._下一步时刻 is None or self._模型标识 != id(event.model)
+                or 当前 - self._下一步时刻 > 0.1):
+            self._下一步时刻 = 当前
+            self._模型标识 = id(event.model)
+
+        剩余 = self._下一步时刻 - 当前
+        if 剩余 > 0:
+            time.sleep(剩余)
+
+        mujoco.mj_step(event.model, event.data)
+        self._下一步时刻 += 墙钟步长
+        return False
+
+
 class 安全注册表:
 
     """包住官方的 PluginRegistry，给每个插件加「出错隔离」。
@@ -319,10 +382,11 @@ class 安全注册表:
       但仿真时间一直停在 0（机械臂纹丝不动）。
     """
 
-    def __init__(self, 插件列表: list):
+    def __init__(self, 插件列表: list, 步进插件=None):
         global _当前注册表
-        # 官方步进插件排在最前面（它的优先级是 INTERNAL，本来就最先执行）
-        self._目标 = [step_control.StepControl(), *插件列表]
+        # 未显式指定时保持官方 StepControl；工作台和批处理会在入口处
+        # 分别传入“实时固定步进”和“固定一步”，避免隐式改变其它模式。
+        self._目标 = [步进插件 or step_control.StepControl(), *插件列表]
         _当前注册表 = self          # 登记给 取注册表() 用（见文件上方说明）
         self._用户插件 = list(插件列表)
         self._出错数: dict[str, int] = {}

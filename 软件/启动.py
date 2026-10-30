@@ -42,6 +42,7 @@ import 模型加载 as _模型加载                                            
 # 它只依赖官方 messages 与标准库，不建窗口，所以导入是安全的。
 import 模型桥 as _模型桥                                                  # noqa: E402
 import 重力桥 as _重力桥                                                  # noqa: E402
+import 控制桥 as _控制桥                                                  # noqa: E402
 from 模型桥 import 项目状态                                               # noqa: E402
 
 # Web 桥（方案 B 的 P0）：给仿真侧的消息再开一个出口，送给浏览器。
@@ -235,7 +236,8 @@ def 取命令队列() -> queue.Queue:
 
 
 def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注册表, 通知模型加载,
-            项目名: str = "", 无窗: bool = False, 后台线程: bool = False):
+            项目名: str = "", 无窗: bool = False, 后台线程: bool = False,
+            预置消息: list | tuple | None = None, 实验名: str = ""):
     """启动官方 Studio 窗口 + 我们的插件。
 
     参数
@@ -248,6 +250,10 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
       项目名      : 启动时选中的项目名（换模型后会被换成新项目的名字）
       后台线程    : 仅在 `无窗=True` 时有意义 —— 让仿真跑在**后台线程**，
                     把主线程让给宿主窗口（AppKit）。宿主窗口形态用这个。
+      预置消息    : 清理上一次会话残留后，为本次会话预先放入的通用命令消息。
+                    同步浏览器入口用它装载实验初值；不包含任何实验或机器人逻辑。
+      实验名      : 可选的 ExperimentRegistry 注册名；只启用通用实验运行器，
+                    空字符串表示普通工作台模式。
       无窗        : **不开官方窗口**（P2 的"无窗宿主"）。此时：
                     · 不建线程端点、不建 ViewerHandle、不加载 ImGui 面板；
                     · 仿真循环直接坐在**主线程**上转（原来它在仿真线程里）；
@@ -265,6 +271,8 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
 
     # 同一进程内再次启动（主要用于自检）时，不能把上一次残留消息带进新模型。
     _排空本地队列()
+    for 消息 in list(预置消息 or ()):
+        命令队列.put_nowait(消息)
 
     # ★ 把"这次加载哪个模型"告诉外面（放进环境变量）：
     #   宿主窗口的 **3D 视口**需要自己再装一份模型（渲染在自己的线程/上下文里，
@@ -420,6 +428,9 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             模型应用器 = None
             重力应用器 = None            # 内置件，注册在下面；这里先占位给 `_装配项目` 用
             仿真状态发布 = None
+            控制目标应用器 = None
+            控制状态发布 = None
+            实验应用器 = None
             当前算法信息: list = []
             当前算法配置: list[str] = []  # 模块名且保留执行顺序；Reset 用它重建同一组算法
             当前控盘 = ""            # 真正驱动机械臂的那个算法（界面显示用）
@@ -740,7 +751,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             except Exception as 异常:                                      # noqa: BLE001
                 print(f"⚠ 算法库扫描失败（界面上的算法列表会是空的）：{type(异常).__name__}: {异常}")
 
-            # ---- 【Display】重力开关：**内置常驻**，与"挂不挂算法"完全无关 ----
+            # ---- 仿真运行 / 重力设置：内置常驻、彼此独立，与算法也相互独立 ----
             #   ★ 必须在**首次装配之前**注册：重力应用器要在第一次 `通知模型加载`
             #     时就收到模型、把机器人复位到默认位置并冻结。注册晚了（原来是放在
             #     模型桥那一段之后）的后果实测过：**首次加载没人复位**，
@@ -755,7 +766,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             def _重置姿态回调() -> str:
                 """给重力应用器的复位回调：无参、返回一句"怎么复位的"说明。
 
-                复用 `_重置姿态()`，这样"换算法时重置"和"取消加载重力时复位"
+                复用 `_重置姿态()`，这样"换算法时重置"和"Reset 复位"
                 走的是**同一套代码** —— 否则同一个概念会长出两种行为。
                 """
                 新模型, 新数据 = model, data
@@ -774,6 +785,8 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     重置姿态=True,
                     保持存盘状态=原存盘状态,
                 )
+                if 控制目标应用器 is not None:
+                    控制目标应用器.重置为当前位置()
                 return next((行 for 行 in 报告 if "重置到默认姿态" in 行), "已重建当前算法")
 
             仿真状态发布 = _重力桥.仿真状态发布器(_发布出口)
@@ -790,8 +803,18 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             注册表.加插件(重力应用器)          # 让它收到 重力状态
             重力应用器.登记到注册表(注册表)     # ★ 登记"世界冻结"判据 —— 冻结靠这个生效
                                                 #   （不能用"改暂停快照"实现：官方不发快照）
-            print("【重力】开关已就绪（默认冻结在默认位置；勾选【Display】的"
-                  "「加载重力」才施用重力）", flush=True)
+            print("【仿真】默认暂停；重力默认按模型 XML 开启，两者已相互独立", flush=True)
+
+            # ---- 简单控制目标：GUI 目标 → 现有面板目标消息 → 当前控制算法 ----
+            # 这里只负责数据交换，不在外壳里实现 PID/PD。没有控制算法时目标会被记住，
+            # 但不会凭空驱动模型；装配算法后会再次转发当前目标。
+            def _转发控制目标(目标) -> None:
+                import 界面桥 as _界面桥
+                注册表.处理消息(_界面桥.面板目标消息(ctrl_target=_np.asarray(目标, dtype=float)))
+
+            控制目标应用器 = _控制桥.控制目标应用器(_转发控制目标)
+            控制状态发布 = _控制桥.控制状态发布器(_发布出口)
+            注册表.加插件(控制目标应用器)
 
             # 启动时也走同一条装配路径（保证"启动"和"点模型"行为完全一致）
             try:
@@ -814,6 +837,11 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             print("（下面每 2 秒打一行插件状态，可以据此判断算法到底有没有在干活）\n", flush=True)
 
             上次状态 = 0.0
+            # 无窗工作台暂停后不应继续把相同的 MjData 复制给3D。
+            # 记住最后一次真正发过的状态；复位/换模型仍会强制发一帧。
+            上次快照模型 = None
+            上次快照时间 = None
+            上次快照复位 = -1
 
             # ------------------------------------------------------------------
             # 模型桥：把"换模型"收敛到这一个函数里（见 模型桥.py 的说明）
@@ -827,7 +855,8 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             # ------------------------------------------------------------------
             模型应用器 = None
             try:
-                def 切换模型(模型=None, 路径: str = "", 通知窗口: bool = True):
+                def 切换模型(模型=None, 路径: str = "", 通知窗口: bool = True,
+                          指定项目: str = ""):
                     """加载并重绑一个新模型。返回 (是否成功, 给人看的一句话)。"""
                     nonlocal 当前模型, 当前数据
                     if 模型 is None:
@@ -888,7 +917,9 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     模型没变 = bool(模型应用器 is not None
                                 and getattr(模型应用器, "当前路径", "")
                                 and os.path.normpath(str(模型应用器.当前路径)) == os.path.normpath(路径))
-                    if 当前项目也声明了这个模型:
+                    if 指定项目:
+                        新项目名 = str(指定项目)
+                    elif 当前项目也声明了这个模型:
                         新项目名 = 当前项目名
                     elif 模型没变 and 当前项目名:
                         # 同一模型重复通知 → 保持现状，别动用户的算法
@@ -955,6 +986,54 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             except Exception as 异常:                                     # noqa: BLE001
                 print(f"⚠ 模型桥不可用（将无法在界面里切换模型）：{type(异常).__name__}: {异常}")
                 模型发布 = None
+
+            # ---- 注册实验：只组合现有模型/项目/控制器/目标，不复制 GUI 或仿真循环 ----
+            try:
+                import experiment_registry as _experiment_registry
+                import 实验桥 as _实验桥
+
+                初始实验 = (_experiment_registry.experiment_registry.create(实验名)
+                        if str(实验名 or "").strip() else None)
+
+                def _应用实验目标(experiment) -> None:
+                    if 控制目标应用器 is None:
+                        return
+                    target = experiment.trajectory.get("target_qpos")
+                    if target is not None:
+                        控制目标应用器.收目标(_控制桥.控制目标命令(目标=list(target)))
+
+                def _加载实验(name: str):
+                    try:
+                        experiment = _experiment_registry.experiment_registry.create(name)
+                    except Exception as error:                           # noqa: BLE001
+                        return None, f"实验不可用：{error}"
+                    # 换实验前先暂停；指定项目避免“同一模型多个项目”时反查到错误算法。
+                    if 重力应用器 is not None:
+                        重力应用器.收仿真控制(_重力桥.仿真控制命令(动作="暂停"))
+                    ok, reason = 切换模型(
+                        路径=str(experiment.model_path), 通知窗口=True,
+                        指定项目=experiment.project)
+                    if not ok:
+                        return None, reason
+                    _应用实验目标(experiment)
+                    os.environ["驭臂_当前实验"] = experiment.key
+                    return experiment, f"已加载 {experiment.name}；点击开始运行"
+
+                def _暂停实验() -> None:
+                    if 重力应用器 is not None:
+                        重力应用器.收仿真控制(_重力桥.仿真控制命令(动作="暂停"))
+
+                实验应用器 = _实验桥.实验应用器(
+                    _发布出口, _加载实验, _暂停实验, _应用实验目标, 初始实验)
+                注册表.加插件(实验应用器)
+                # 它是在首次项目装配之后加入的，所以手动补一次当前模型上下文。
+                实验应用器.收到模型(type("模型事件", (), {"model": model, "data": data})())
+                实验应用器.发布(强制=True)
+                print(f"【实验】已就绪（当前：{初始实验.key if 初始实验 else '未选择'}）", flush=True)
+            except Exception as 异常:                                     # noqa: BLE001
+                print(f"⚠ 实验运行器不可用（普通模型/控制功能不受影响）："
+                      f"{type(异常).__name__}: {异常}", flush=True)
+                实验应用器 = None
 
             # 参数通道：把"插件声明了哪些可调参数"周期性发给界面（第 4 步 参数面板）
             try:
@@ -1101,7 +1180,8 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                         print(f"⚠ 记录航点失败：{type(_e).__name__}: {_e}", flush=True)
 
                 # 送一帧指标给界面（内部按 30 Hz 限频，不会每圈都发）
-                if 指标发布 is not None:
+                if (指标发布 is not None and 重力应用器 is not None
+                        and 重力应用器.运行中):
                     # ★ 只有**真的发了一帧**才喂观测核心：指标是 30 Hz 限频的，
                     #   而物理是 500 Hz。若每步都喂，缓冲里会塞进 16 倍重复值，
                     #   "过零次数"和"频率"会被严重低估（判定直接失效）。
@@ -1141,6 +1221,10 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 if 仿真状态发布 is not None and 重力应用器 is not None:
                     仿真状态发布.也许发布(
                         重力应用器, float(data.time), _time.perf_counter())
+                # 关节目标输入区（10 Hz）：当前位置来自 MjData，目标来自控制目标应用器。
+                if 控制状态发布 is not None and 控制目标应用器 is not None:
+                    控制状态发布.也许发布(
+                        控制目标应用器, model, data, _time.perf_counter())
                 # 周期性送"可调参数表"给界面（10 Hz 够了，滑杆不需要更密）
                 if 参数发布 is not None:
                     参数发布.也许发布(注册表, float(data.time), _time.perf_counter())
@@ -1176,17 +1260,31 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                         重力开=bool(重力应用器.重力开) if 重力应用器 is not None else False,
                     ), _time.perf_counter())
 
-                集成签名 = int(mujoco.mjtState.mjSTATE_INTEGRATION)
-                集成状态 = _np.empty(mujoco.mj_stateSize(model, 集成签名), _np.float64)
-                mujoco.mj_getState(model, data, 集成状态, 集成签名)
-                快照 = messages.StateSnapshot(state=集成状态, state_sig=集成签名)
-                发送出口.发送(快照)
-                # 顺手给 3D 视口（如果有）；失败绝不影响仿真主循环
-                if 状态观察者 is not None:
-                    try:
-                        状态观察者(_视口状态快照(快照, data))
-                    except Exception:                                 # noqa: BLE001
-                        pass
+                _快照复位 = int(重力应用器.复位次数) if 重力应用器 is not None else 0
+                _快照时间 = float(data.time)
+                _需发快照 = (
+                    not 无窗
+                    or 重力应用器 is None
+                    or 重力应用器.运行中
+                    or model is not 上次快照模型
+                    or _快照时间 != 上次快照时间
+                    or _快照复位 != 上次快照复位
+                )
+                if _需发快照:
+                    集成签名 = int(mujoco.mjtState.mjSTATE_INTEGRATION)
+                    集成状态 = _np.empty(mujoco.mj_stateSize(model, 集成签名), _np.float64)
+                    mujoco.mj_getState(model, data, 集成状态, 集成签名)
+                    快照 = messages.StateSnapshot(state=集成状态, state_sig=集成签名)
+                    发送出口.发送(快照)
+                    # 顺手给 3D 视口（如果有）；失败绝不影响仿真主循环
+                    if 状态观察者 is not None:
+                        try:
+                            状态观察者(_视口状态快照(快照, data))
+                        except Exception:                             # noqa: BLE001
+                            pass
+                    上次快照模型 = model
+                    上次快照时间 = _快照时间
+                    上次快照复位 = _快照复位
 
                 # 官方 StepControl 自己会按刷新预算等待；这里补一点点，避免极端情况下空转
                 _time.sleep(0.0002)

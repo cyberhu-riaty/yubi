@@ -238,6 +238,37 @@ def 检查兼容性(实例列表: list, 模型) -> tuple[list, list[dict]]:
     return 能跑的, 跳过
 
 
+def 创建插件(条目: dict | str) -> tuple[object | None, dict, str]:
+    """按注册名创建一个插件实例，供项目装配与 ``ControllerRegistry`` 共用。
+
+    返回 ``(实例, 元信息, 错误说明)``。这里是唯一真正执行“路径 → 模块 → 类 →
+    实例”的地方；注册表和项目装配不再各写一份动态导入逻辑。
+    """
+    if isinstance(条目, str):
+        条目 = {"插件": 条目}
+    模块名 = str((条目 or {}).get("插件") or "").strip()
+    文件 = (条目 or {}).get("文件") or _项目.算法文件(条目)
+    if not 模块名:
+        return None, {}, "没有给插件注册名"
+    if not 文件:
+        return None, {}, "算法库里找不到这个文件（已跳过）"
+
+    模块, 原因 = 导入算法文件(文件)
+    if 模块 is None:
+        return None, {}, f"导入失败 —— {原因}"
+
+    类, 原因 = 找插件类(模块, str((条目 or {}).get("类") or ""))
+    if 类 is None:
+        return None, {}, 原因
+
+    元 = 读元信息(类)
+    元.update({"插件": 模块名, "文件": os.path.abspath(文件), "类": 类.__name__})
+    try:
+        return 类(), 元, ""
+    except Exception as 异常:                                      # noqa: BLE001
+        return None, 元, f"实例化失败 —— {type(异常).__name__}: {异常}"
+
+
 def 按项目装配(项目数据: dict | None, 项目名: str = "",
               模型=None, 算法覆盖: list | None = None) -> tuple[list, list[str]]:
     """★ 核心入口：项目数据 → (插件实例列表, 给人看的报告行列表)。
@@ -275,38 +306,20 @@ def 按项目装配(项目数据: dict | None, 项目名: str = "",
 
     for 条目 in 条目们:
         模块名 = 条目.get("插件", "")
-        文件 = 条目.get("文件") or _项目.算法文件(条目)
-        if not 文件:
-            报告.append(f"✗ {模块名}：算法库里找不到这个文件（已跳过）")
-            continue
-
-        模块, 原因 = 导入算法文件(文件)
-        if 模块 is None:
-            报告.append(f"✗ {模块名}：导入失败 —— {原因}")
-            continue
-
-        类, 原因 = 找插件类(模块, 条目.get("类", ""))
-        if 类 is None:
+        实例, 元, 原因 = 创建插件(条目)
+        if 实例 is None:
             报告.append(f"✗ {模块名}：{原因}")
             continue
-
-        元 = 读元信息(类)
         if 元["名称"] in 已用类名:
             # 参数面板/消息按"插件名"寻址，重名会让它们串台 —— 直接拒绝，别留隐患
             报告.append(f"✗ {模块名}：插件名「{元['名称']}」和前面某个算法重名（已跳过）")
-            continue
-
-        try:
-            实例 = 类()
-        except Exception as 异常:                                      # noqa: BLE001
-            报告.append(f"✗ {模块名}：实例化失败 —— {type(异常).__name__}: {异常}")
             continue
 
         已用类名.add(元["名称"])
         实例列表.append(实例)
         报告.append(f"✓ {元['名称']} v{元['版本']}"
                     + (f"  —— {元['作者']}" if 元["作者"] else "")
-                    + (f"  [{os.path.basename(文件)}]" if 元["说明"] else ""))
+                    + (f"  [{os.path.basename(元['文件'])}]" if 元["说明"] else ""))
 
     # ---- 兼容性预检：跟当前模型对不上的算法**不启用**（见 检查兼容性 的说明）----
     if 模型 is not None:
