@@ -1,0 +1,18 @@
+{
+  "key": "ur5e_pd_plain",
+  "name": "PD定点控制",
+  "description": "UR5e 固定目标调节；纯 PD 反馈，不使用积分或重力前馈。",
+  "model": "模型/universal_robots_ur5e/ur5e_torque.xml",
+  "project": "ur5e_pd_plain",
+  "controllers": ["joint_pd_plain"],
+  "plugins": ["数据录制"],
+  "trajectory": {
+    "type": "joint_target",
+    "source": "comparison_target_v1",
+    "target_qpos": [-1.5708, -1.2208, 1.2208, -1.5708, -1.5708, 0.0]
+  },
+  "initial_state": {"type": "keyframe_or_qpos0", "keyframe": "home"},
+  "stop_condition": {"type": "simulation_time", "seconds": 12.0},
+  "recording": {"enabled": true, "frequency_hz": 100.0},
+  "result": {"directory": "输出/实验", "files": ["states.csv", "metrics.json", "curves.html"]}
+}

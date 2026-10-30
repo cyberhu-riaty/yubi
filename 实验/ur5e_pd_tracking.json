@@ -1,0 +1,32 @@
+{
+  "key": "ur5e_pd_tracking",
+  "name": "UR5e 关节 PD 目标跟踪",
+  "description": "使用力矩驱动 UR5e、关节 PD 控制器和统一记录器运行一次可复现实验。",
+  "model": "模型/universal_robots_ur5e/ur5e_torque.xml",
+  "project": "UR5e_PD跟踪实验",
+  "controllers": ["关节pd控制"],
+  "plugins": ["数据录制"],
+  "trajectory": {
+    "type": "joint_target",
+    "source": "关节pd控制",
+    "target_qpos": [-1.5708, -1.2208, 1.2208, -1.5708, -1.5708, 0.0],
+    "description": "控制器以模型 home 姿态为基准，第二、三关节分别偏移 +0.35/-0.35 rad；GUI 手动目标可覆盖。"
+  },
+  "initial_state": {
+    "type": "keyframe_or_qpos0",
+    "keyframe": "home"
+  },
+  "stop_condition": {
+    "type": "simulation_time",
+    "seconds": 12.0
+  },
+  "recording": {
+    "enabled": true,
+    "frequency_hz": 100.0,
+    "fields": ["time", "qpos", "qvel", "ctrl", "qfrc_bias"]
+  },
+  "result": {
+    "directory": "输出/实验",
+    "files": ["states.csv", "metrics.json", "curves.html"]
+  }
+}

@@ -290,6 +290,10 @@ def 按模型找项目(模型路径: str) -> str:
     命中 = []
     for 名 in 列出项目():
         数据 = 读项目(名) or {}
+        # 实验专用项目只能由 ExperimentRegistry 显式选择，普通“点模型”流程不自动命中。
+        # 否则同一模型有多个实验时，按字母排序随便挑一个会让机器人意外开始运动。
+        if bool(数据.get("实验专用", False)):
+            continue
         if os.path.normpath(绝对(str(数据.get("模型") or ""))) == 目标:
             命中.append(名)
     if not 命中:

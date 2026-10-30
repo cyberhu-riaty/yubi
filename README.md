@@ -277,3 +277,13 @@ class 我的插件(控制插件):
 驭臂自身的源代码与文档采用 [MIT License](LICENSE)。
 
 `模型/` 中的模型与网格来自多个上游项目（MuJoCo Menagerie 等），分别遵循各自目录下的 `LICENSE`，再分发时请一并保留。前端依赖（React、Vite、Tailwind 等）遵循各自的许可证。MuJoCo 由 Google DeepMind 开发，采用 Apache-2.0 许可证。
+
+## 控制器与实验扩展
+
+GUI 已作为稳定载体使用。控制算法通过 `ControllerRegistry` 按名称创建，完整实验通过
+`ExperimentRegistry` 组合模型、控制器、轨迹说明、初始状态、停止条件与记录策略。
+内置示例：`ur5e_pd_tracking`、`ur5e_pid_tracking`。详细用法见
+[`实验/README.md`](实验/README.md)。
+
+GUI 顶部可直接选择实验；加载后复用原来的“开始/暂停/复位”。开始时自动记录，
+达到实验停止时间后自动暂停并导出 CSV、指标 JSON 和离线曲线。

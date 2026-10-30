@@ -24,6 +24,7 @@
 from __future__ import annotations
 
 import dataclasses
+import time
 from typing import Any, Callable
 
 from 官方层 import messages          # 全部走适配层，见 软件/官方层.py
@@ -78,15 +79,19 @@ class 发布器:
         self.已发布 = 0
         self.最近: dict[str, float] = {}
 
-    def 也许发布(self, 注册表, 仿真时间: float, 墙钟: float) -> bool:
-        """到了时间就采集并发一帧。返回是否真的发了。"""
-        if 墙钟 < self._下次:
+    def 也许发布(self, 注册表, 仿真时间: float, 单调时钟: float) -> bool:
+        """到了时间就采集并发一帧。返回是否真的发了。
+
+        限频用 ``perf_counter`` 这类单调时钟；但发给前端的横轴必须是
+        Unix 墙钟 ``time.time()``。两者混用会让“最近更新”变成十几亿秒前。
+        """
+        if 单调时钟 < self._下次:
             return False
-        self._下次 = 墙钟 + self._间隔
+        self._下次 = 单调时钟 + self._间隔
         数值 = 采集(注册表)
         self.最近 = 数值
         try:
-            self._发送(指标消息(时间=仿真时间, 墙钟=墙钟, 数值=数值))
+            self._发送(指标消息(时间=仿真时间, 墙钟=time.time(), 数值=数值))
             self.已发布 += 1
             return True
         except Exception as 异常:                                       # noqa: BLE001

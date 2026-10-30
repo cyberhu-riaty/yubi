@@ -44,6 +44,7 @@ import Web桥
 import 启动
 import 插件系统 as 插件框架
 import 装配器
+import experiment_cli
 
 import 项目 as 项目清单
 
@@ -136,10 +137,10 @@ def 检查() -> int:
     # ⑤ 上行命令名（本入口会直接入队的那几个）
     try:
         import 契约 as _契约
-        for 名 in ("命令.重力",):
+        for 名 in ("命令.重力", "命令.仿真", "命令.控制目标", "命令.实验"):
             if _契约.取(名) is None:
                 坏 += 1
-                print(f"  ✗ 契约里没有上行命令「{名}」（本入口会用它开重力）")
+                print(f"  ✗ 契约里没有上行命令「{名}」（工作台控制通道不完整）")
             else:
                 print(f"  ✓ 上行命令「{名}」在契约里")
     except Exception as 异常:                                         # noqa: BLE001
@@ -165,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--web口", "--web-port", dest="web口", type=int, default=None)
     ap.add_argument("--项目", default=None, help="挂哪个项目的算法组")
     ap.add_argument("--模型", default=None, help="加载哪个模型")
+    experiment_cli.add_experiment_argument(ap)
     ap.add_argument("--开重力", dest="开重力", action="store_true",
                     help="启动时就推进物理（默认冻结在默认位置）")
     ap.add_argument("--无3D", dest="无3D", action="store_true",
@@ -174,6 +176,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--检查", action="store_true", help="不开窗口，只自检")
     ap.add_argument("--标题", default=f"{软件名} · 机器人仿真工作台")
     args = ap.parse_args(argv)
+
+    try:
+        当前实验 = experiment_cli.apply_experiment(args)
+    except Exception as 异常:                                         # noqa: BLE001
+        print(f"✗ 实验加载失败：{异常}", flush=True)
+        return 2
 
     if args.模型:
         os.environ["驭臂_模型"] = args.模型
@@ -237,12 +245,17 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  界面地址 : {地址}（显示在窗口内的网页视图里）", flush=True)
     print(f"  模型     : {os.path.basename(模型路径)}（{说明}）", flush=True)
     print(f"  项目     : {项目名 or '（无 → 不挂算法，进去是静止的）'}", flush=True)
+    if 当前实验 is not None:
+        print(f"  实验     : {当前实验.key}（{当前实验.name}）", flush=True)
     print(f"  算法     : {len(插件清单)} 个", flush=True)
     if args.无3D:
         print("  ⚠ --无3D：本次不建 3D 视口", flush=True)
     print("=" * 76, flush=True)
 
-    注册表 = 插件框架.安全注册表(插件清单)
+    # 无窗宿主不能依赖官方 Viewer 的刷新节拍：按模型 timestep
+    # 实时推进，保证 GUI 的 Start 按钮能以约 1× 速度跑完实验。
+    注册表 = 插件框架.安全注册表(
+        插件清单, 步进插件=插件框架.实时固定步进())
     配置 = 插件框架.viewer_protocol.ViewerConfig(
         title=args.标题, width=int(args.宽), height=int(args.高), gfx="")
 
@@ -272,13 +285,24 @@ def main(argv: list[str] | None = None) -> int:
     启动码 = 启动.启动外壳(
         配置, 模型路径, None, 插件清单, 注册表,
         插件框架.通知模型加载, 项目名=项目名,
-        无窗=True, 后台线程=True)
+        无窗=True, 后台线程=True,
+        实验名=(当前实验.key if 当前实验 is not None else ""))
     if 启动码 != 0:
         Web桥.关闭()
         return int(启动码)
     已就绪, 就绪说明 = 启动.等待就绪(15.0)
     if not 已就绪:
         print(f"✗ {就绪说明}", flush=True)
+        启动.请求停止()
+        Web桥.关闭()
+        return 1
+
+    # 实验定义里的初始控制目标统一走现有命令队列。
+    # 普通启动时 当前实验 为 None，不改变原来的 GUI 操作流程。
+    try:
+        experiment_cli.enqueue_initial_commands(当前实验, 启动.取命令队列())
+    except Exception as e:
+        print(f"✗ 实验初始命令加载失败：{type(e).__name__}: {e}", flush=True)
         启动.请求停止()
         Web桥.关闭()
         return 1

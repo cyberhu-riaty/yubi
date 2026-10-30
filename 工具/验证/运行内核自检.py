@@ -6,6 +6,7 @@ from pathlib import Path
 import queue
 import sys
 import threading
+import types
 
 
 包根 = Path(__file__).resolve().parents[2]
@@ -24,6 +25,7 @@ import 启动  # noqa: E402
 import 插件系统  # noqa: E402
 import 命令桥  # noqa: E402
 import 重力桥  # noqa: E402
+import 控制桥  # noqa: E402
 
 
 def 检查队列() -> None:
@@ -64,22 +66,43 @@ def 检查仿真控制语义() -> None:
 
     应用器.收仿真控制(重力桥.仿真控制命令(动作="运行"))
     assert 应用器.运行中, "Run 应打开步进闸门"
+    assert 应用器.重力开, "Run 不应改写重力设置"
     assert not 复位调用, "Run 不应触发复位"
+
+    应用器.收状态(重力桥.重力状态(重力开=False))
+    assert 应用器.运行中, "关闭重力不应顺带暂停仿真"
+    assert not 应用器.重力开, "重力命令没有独立生效"
 
     应用器.收仿真控制(重力桥.仿真控制命令(动作="暂停"))
     assert not 应用器.运行中, "Pause 应关闭步进闸门"
+    assert not 应用器.重力开, "Pause 不应改写重力设置"
     assert not 复位调用, "Pause 必须保持当前位置，不能偷偷复位"
 
     应用器.收仿真控制(重力桥.仿真控制命令(动作="复位"))
     assert not 应用器.运行中, "Reset 后应保持暂停"
     assert 复位调用 == ["reset"], "Reset 应且只应重建当前算法一次"
     assert 应用器.复位次数 == 1, "Reset 次数没有记账"
-    assert len(状态调用) == 3, "每个动作都应主动回报一次真实状态"
+    assert len(状态调用) == 4, "运行控制与重力修改都应主动回报真实状态"
 
     已发 = []
     发布器 = 重力桥.仿真状态发布器(已发.append)
     assert 发布器.发布(应用器, 0.0, 强制=True)
-    assert 已发[-1].状态 == "暂停" and 已发[-1].仿真时间 == 0.0
+    assert 已发[-1].状态 == "暂停" and not 已发[-1].重力开 and 已发[-1].仿真时间 == 0.0
+
+
+def 检查控制目标() -> None:
+    已转发: list = []
+    应用器 = 控制桥.控制目标应用器(lambda 目标: 已转发.append(目标.copy()))
+    模型 = types.SimpleNamespace(nq=2)
+    数据 = types.SimpleNamespace(qpos=__import__("numpy").array([0.1, -0.2]))
+    应用器.收到模型(types.SimpleNamespace(model=模型, data=数据))
+    应用器.收目标(控制桥.控制目标命令(目标=[0.3, -0.4]))
+    assert len(已转发) == 2, "模型初始化与手动目标都应转发"
+    assert 应用器.来源 == "手动输入"
+    assert 应用器.目标.tolist() == [0.3, -0.4]
+
+    应用器.收目标(控制桥.控制目标命令(目标=[1.0]))
+    assert 应用器.目标.tolist() == [0.3, -0.4], "维度错误的目标不应覆盖已接受目标"
 
 
 def 检查生命周期() -> None:
@@ -118,9 +141,11 @@ def main() -> int:
     print("[PASS] 线程安全命令队列")
     检查仿真控制语义()
     print("[PASS] Run / Pause / Reset 语义")
+    检查控制目标()
+    print("[PASS] 关节控制目标通道")
     检查生命周期()
     print("[PASS] 仿真就绪信号与可控退出")
-    print("运行内核自检：3 项通过")
+    print("运行内核自检：4 项通过")
     return 0
 
 
