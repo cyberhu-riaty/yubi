@@ -128,10 +128,11 @@ def __getattr__(属性: str):
                 模块 = __import__("mujoco.experimental.dear_imgui.dear_imgui",
                                   fromlist=["dear_imgui"])
         except ImportError as 异常:
+            检查命令 = _环境命令('-c "from 官方层 import ux; print(ux)"')
             raise SystemExit(
                 f"\n✗ 取不到 {属性}（{异常}）。\n"
                 f"  它属于官方 experimental 子模块；当前 mujoco 可能不是完整 pip 包。\n"
-                f"  检查：{_环境命令('-c \"from 官方层 import ux; print(ux)\"')}\n") from 异常
+                f"  检查：{检查命令}\n") from 异常
         globals()[属性] = 模块
         return 模块
     raise AttributeError(f"官方层 里没有 {属性!r}")
