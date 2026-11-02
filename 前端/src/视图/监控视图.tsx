@@ -23,7 +23,7 @@ export function 监控视图() {
   const 连接 = 用仓库((s) => s.连接);
   const 告警 = 用仓库((s) => s.告警.数据);
   const 活动告警 = 告警?.活动 ?? [];
-  const 活跃数 = 活动告警.filter((a) => a.严重度 === "严重").length || 活动告警.length;
+  const 严重数 = 活动告警.filter((a) => a.严重度 === "严重").length;
   const 已冻结 = 仿真?.状态 === "暂停";
   const 跑得动 = 系统?.RTF !== undefined && 系统.RTF >= 0.95;
 
@@ -62,7 +62,11 @@ export function 监控视图() {
       {活动告警.length ? (
         <可折叠区块
           标题={t("监控.告警")}
-          徽标={<标签 语气="警示">{活跃数}</标签>}
+          徽标={
+            <标签 语气={严重数 ? "警示" : "强调"}>
+              {t("监控.告警.计数", { 活动: 活动告警.length, 严重: 严重数 })}
+            </标签>
+          }
         >
           <p className="text-dim">{t("监控.告警.说明")}</p>
           <ul className="mt-2 space-y-1.5">
@@ -76,8 +80,8 @@ export function 监控视图() {
               >
                 <div className="flex flex-wrap items-baseline gap-1.5">
                   <标签 语气={a.严重度 === "严重" ? "警示" : "强调"}>{a.类型}</标签>
-                  <span className="min-w-0 flex-1 truncate text-[0.85em] 等宽" title={a.信号}>
-                    {String(a.信号 ?? "").split("·").pop()}
+                  <span className="min-w-0 flex-1 break-words text-[0.85em] 等宽" title={a.信号}>
+                    {String(a.信号 ?? "")}
                   </span>
                   <span className="flex-none text-[0.78em] text-dim 等宽">
                     {`${(a.开始秒 ?? 0).toFixed(1)}–${(a.结束秒 ?? 0).toFixed(1)}s`}

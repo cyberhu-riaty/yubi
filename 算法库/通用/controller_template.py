@@ -1,19 +1,19 @@
 """
-我的控制律_模板.py —— 复制这个文件开始写你自己的控制算法
+controller_template.py —— 复制这个文件开始写你自己的控制算法
 
 用法（三步，**主程序一行都不用改**）：
-    ① 把这个文件复制成 算法库/通用/你的算法名.py
+    ① 把这个文件复制成 算法库/通用/my_controller.py
        （★ 文件名不能以数字开头；只服务某个实验的算法就放 算法库/实验/）
     ② 改类名、名称、英文名、说明，然后在 每步控制() 里写你的算法
     ③ 让它被项目引用 —— 项目的 `算法` 字段写 `"*"` 时**自动就会加载它**，
        不用改任何代码；只想挂在某几个项目上，就在那些项目文件的 算法 列表里写上：
-           {"插件": "你的算法名"}
+           {"插件": "my_controller"}
        （`类` 可以省：模块里只有一个插件类时装配器自己认；
          有多个才需要写 "类": "你的插件类名"）
 
 运行 / 检查：
-    ./.venv/bin/python 软件/主程序窗口.py                 # 开工作台（装"上次用的项目"的算法）
-    ./.venv/bin/python 软件/主程序窗口.py --项目 UR5e_基础PD
+    ./.venv/bin/python run_yubi.py                         # 开工作台
+    ./.venv/bin/python run_yubi.py --project UR5e_基础PD
     ./.venv/bin/python "工具/验证/校验项目.py"            # 项目↔模型↔算法 一致性
 
 ★ 元信息怎么显示：
@@ -29,14 +29,14 @@
     · 想声明"我这个算法只跑得动某些模型"，实现 `模型兼容性(模型)` 并返回原因字符串。
       外壳会在装配时**跳过**它、把原因显示给用户 —— 这比"跑起来抛异常被永久停用"好得多；
     · 想清掉跟旧模型绑定的缓存（采样数据、索引、上一次的结果），实现
-      `模型已切换(路径, 模型, 数据)`。标准范例见 `参数辨识插件.py`。
+      `模型已切换(路径, 模型, 数据)`。标准范例见 `parameter_identification_plugin.py`。
 """
 from __future__ import annotations
 
 import numpy as np
 
-import 插件系统 as 插件
-from 插件系统 import 控制插件, 每步
+import plugin_system as 插件
+from plugin_system import ControlPlugin as 控制插件, step_handler as 每步
 
 
 class 我的插件(控制插件):

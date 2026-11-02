@@ -5,7 +5,7 @@
   "model": "模型/universal_robots_ur5e/ur5e_torque.xml",
   "project": "ur5e_pd_plain",
   "controllers": ["joint_pd_plain"],
-  "plugins": ["数据录制"],
+  "plugins": ["data_recorder"],
   "trajectory": {
     "type": "joint_target",
     "source": "comparison_target_v1",

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from controller_registry import ControllerRegistry, controller_registry
-import 项目 as _项目
+import project_registry as _projects
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
@@ -28,6 +28,7 @@ class Experiment:
     model: str
     project: str
     controllers: tuple[str, ...]
+    preprocessors: tuple[str, ...] = ()
     plugins: tuple[str, ...] = ()
     trajectory: Mapping[str, Any] = field(default_factory=dict)
     initial_state: Mapping[str, Any] = field(default_factory=dict)
@@ -49,8 +50,8 @@ class Experiment:
 
     @property
     def algorithm_names(self) -> tuple[str, ...]:
-        """控制器在前、辅助插件在后；顺序就是插件执行顺序。"""
-        return tuple(dict.fromkeys((*self.controllers, *self.plugins)))
+        """前置目标源、控制器、记录插件；顺序就是每步执行顺序。"""
+        return tuple(dict.fromkeys((*self.preprocessors, *self.controllers, *self.plugins)))
 
     def should_stop(self, simulation_time: float) -> bool:
         return self.duration > 0 and float(simulation_time) >= self.duration
@@ -61,12 +62,12 @@ class Experiment:
             errors.append("实验注册名为空")
         if not self.model_path.is_file():
             errors.append(f"模型不存在：{self.model_path}")
-        project = _项目.读项目(self.project) if self.project else None
+        project = _projects.load_project(self.project) if self.project else None
         if not project:
             errors.append(f"项目不存在：{self.project or '（空）'}")
         else:
             configured = tuple(
-                str(item.get("插件") or "") for item in _项目.解析算法(project)
+                str(item.get("插件") or "") for item in _projects.parse_algorithms(project)
                 if isinstance(item, dict)
             )
             if configured != self.algorithm_names:
@@ -77,6 +78,10 @@ class Experiment:
                 controllers.describe(name)
             except Exception as exc:                                  # noqa: BLE001
                 errors.append(f"控制器「{name}」不可用：{exc}")
+        discovered = set(controllers.keys())
+        for name in self.preprocessors:
+            if name not in discovered:
+                errors.append(f"前置模块「{name}」不可用")
         if self.duration <= 0:
             errors.append("停止时间必须大于 0 秒")
         return errors
@@ -120,14 +125,22 @@ class ExperimentRegistry:
 
     @staticmethod
     def _from_mapping(default_key: str, data: Mapping[str, Any]) -> Experiment:
-        controllers = tuple(str(x) for x in data.get("controllers", ()) if str(x).strip())
-        plugins = tuple(str(x) for x in data.get("plugins", ()) if str(x).strip())
+        controllers = tuple(
+            _projects.normalize_algorithm_name(str(x))
+            for x in data.get("controllers", ()) if str(x).strip())
+        preprocessors = tuple(
+            _projects.normalize_algorithm_name(str(x))
+            for x in data.get("preprocessors", ()) if str(x).strip())
+        plugins = tuple(
+            _projects.normalize_algorithm_name(str(x))
+            for x in data.get("plugins", ()) if str(x).strip())
         return Experiment(
             key=str(data.get("key") or default_key),
             name=str(data.get("name") or data.get("key") or default_key),
             model=str(data.get("model") or ""),
             project=str(data.get("project") or ""),
             controllers=controllers,
+            preprocessors=preprocessors,
             plugins=plugins,
             trajectory=dict(data.get("trajectory") or {}),
             initial_state=dict(data.get("initial_state") or {}),

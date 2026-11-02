@@ -1,5 +1,5 @@
 """
-关节pd控制.py —— 最简单的控制插件（把教程 11 号脚本的算法搬进外壳）
+joint_pd_control.py —— 最简单的控制插件（把教程 11 号脚本的算法搬进外壳）
 
 （文件名不能以数字开头，否则 Python 不能 import；加载顺序由主程序里的列表决定）
 
@@ -19,11 +19,11 @@ from __future__ import annotations
 
 import numpy as np
 
-import 插件系统 as 插件                       # 我们自己的兼容层（唯一碰官方 API 的地方）
-from 插件系统 import 控制插件, 每步
+import plugin_system as 插件                  # 统一走英文公共接口，不直接依赖旧模块文件名
+from plugin_system import ControlPlugin as 控制插件, step_handler as 每步
 
 try:                                          # 界面桥是可选的：没有它也能单独跑本插件
-    from 界面桥 import 面板目标消息
+    from ui_bridge import PanelTargetMessage as 面板目标消息
 except Exception:                             # noqa: BLE001
     class 面板目标消息:                        # 占位类型（保证 @每步 的类型标注仍然合法）
         ctrl_target = None
@@ -54,7 +54,7 @@ class 关节PD控制插件(控制插件):
 
     # ------------------------------------------------------------------
     # 兼容性预检：外壳换模型时会先问一句"这个模型你能跑吗"
-    #   （契约见 软件/插件系统.py 的 `控制插件.模型兼容性`）
+    #   （契约见 软件/plugin_system.py 的 `ControlPlugin`）
     # ------------------------------------------------------------------
     def 模型兼容性(self, 模型) -> str:
         """要求"每个关节都有自己的力矩执行器"，也就是 nu == nq（扭矩模型）。

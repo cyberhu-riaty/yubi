@@ -431,8 +431,8 @@ class 规划器:
                     "约束": str(来源), "sd": np.asarray(报.sd, dtype=float),
                 }
                 try:
-                    import 模型桥 as _模型桥
-                    _项目名 = str(_模型桥.读取设置("上次项目", "") or "")
+                    import model_bridge as _模型桥
+                    _项目名 = str(_模型桥.read_setting("上次项目", "") or "")
                 except Exception:                                         # noqa: BLE001
                     _项目名 = ""
                 self.存盘目录 = _保存轨迹(报, self._包根, _项目名)

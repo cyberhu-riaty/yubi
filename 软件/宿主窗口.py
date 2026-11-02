@@ -730,6 +730,7 @@ class Viewport(NSOpenGLView):
                 场景.ngeom += 1
         if self.末端坐标开:
             self.画_末端坐标(场景)
+        self.画_实验轨迹(场景)
         # 关节高亮：日志里的 Jn 点击后到这里画一个橙色球 + 三条短线。
         # 只做视觉标记，不改变任何物理量。
         if self.高亮关节 is not None and self.模型 is not None and self.数据 is not None:
@@ -795,6 +796,37 @@ class Viewport(NSOpenGLView):
                                   (0.35, 0.90, 0.45, 1),
                                   (0.40, 0.60, 1.00, 1))):
             self.加_线(场景, 位置, 位置 + 旋转[:, 轴] * 长, 颜色, 2.0)
+
+    def 画_实验轨迹(self, 场景) -> None:
+        """把实验发布的末端目标/实际路径作为装饰画进 3D，不参与物理。"""
+        import mujoco
+        import numpy as np
+        from trajectory_runtime import current_trajectory_visualization
+
+        snapshot = current_trajectory_visualization()
+        if not snapshot.experiment_key:
+            return
+        for points, color, width in (
+                (snapshot.planned, (0.10, 0.86, 1.00, 0.72), 5.0),
+                (snapshot.actual, (1.00, 0.46, 0.08, 1.00), 2.5)):
+            if len(points) > 301:
+                indices = np.linspace(0, len(points) - 1, 301).astype(int)
+                points = points[indices]
+            for start, end in zip(points[:-1], points[1:]):
+                self.加_线(场景, start, end, color, width)
+        for points, color, radius in (
+                (snapshot.planned, (0.10, 0.86, 1.00, 1.0), 0.012),
+                (snapshot.actual, (1.00, 0.46, 0.08, 1.0), 0.015)):
+            if len(points) == 0 or 场景.ngeom >= 场景.maxgeom:
+                continue
+            几何 = 场景.geoms[场景.ngeom]
+            mujoco.mjv_initGeom(
+                几何, int(mujoco.mjtGeom.mjGEOM_SPHERE),
+                np.array([radius, 0.0, 0.0], dtype=float),
+                np.asarray(points[-1], dtype=float), np.eye(3).reshape(9),
+                np.asarray(color, dtype=np.float32))
+            几何.category = int(mujoco.mjtCatBit.mjCAT_DECOR)
+            场景.ngeom += 1
 
     def _渲染循环(self) -> None:
         import time as _t

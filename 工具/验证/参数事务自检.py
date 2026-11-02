@@ -42,11 +42,12 @@ def main() -> int:
     args = ap.parse_args()
 
     import 参数桥
-    import 插件系统 as 框架
-    import 装配器
+    import plugin_system as 框架
+    import plugin_assembler as 装配器
 
-    插件, _ = 装配器.按项目装配({"算法": [{"插件": "关节pd控制"}], "参数": {}}, "事务自检")
-    reg = 框架.安全注册表(插件)
+    插件, _ = 装配器.assemble_project(
+        {"算法": [{"插件": "joint_pd_control"}], "参数": {}}, "事务自检")
+    reg = 框架.SafeRegistry(插件)
     发出: list = []
     存盘: list = []
     ap_ = 参数桥.参数应用器(参数存盘=lambda 名, 表: 存盘.append((名, 表))).重绑(reg).绑定发布(发出.append)

@@ -102,7 +102,7 @@ def 取插件目录(包根: str, 当前算法: list[str] | None = None) -> dict:
     参数
       当前算法 : 当前项目真正启用的插件名（有序）。用来标"已启用"。
     """
-    import 项目 as _项目
+    import project_registry as _项目
 
     # 顺序不能只做成 set：多个算法依次写 data.ctrl 时，后执行者可能覆盖前者。
     # 插件目录把真实执行序号一并交给 GUI，避免用户只点一次保存就改变控制顺序。
@@ -110,7 +110,7 @@ def 取插件目录(包根: str, 当前算法: list[str] | None = None) -> dict:
     使用表 = _被项目使用(包根)
     出 = []
     try:
-        发现 = _项目.发现的算法()
+        发现 = _项目.discover_algorithms()
     except Exception as 异常:                                         # noqa: BLE001
         return {"数量": 0, "插件": [], "说明": f"算法库扫描失败：{异常}"}
 

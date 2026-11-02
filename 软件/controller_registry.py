@@ -1,7 +1,7 @@
 """通用控制器注册表。
 
 它不替代 yubi 已有的插件系统，而是给“按名称选择控制器”提供稳定外观：
-算法文件仍放在 ``算法库/``，真正的动态导入仍由 ``装配器.创建插件`` 完成。
+算法文件仍放在 ``算法库/``，真正的动态导入由 ``plugin_assembler`` 完成。
 """
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-import 项目 as _项目
-import 装配器 as _装配器
+import project_registry as _projects
+import plugin_assembler as _assembler
 
 
 @dataclass(frozen=True)
@@ -48,17 +48,17 @@ class ControllerRegistry:
         self._metadata.pop(str(name), None)
 
     def keys(self) -> tuple[str, ...]:
-        discovered = {str(item.get("插件") or "") for item in _项目.发现的算法()}
+        discovered = {str(item.get("插件") or "") for item in _projects.discover_algorithms()}
         return tuple(sorted(({x for x in discovered if x} | set(self._factories))))
 
     def create(self, name: str, **kwargs: Any) -> object:
-        key = str(name).strip()
+        key = _projects.normalize_algorithm_name(str(name))
         if key in self._factories:
             instance = self._factories[key](**kwargs)
         else:
             if kwargs:
                 raise TypeError(f"算法库控制器「{key}」不接受构造参数；请通过可调参数接口配置")
-            instance, _meta, error = _装配器.创建插件(key)
+            instance, _meta, error = _assembler.create_plugin(key)
             if instance is None:
                 raise KeyError(f"无法创建控制器「{key}」：{error}")
         if not bool(getattr(instance, "接管控制", True)):
@@ -66,7 +66,7 @@ class ControllerRegistry:
         return instance
 
     def describe(self, name: str) -> ControllerInfo:
-        key = str(name).strip()
+        key = _projects.normalize_algorithm_name(str(name))
         if key in self._factories:
             instance = self.create(key)
             meta = self._metadata.get(key, {})
@@ -78,7 +78,7 @@ class ControllerRegistry:
                 author=meta.get("author", str(getattr(instance, "作者", ""))),
                 source="registered factory",
             )
-        instance, meta, error = _装配器.创建插件(key)
+        instance, meta, error = _assembler.create_plugin(key)
         if instance is None:
             raise KeyError(f"无法读取控制器「{key}」：{error}")
         if not bool(getattr(instance, "接管控制", True)):

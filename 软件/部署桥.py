@@ -79,9 +79,9 @@ def _项目目录(包根: str) -> str:
 
 def 导出(包根: str, 项目名: str) -> dict:
     """把项目导出成一个包。返回 {目录, 文件数, 字节, 清单[]}；失败抛异常。"""
-    import 项目 as _项目
+    import project_registry as _项目
 
-    配置 = _项目.读项目(项目名) if 项目名 else None
+    配置 = _项目.load_project(项目名) if 项目名 else None
     if not 配置:
         raise ValueError(f"读不到项目「{项目名}」")
 
@@ -106,7 +106,7 @@ def 导出(包根: str, 项目名: str) -> dict:
     记("项目.json", "模型路径 / 算法清单 / 参数")
 
     # ② 算法源码（真源码，不是名字）
-    发现 = {d["插件"]: d for d in _项目.发现的算法()}
+    发现 = {d["插件"]: d for d in _项目.discover_algorithms()}
     用到 = []
     for 项 in (配置.get("算法") or []):
         名 = str((项 or {}).get("插件") or "") if isinstance(项, dict) else ""
@@ -119,7 +119,7 @@ def 导出(包根: str, 项目名: str) -> dict:
 
     # ③ 模型清单（不复制本体，给校验和）
     模型相对 = str(配置.get("模型") or "")
-    模型绝对 = _项目.绝对(模型相对) if 模型相对 else ""
+    模型绝对 = _项目.absolute_path(模型相对) if 模型相对 else ""
     行们 = ["| 文件 | 大小 | sha256 |", "|---|---|---|"]
     for 路径, 标签 in ((模型绝对, "入口模型"),):
         if 路径 and os.path.exists(路径):
@@ -213,8 +213,8 @@ class 部署器:
         # 项目名不给就用当前项目（由外壳在构造时告诉我们的是空，所以这里兜底读设置）
         if not 项目名:
             try:
-                import 模型桥 as _模型桥
-                项目名 = str(_模型桥.读取设置("上次项目", "") or "")
+                import model_bridge as _模型桥
+                项目名 = str(_模型桥.read_setting("上次项目", "") or "")
             except Exception:                                         # noqa: BLE001
                 项目名 = ""
         try:

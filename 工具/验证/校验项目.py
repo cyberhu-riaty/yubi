@@ -34,8 +34,8 @@ import sys
 if 软件目录 not in sys.path:
     sys.path.insert(0, 软件目录)
 
-import 项目                                                          # noqa: E402
-import 装配器                                                        # noqa: E402
+import project_registry as 项目                                       # noqa: E402
+import plugin_assembler as 装配器                                      # noqa: E402
 
 
 class 结果:
@@ -396,9 +396,14 @@ def main() -> int:
     #   `模型桥.py` 一 import 就抛 TypeError（报的是"消息类型不对"，
     #   根因却是**类嵌套错了**，症状很绕）。逐模块 import 能直接指出是哪个文件。
     import importlib
+    # `宿主窗口.py` 和 `定时器.py` 是旧的 macOS AppKit 实现，依赖 PyObjC。
+    # Windows 由 `平台适配层/windows.py` 提供宿主；在 Windows 强行导入前两者
+    # 只会得到缺少 objc 的假失败，并不能说明当前平台不可运行。
+    当前平台跳过 = {"定时器", "宿主窗口"} if sys.platform != "darwin" else set()
     模块名们 = sorted(
         os.path.splitext(f)[0] for f in os.listdir(软件目录)
-        if f.endswith(".py") and not f.startswith("主程序")   # 入口由下面的 --冒烟/--检查 覆盖
+        if (f.endswith(".py") and not f.startswith("主程序")
+            and os.path.splitext(f)[0] not in 当前平台跳过)   # 入口由下面的 --冒烟/--检查 覆盖
     )
     if 软件目录 not in sys.path:
         sys.path.insert(0, 软件目录)

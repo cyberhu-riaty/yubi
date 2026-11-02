@@ -1,0 +1,27 @@
+{
+  "_说明": "多航点轨迹对比之一：轨迹目标执行器在纯 PD 之前发布 q_ref(t)。",
+  "项目": "ur5e_pd_waypoint_tracking",
+  "模型": "模型/universal_robots_ur5e/ur5e_torque.xml",
+  "实验专用": true,
+  "算法": [
+    {
+      "插件": "trajectory_target_player"
+    },
+    {
+      "插件": "joint_pd_plain"
+    },
+    {
+      "插件": "data_recorder"
+    }
+  ],
+  "参数": {
+    "关节 PD 纯反馈": {
+      "KP": 400.0,
+      "KD": 15.0
+    },
+    "实验轨迹目标执行": {
+      "监看关节": 2.0
+    }
+  },
+  "备注": "三组轨迹实验共用 KP=400、KD=15，并统一使用目标/实际速度误差；参数兼顾误差、控制代价和零饱和。"
+}

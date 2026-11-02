@@ -13,10 +13,14 @@ if str(SOFTWARE) not in sys.path:
     sys.path.insert(0, str(SOFTWARE))
 os.environ["驭臂_关Web"] = "1"
 
+import console_support  # noqa: E402
+
+console_support.prepare_output()
+
 import experiment_registry  # noqa: E402
-import 命令桥  # noqa: E402
-import 启动  # noqa: E402
-import 插件系统  # noqa: E402
+import command_bridge as 命令桥  # noqa: E402
+import runtime_engine as 启动  # noqa: E402
+import plugin_system as 插件系统  # noqa: E402
 
 
 def main() -> int:
@@ -25,19 +29,20 @@ def main() -> int:
     before = {path.resolve() for path in output_root.glob("ur5e_pd_tracking_*")}
 
     empty_scene = ROOT / "模型" / "空场景.xml"
-    registry = 插件系统.安全注册表([], 步进插件=插件系统.固定一步())
+    registry = 插件系统.SafeRegistry([], 步进插件=插件系统.FixedStep())
     config = 插件系统.viewer_protocol.ViewerConfig(
         title="实验 GUI 闭环自检", width=800, height=600, gfx="")
-    启动.请求停止(1.0)
-    启动._排空本地队列()                                      # noqa: SLF001
+    启动.stop(1.0)
+    启动.drain_local_queue()
     视口快照数 = [0]
-    启动.设状态观察者(lambda _快照: 视口快照数.__setitem__(0, 视口快照数[0] + 1))
+    启动.set_state_observer(lambda _快照: 视口快照数.__setitem__(0, 视口快照数[0] + 1))
     try:
-        code = 启动.启动外壳(
+        code = 启动.start(
             config, str(empty_scene), None, [], registry,
-            插件系统.通知模型加载, 项目名="", 无窗=True, 后台线程=True)
+            插件系统.notify_model_loaded, project_name="", headless=True,
+            background_thread=True)
         assert code == 0
-        ready, reason = 启动.等待就绪(20.0)
+        ready, reason = 启动.wait_until_ready(20.0)
         assert ready, reason
 
         # 默认暂停时只送初始状态，不应让 3D “状态同步”计数空转。
@@ -46,7 +51,7 @@ def main() -> int:
         time.sleep(0.15)
         assert 视口快照数[0] == paused_count, "暂停时仍在重复发送相同3D状态"
 
-        queue = 启动.取命令队列()
+        queue = 启动.command_queue()
         ok, reason = 命令桥.命令入队(
             queue, "命令.实验", {"动作": "加载", "实验": experiment.key}, 打印=False)
         assert ok, reason
@@ -78,8 +83,8 @@ def main() -> int:
         print("[PASS] 暂停/完成后3D状态快照不再重复增长")
         return 0
     finally:
-        启动.设状态观察者(None)
-        启动.请求停止(5.0)
+        启动.set_state_observer(None)
+        启动.stop(5.0)
 
 
 if __name__ == "__main__":

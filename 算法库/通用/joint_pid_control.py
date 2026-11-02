@@ -1,10 +1,10 @@
-"""通用关节 PID 力矩控制器示例；用于验证新增算法无需修改 GUI/仿真引擎。"""
+"""Joint PID torque-control example for the reusable plugin interface."""
 from __future__ import annotations
 
 import numpy as np
-import 插件系统 as 插件
-from 插件系统 import 控制插件, 每步
-from 界面桥 import 面板目标消息
+import plugin_system as 插件
+from plugin_system import ControlPlugin as 控制插件, step_handler as 每步
+from ui_bridge import PanelTargetMessage as 面板目标消息
 
 
 class 关节PID控制插件(控制插件):

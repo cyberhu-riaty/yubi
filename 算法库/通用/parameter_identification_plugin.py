@@ -1,5 +1,5 @@
 """
-参数辨识插件.py —— D3 的界面后端（仿真侧）
+parameter_identification_plugin.py —— D3 的界面后端（仿真侧）
 
 它把已验证的 `参数辨识.py` 接到界面上：
     ① 激励采样：在当前模型上做一段闭环激励，记录 q/v/τ（用于辨识）
@@ -26,7 +26,7 @@ import time
 
 import numpy as np
 
-from 官方层 import messages
+from official_api import messages
 
 # ★ 本文件在 `算法库/通用/` 下，但它要 import 外壳侧的 `参数辨识`、`辨识桥`、`项目`
 #   —— 那三个在 `软件/` 里。所以先保证 `软件/` 在 sys.path 上。
@@ -39,15 +39,22 @@ _软件目录 = _os.path.normpath(_os.path.join(_os.path.dirname(_os.path.abspat
 if _os.path.isdir(_软件目录) and _软件目录 not in _sys.path:
     _sys.path.insert(0, _软件目录)
 
-from 参数辨识 import 参数定义, 采数据, 辨识                              # noqa: E402
-from 辨识桥 import 辨识命令, 辨识状态                                     # noqa: E402
+from parameter_identification import (                                      # noqa: E402
+    ParameterDefinition as 参数定义,
+    collect_data as 采数据,
+    identify as 辨识,
+)
+from identification_bridge import (                                         # noqa: E402
+    IdentificationCommand as 辨识命令,
+    IdentificationState as 辨识状态,
+)
 
 # ★ 模型目录不在这里数 `dirname` 的层数：本文件原来在 `算法库/通用/` 下，
 #   方案 C 搬到 `算法库/通用/` 之后层数变了，数层数的写法会**静默**指到别的目录
 #   （读不到参数表 → 所有模型都显示"不支持辨识"，很难查）。
 #   统一从 `项目.py` 取，路径只有一处定义。
-import 项目 as _项目                                                     # noqa: E402
-_模型目录 = _项目.模型目录
+import project_registry                                                    # noqa: E402
+_模型目录 = project_registry.MODEL_DIRECTORY
 _参数表路径 = os.path.join(_模型目录, "辨识参数表.json")
 
 
@@ -299,7 +306,7 @@ class 参数辨识插件:
 def _按参数造模型(模型路径: str, 参数们: list[参数定义]):
     """按参数造模型（复用 参数辨识 里的边界夹取与写入逻辑）。"""
     import mujoco
-    from 参数辨识 import _写参数
+    from parameter_identification import write_parameter as _写参数
     spec = mujoco.MjSpec.from_file(模型路径)
     for p in 参数们:
         _写参数(spec, p.目标, float(np.clip(p.初值, p.下界, p.上界)))

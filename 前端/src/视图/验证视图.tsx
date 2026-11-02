@@ -145,6 +145,11 @@ export function 验证视图() {
     });
   };
 
+  /** 演示时一键切到同类曲线，避免角度、误差和力矩混在同一纵轴。 */
+  const 只显示 = (判定: (名: string) => boolean) => {
+    设隐藏(new Set(名们.filter((名) => !判定(名))));
+  };
+
   const 图例行: Record<string, unknown>[] = 名们.map((名) => {
     const 点 = 曲线数[名];
     const 末 = 点?.[点.length - 1];
@@ -165,6 +170,8 @@ export function 验证视图() {
             checked={!隐藏.has(名)}
             onChange={() => 切换(名)}
             aria-label={`${t("验证.选中")} ${名}`}
+            // 复选框、图例短线和画布曲线使用同一个稳定颜色，便于快速核对。
+            style={{ accentColor: 取配色(名们.indexOf(名)) }}
           />
         );
       },
@@ -357,6 +364,15 @@ export function 验证视图() {
         {名们.length ? (
           <>
             <div className="mt-2 flex items-center gap-1.5">
+              <按钮 尺寸="小" 种类="幽灵" on按下={() => 只显示((名) => 名.includes("目标位置") || 名.includes("实际位置"))}>
+                {t("验证.只看轨迹")}
+              </按钮>
+              <按钮 尺寸="小" 种类="幽灵" on按下={() => 只显示((名) => 名.includes("误差"))}>
+                {t("验证.只看误差")}
+              </按钮>
+              <按钮 尺寸="小" 种类="幽灵" on按下={() => 只显示((名) => 名.includes("力矩") || 名.includes("控制输入"))}>
+                {t("验证.只看控制")}
+              </按钮>
               <按钮 尺寸="小" 种类="幽灵" on按下={() => 设隐藏(new Set())}>
                 {t("验证.全选")}
               </按钮>

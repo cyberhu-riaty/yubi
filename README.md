@@ -83,21 +83,21 @@ py -3.12 -m venv .venv
 ### 2. 启动
 
 ```bash
-# 主入口：自研窗口 = React 界面 + 原生 3D 视口
-.venv/bin/python 软件/主程序窗口.py
+# 推荐主入口（ASCII 路径）：自研窗口 = React 界面 + 原生 3D 视口
+.venv/bin/python run_yubi.py
 
 # 浏览器入口：同一个数据层，没有原生 3D
-.venv/bin/python 软件/主程序Web.py
+.venv/bin/python run_yubi_web.py
 ```
 
 Windows 启动方式：
 
 ```powershell
 # Qt 桌面窗口：React 工作台 + 嵌入式 MuJoCo 3D
-.\.venv\Scripts\python.exe 软件\主程序窗口.py
+.\.venv\Scripts\python.exe run_yubi.py
 
 # 排查用浏览器入口
-.\.venv\Scripts\python.exe 软件\主程序Web.py
+.\.venv\Scripts\python.exe run_yubi_web.py
 ```
 
 普通启动会先显示带地面、灯光和背景的**空场景**，不自动恢复上次的机器人；
@@ -110,15 +110,24 @@ Windows 启动方式：
 常用参数：
 
 ```bash
-.venv/bin/python 软件/主程序窗口.py --检查                 # 不开窗，只自检
-.venv/bin/python 软件/主程序窗口.py --模型 模型/universal_robots_ur5e/ur5e_torque.xml
-.venv/bin/python 软件/主程序窗口.py --项目 UR5e_基础PD
-.venv/bin/python 软件/主程序窗口.py --开重力
-.venv/bin/python 软件/主程序窗口.py --无3D                  # 不要 3D 视口（排查用）
-.venv/bin/python 软件/主程序窗口.py --web口 8899            # Web 服务换端口（默认 8712）
+.venv/bin/python run_yubi.py --check                        # 不开窗，只自检
+.venv/bin/python run_yubi.py --model 模型/universal_robots_ur5e/ur5e_torque.xml
+.venv/bin/python run_yubi.py --project UR5e_基础PD
+.venv/bin/python run_yubi.py --enable-gravity
+.venv/bin/python run_yubi.py --no-3d                        # 不要 3D 视口（排查用）
+.venv/bin/python run_yubi.py --web-port 8899                # Web 服务换端口（默认 8712）
 
-.venv/bin/python 软件/主程序Web.py --不开浏览器
-.venv/bin/python 软件/主程序Web.py --web口 8899
+.venv/bin/python run_yubi_web.py --no-browser
+.venv/bin/python run_yubi_web.py --web-port 8899
+```
+
+无界面实验和控制算法对比也提供 ASCII 入口：
+
+```bash
+.venv/bin/python run_experiment_cli.py --list
+.venv/bin/python run_experiment_cli.py ur5e_pd_plain
+.venv/bin/python compare_experiments_cli.py
+.venv/bin/python scripts/check_naming.py
 ```
 
 ### 3. 想要桌面图标（macOS，可选）
@@ -127,7 +136,7 @@ Windows 启动方式：
 .venv/bin/python 工具/打包应用.py \
   --名字 小软件 \
   --输出名 小软件 \
-  --主程序 软件/主程序窗口.py
+  --主程序 run_yubi.py
 ```
 
 生成的 `.app` 在包根目录，双击即可启动。它只是启动器 + 图标，不含 Python 环境；换机器后仍要先跑 `工具/重建环境.sh`。
@@ -136,7 +145,7 @@ Windows 启动方式：
 
 ```text
 yubi/
-├── 软件/                  运行时：宿主窗口、Web 桥、参数/规划/辨识/部署桥、设备层
+├── 软件/                  runtime/plugin/project/model 核心、宿主及各消息桥
 ├── 前端/                  React 19 + Vite 7 + Tailwind 4 源码（构建产物在 软件/web/）
 ├── 算法库/通用/           控制、录制、辨识插件与算法模板
 ├── 模型/                  MuJoCo 模型与网格资产（5 台机械臂 + Robotiq 2F85）
@@ -164,7 +173,7 @@ yubi/
 
 ```bash
 # ① 复制模板
-cp 算法库/通用/我的控制律_模板.py 算法库/通用/我的算法.py
+cp 算法库/通用/controller_template.py 算法库/通用/my_controller.py
 
 # ② 改类名、名称、英文名、说明，在 每步控制() 里写控制律
 # ③ 在项目文件里登记，或在「插件」页启用
@@ -203,7 +212,7 @@ class 我的插件(控制插件):
 {
   "项目": "UR5e_基础PD",
   "模型": "模型/universal_robots_ur5e/ur5e_torque.xml",
-  "算法": [{ "插件": "关节pd控制" }, { "插件": "我的算法" }],
+  "算法": [{ "插件": "joint_pd_control" }, { "插件": "my_controller" }],
   "参数": { "关节 PD 位置控制": { "KP": 320.0 } }
 }
 ```
@@ -246,7 +255,7 @@ class 我的插件(控制插件):
 另有入口自检：
 
 ```bash
-.venv/bin/python 软件/主程序窗口.py --检查
+.venv/bin/python run_yubi.py --check
 ```
 
 这些脚本都是独立可执行的：有自己的退出码，不依赖界面。诊断页用子进程调用它们，跑的就是你在终端里敲的同一批脚本。

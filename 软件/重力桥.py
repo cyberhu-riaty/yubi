@@ -340,8 +340,8 @@ class 重力应用器:
         ★ `_正在补发` 必须在 finally 里复位：万一官方 StepControl 那边抛异常，
           旗子留在 True 上就再也改不动暂停状态了（冻结会静默失效）。
         """
-        from 插件系统 import 取注册表
-        注册表 = 取注册表()
+        from plugin_system import get_registry
+        注册表 = get_registry()
         if 注册表 is None:
             return
         self._正在补发 = True

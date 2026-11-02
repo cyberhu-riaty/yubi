@@ -3,17 +3,18 @@ from __future__ import annotations
 
 import numpy as np
 
-import 插件系统 as studio
-from 插件系统 import 控制插件, 每步
-from 界面桥 import 面板目标消息
+import plugin_system as studio
+from plugin_system import ControlPlugin, step_handler
+from ui_bridge import PanelTargetMessage
+from trajectory_runtime import matching_reference_velocity
 
 
-class JointPIDPlainController(控制插件):
+class JointPIDPlainController(ControlPlugin):
     名称 = "关节 PID 纯反馈"
     英文名 = "Joint PID (feedback only)"
     版本 = "1.0"
     作者 = "数字样机"
-    说明 = "在纯 PD 基础上增加误差积分；不加入重力前馈。"
+    说明 = "使用位置/速度误差并增加误差积分；不加入重力前馈。"
     接管控制 = True
 
     # 与另外两组共用 KP/KD，只增加 KI，便于解释差异来源。
@@ -21,6 +22,9 @@ class JointPIDPlainController(控制插件):
     KI = 40.0
     KD = 70.0
     积分上限 = 1.0
+    # 连续轨迹每个控制周期都会更新目标，不能因此清积分；只有明显的人工跳变
+    # 才视为换任务。实验复位会重建控制器，本身也会自然清空积分。
+    目标跳变阈值 = np.deg2rad(10.0)
 
     def __init__(self) -> None:
         self.目标 = None
@@ -38,20 +42,24 @@ class JointPIDPlainController(控制插件):
             return f"当前对比控制器要求 nq==nv==nu（实际 {nq}/{nv}/{nu}）"
         return ""
 
-    @每步
-    def 收到面板目标(self, 消息: 面板目标消息) -> bool:
+    @step_handler
+    def 收到面板目标(self, 消息: PanelTargetMessage) -> bool:
         try:
             target = np.asarray(消息.ctrl_target, dtype=float).copy()
-            if (self.界面目标 is None or self.界面目标.shape != target.shape
-                    or not np.allclose(self.界面目标, target, rtol=0.0, atol=1e-12)):
-                self.界面目标 = target
-                if self.积分 is not None and self.积分.shape == target.shape:
-                    self.积分.fill(0.0)
+            形状变化 = self.界面目标 is not None and self.界面目标.shape != target.shape
+            大幅跳变 = (
+                self.界面目标 is not None
+                and self.界面目标.shape == target.shape
+                and float(np.max(np.abs(target - self.界面目标))) >= self.目标跳变阈值
+            )
+            self.界面目标 = target
+            if (形状变化 or 大幅跳变) and self.积分 is not None:
+                self.积分 = np.zeros_like(target)
         except Exception:                                             # noqa: BLE001
             pass
         return False
 
-    @每步
+    @step_handler
     def 每步控制(self, event: studio.messages.StepEvent) -> bool:
         model, data = event.model, event.data
         if data.qpos.size == 0 or data.ctrl.size == 0:
@@ -65,10 +73,26 @@ class JointPIDPlainController(控制插件):
             target = self.界面目标
 
         error = target - data.qpos
+        target_velocity = matching_reference_velocity(data, target)
+        velocity_error = target_velocity - data.qvel
         dt = max(float(model.opt.timestep), 1e-9)
-        self.积分 = np.clip(
-            self.积分 + error * dt, -self.积分上限, self.积分上限)
-        torque = self.KP * error + self.KI * self.积分 - self.KD * data.qvel
+        old_integral = self.积分.copy()
+        candidate_integral = np.clip(
+            old_integral + error * dt, -self.积分上限, self.积分上限)
+        candidate_torque = (
+            self.KP * error + self.KI * candidate_integral + self.KD * velocity_error)
+        limited_torque = self._限制力矩(model, candidate_torque)
+
+        # 条件积分抗饱和：若某关节已经触及力矩上/下限，而且当前误差会让积分
+        # 继续把它推向限位，就暂停该关节积分；脱离饱和后自动恢复。
+        saturated = np.abs(candidate_torque - limited_torque) > 1e-10
+        pushes_further = np.logical_or(
+            np.logical_and(candidate_torque > limited_torque, error > 0.0),
+            np.logical_and(candidate_torque < limited_torque, error < 0.0),
+        )
+        block = np.logical_and(saturated, pushes_further)
+        self.积分 = np.where(block, old_integral, candidate_integral)
+        torque = self.KP * error + self.KI * self.积分 + self.KD * velocity_error
         data.ctrl[:] = self._限制力矩(model, torque)
         self.当前误差 = float(np.max(np.abs(error)))
         self.最大误差 = max(self.最大误差, self.当前误差)

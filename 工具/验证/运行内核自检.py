@@ -17,21 +17,21 @@ if str(软件目录) not in sys.path:
 # 自检不占 Web 端口，也不创建窗口。
 os.environ["驭臂_关Web"] = "1"
 
-import 控制台  # noqa: E402
+import console_support as 控制台  # noqa: E402
 
-控制台.准备输出()
+控制台.prepare_output()
 
-import 启动  # noqa: E402
-import 插件系统  # noqa: E402
-import 命令桥  # noqa: E402
-import 重力桥  # noqa: E402
+import runtime_engine as 启动  # noqa: E402
+import plugin_system as 插件系统  # noqa: E402
+import command_bridge as 命令桥  # noqa: E402
+import simulation_control as 重力桥  # noqa: E402
 import 控制桥  # noqa: E402
 
 
 def 检查队列() -> None:
-    待测 = 启动.取命令队列()
+    待测 = 启动.command_queue()
     assert isinstance(待测, queue.Queue), "本地命令通道必须使用线程安全 Queue"
-    启动._排空本地队列()
+    启动.drain_local_queue()
 
     def 生产者(编号: int) -> None:
         for 序号 in range(200):
@@ -43,7 +43,7 @@ def 检查队列() -> None:
     for 线程 in 线程们:
         线程.join()
 
-    结果 = 启动._排空本地队列()
+    结果 = 启动.drain_local_queue()
     assert len(结果) == 800, f"并发入队后应收到 800 条，实际 {len(结果)}"
     assert len(set(结果)) == 800, "队列中出现重复或丢失"
 
@@ -51,7 +51,7 @@ def 检查队列() -> None:
     assert 好, 说明
     好, 说明 = 命令桥.命令入队(待测, "命令.仿真", {"动作": "暂停"}, 打印=False)
     assert 好, 说明
-    assert len(启动._排空本地队列()) == 2, "Web 命令没有进入线程安全队列"
+    assert len(启动.drain_local_queue()) == 2, "Web 命令没有进入线程安全队列"
 
 
 def 检查仿真控制语义() -> None:
@@ -115,20 +115,21 @@ def 检查生命周期() -> None:
     原设置 = 设置路径.read_bytes() if 设置路径.exists() else None
 
     try:
-        注册表 = 插件系统.安全注册表([])
+        注册表 = 插件系统.SafeRegistry([])
         配置 = 插件系统.viewer_protocol.ViewerConfig(
             title="运行内核自检", width=640, height=480, gfx="")
-        码 = 启动.启动外壳(
+        码 = 启动.start(
             配置, str(模型路径), None, [], 注册表,
-            插件系统.通知模型加载, 项目名="", 无窗=True, 后台线程=True)
+            插件系统.notify_model_loaded, project_name="", headless=True,
+            background_thread=True)
         assert 码 == 0, f"后台仿真启动返回 {码}"
 
-        好, 说明 = 启动.等待就绪(10.0)
+        好, 说明 = 启动.wait_until_ready(10.0)
         assert 好, 说明
-        好, 说明 = 启动.请求停止(3.0)
+        好, 说明 = 启动.stop(3.0)
         assert 好, 说明
     finally:
-        启动.请求停止(3.0)
+        启动.stop(3.0)
         if 原设置 is None:
             设置路径.unlink(missing_ok=True)
         else:

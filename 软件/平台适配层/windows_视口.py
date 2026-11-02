@@ -234,10 +234,58 @@ class MuJoCo视口(QWidget):
             改了 = True
         return 改了
 
+    @staticmethod
+    def _加线(场景, mujoco, np, 起, 止, 颜色, 宽: float) -> None:
+        if 场景 is None or 场景.ngeom >= 场景.maxgeom:
+            return
+        几何 = 场景.geoms[场景.ngeom]
+        mujoco.mjv_initGeom(
+            几何, int(mujoco.mjtGeom.mjGEOM_LINE),
+            np.array([float(宽), 0.0, 0.0], dtype=float),
+            np.zeros(3, dtype=float), np.eye(3).reshape(9),
+            np.asarray(颜色, dtype=np.float32))
+        mujoco.mjv_connector(
+            几何, int(mujoco.mjtGeom.mjGEOM_LINE), float(宽),
+            np.asarray(起, dtype=float), np.asarray(止, dtype=float))
+        几何.category = int(mujoco.mjtCatBit.mjCAT_DECOR)
+        场景.ngeom += 1
+
+    def _画实验轨迹(self, 场景, mujoco, np) -> None:
+        """青色为既定末端轨迹，橙色为当前实验实际走过的轨迹。"""
+        from trajectory_runtime import current_trajectory_visualization
+
+        snapshot = current_trajectory_visualization()
+        if not snapshot.experiment_key:
+            return
+        planned = snapshot.planned
+        actual = snapshot.actual
+        # 限制装饰几何数量；长实验只做显示降采样，不改变原始记录与指标。
+        for points, color, width in (
+                (planned, (0.10, 0.86, 1.00, 0.72), 5.0),
+                (actual, (1.00, 0.46, 0.08, 1.00), 2.5)):
+            if len(points) > 301:
+                indices = np.linspace(0, len(points) - 1, 301).astype(int)
+                points = points[indices]
+            for start, end in zip(points[:-1], points[1:]):
+                self._加线(场景, mujoco, np, start, end, color, width)
+        for points, color, radius in (
+                (planned, (0.10, 0.86, 1.00, 1.0), 0.012),
+                (actual, (1.00, 0.46, 0.08, 1.0), 0.015)):
+            if len(points) == 0 or 场景.ngeom >= 场景.maxgeom:
+                continue
+            几何 = 场景.geoms[场景.ngeom]
+            mujoco.mjv_initGeom(
+                几何, int(mujoco.mjtGeom.mjGEOM_SPHERE),
+                np.array([radius, 0.0, 0.0], dtype=float),
+                np.asarray(points[-1], dtype=float), np.eye(3).reshape(9),
+                np.asarray(color, dtype=np.float32))
+            几何.category = int(mujoco.mjtCatBit.mjCAT_DECOR)
+            场景.ngeom += 1
+
     def _渲染循环(self) -> None:
         import mujoco
         import numpy as np
-        import 模型加载
+        import model_loader
 
         模型 = 数据 = 相机 = 选项 = 渲染器 = None
         当前画布 = (0, 0)
@@ -259,7 +307,7 @@ class MuJoCo视口(QWidget):
                     if 渲染器 is not None:
                         渲染器.close()
                         渲染器 = None
-                    模型 = 模型加载.加载模型(mujoco, 待换)
+                    模型 = model_loader.load_model(mujoco, 待换)
                     数据 = mujoco.MjData(模型)
                     mujoco.mj_forward(模型, 数据)
                     相机 = mujoco.MjvCamera()
@@ -317,6 +365,7 @@ class MuJoCo视口(QWidget):
                     if 剩余 > 0:
                         time.sleep(剩余)
                 渲染器.update_scene(数据, camera=相机, scene_option=选项)
+                self._画实验轨迹(渲染器.scene, mujoco, np)
                 图 = np.ascontiguousarray(渲染器.render())
                 高, 宽, _ = 图.shape
                 q图 = QImage(图.data, 宽, 高, int(图.strides[0]), QImage.Format.Format_RGB888).copy()

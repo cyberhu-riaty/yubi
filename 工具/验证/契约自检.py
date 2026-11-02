@@ -164,6 +164,25 @@ def 检查桥模块的消息都已登记() -> None:
             树 = ast.parse(open(路径, encoding="utf-8").read())
         except (SyntaxError, UnicodeDecodeError):
             continue
+        # English implementation classes may retain a legacy wire name while
+        # frontend contract keys are migrated separately.  Modules declare that
+        # relationship explicitly instead of hiding it in the validator.
+        线协议类名: dict[str, str] = {}
+        for 顶层节点 in 树.body:
+            if not isinstance(顶层节点, (ast.Assign, ast.AnnAssign)):
+                continue
+            目标们 = (顶层节点.targets if isinstance(顶层节点, ast.Assign)
+                   else [顶层节点.target])
+            if not any(isinstance(目标, ast.Name) and 目标.id == "WIRE_CLASS_ALIASES"
+                       for 目标 in 目标们):
+                continue
+            try:
+                值节点 = 顶层节点.value
+                线协议类名 = {
+                    str(k): str(v) for k, v in ast.literal_eval(值节点).items()
+                }
+            except (ValueError, TypeError, AttributeError):
+                线协议类名 = {}
         for 节点 in ast.walk(树):
             if not isinstance(节点, ast.ClassDef):
                 continue
@@ -171,10 +190,13 @@ def 检查桥模块的消息都已登记() -> None:
             if not any(x in ("Snapshot", "Message") for x in 基):
                 continue
             扫过 += 1
-            if 节点.name in 内部消息:
+            协议类名 = 线协议类名.get(节点.name, 节点.name)
+            if 协议类名 in 内部消息:
                 continue
-            if 节点.name not in 已登记类名:
-                漏.append(f"{os.path.basename(路径)}: class {节点.name}")
+            if 协议类名 not in 已登记类名:
+                说明 = (f"{节点.name} → {协议类名}"
+                      if 协议类名 != 节点.name else 节点.name)
+                漏.append(f"{os.path.basename(路径)}: class {说明}")
     判(not 漏,
        f"扫了 {扫过} 个消息类，全部在契约里登记"
        if not 漏 else "有消息类没登记进契约（发不出去）：" + "；".join(漏))

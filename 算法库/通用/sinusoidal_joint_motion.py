@@ -1,5 +1,5 @@
 """
-正弦摆动.py —— 一个会"动"的最小例子（算法只有几行）
+sinusoidal_joint_motion.py —— 一个会"动"的最小例子（算法只有几行）
 
 前面的插件都是"走到某个姿势就停住"。这个插件让关节一直按正弦摆动，
 用来演示：**控制律可以依赖时间**（data.time），也就是轨迹跟踪的雏形。
@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import numpy as np
 
-import 插件系统 as 插件
-from 插件系统 import 控制插件, 每步
+import plugin_system as 插件
+from plugin_system import ControlPlugin as 控制插件, step_handler as 每步
 
 
 class 正弦摆动插件(控制插件):

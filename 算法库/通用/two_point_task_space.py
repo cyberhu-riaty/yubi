@@ -1,5 +1,5 @@
 """
-末端两点运动.py —— 任务空间控制插件（把教程 10 号脚本的算法搬进外壳）
+two_point_task_space.py —— 任务空间控制插件（把教程 10 号脚本的算法搬进外壳）
 
 和第 1 个插件的区别（这正是"换个算法 = 换个文件"要展示的东西）：
     关节PD控制   ：目标是"6 个关节角"      → 不需要逆运动学，3 行搞定
@@ -12,7 +12,7 @@
 
 ★ 两个插件同时挂上时谁说了算？—— 看**装配顺序**，不是看 Priority。
 
-    本外壳的派发是"逐个插件依次调用"（为了做出错隔离，见 软件/插件系统.py），
+    本外壳的派发是"逐个插件依次调用"（为了做出错隔离，见 软件/plugin_system.py），
     顺序 = 项目文件里 `算法` 列表的顺序，**排在最后的那个最后写 ctrl[:]，它赢**。
     `messages.Priority` 在本外壳的**跨插件**派发里不参与排序 —— 官方
     `PluginRegistry.dispatch` 会按它降序排，但我们没用官方那条路。
@@ -28,8 +28,12 @@ from __future__ import annotations
 
 import numpy as np
 
-import 插件系统 as 插件
-from 插件系统 import 控制插件, 每步, 优先级
+import plugin_system as 插件
+from plugin_system import (
+    ControlPlugin as 控制插件,
+    Priority as 优先级,
+    step_handler as 每步,
+)
 
 末端站点 = "attachment_site"       # UR5e 法兰往外 0.1 m 的工具中心点（TCP）
 
@@ -64,7 +68,7 @@ class 末端两点运动插件(控制插件):
 
     # ------------------------------------------------------------------
     # 兼容性预检：外壳换模型时会先问一句"这个模型你能跑吗"
-    #   （契约见 软件/插件系统.py 的 `控制插件.模型兼容性`）
+    #   （契约见 软件/plugin_system.py 的 `ControlPlugin`）
     # ------------------------------------------------------------------
     def 模型兼容性(self, 模型) -> str:
         """要求 6 自由度 + 有 `attachment_site` 这个末端站点。

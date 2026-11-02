@@ -44,8 +44,8 @@ def initial_messages(experiment: Experiment | None) -> list[object]:
     target = experiment.trajectory.get("target_qpos")
     if target is None:
         return []
-    import 命令桥
-    message, reason = 命令桥.造消息(
+    import command_bridge
+    message, reason = command_bridge.create_message(
         "命令.控制目标", {"目标": [float(x) for x in target]})
     if message is None:
         raise RuntimeError(f"实验初始控制目标构造失败：{reason}")

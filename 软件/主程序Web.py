@@ -4,24 +4,24 @@
 它和主入口的关系（一句话）：
     **同一个数据层，两种前端。**
     `主程序窗口.py` → 自研 NSWindow，React 界面 + 原生 OpenGL 3D 视口
-    `主程序Web.py`  → 外部浏览器，React 界面，无原生 3D（仿真直接在主线程里跑）
+    `run_yubi_web.py` → 外部浏览器，React 界面，无原生 3D（仿真直接在主线程里跑）
 
 为什么不是"复制一份主程序"：
     模型装载、项目装配、各桥、参数/辨识这些**一模一样**。复制等于把每一处修复
-    都维护两遍，必然分叉。所以 `启动.启动外壳()` 多了个 `无窗` 参数：
+    都维护两遍，必然分叉。所以 `runtime_engine.start()` 提供了无窗口模式：
     窗口与 3D 那两段变成可跳过的，其余原样复用。
 
 现在能用什么 / 还不能用什么（诚实清单）：
     ✅ 真物理、控制算法、参数可改、辨识、项目/模型切换、6 套皮肤、中英双语
     ⚠️ **没有原生 3D 视口** —— 这是浏览器入口的设计取舍，不是遗漏；
-       要看 3D 请用 `软件/主程序窗口.py`。
+       要看 3D 请用 `run_yubi.py`。
     ⚠️ 官方 Studio 的 19 个 ImGui 面板不在这里，能力由 Web 界面覆盖。
 
 用法：
-    .venv/bin/python 软件/主程序Web.py              # 起服务 + 自动开浏览器
-    .venv/bin/python 软件/主程序Web.py --不开浏览器   # 只起服务（远程/排查用）
-    .venv/bin/python 软件/主程序Web.py --web口 8899
-    .venv/bin/python 软件/主程序Web.py --检查         # 不开服务，只做环境与前端产物自检
+    .venv/bin/python run_yubi_web.py                  # 起服务 + 自动开浏览器
+    .venv/bin/python run_yubi_web.py --no-browser     # 只起服务（远程/排查用）
+    .venv/bin/python run_yubi_web.py --web-port 8899
+    .venv/bin/python run_yubi_web.py --check          # 不开服务，只做环境与前端产物自检
 """
 from __future__ import annotations
 
@@ -32,17 +32,19 @@ import sys
 本目录 = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, 本目录)
 
-import 控制台                          # noqa: E402
-控制台.准备输出()
+import console_support                 # noqa: E402
 
-import 插件系统 as 插件框架            # noqa: E402
-import 启动                            # noqa: E402
-import 文案                          # noqa: E402
-import Web桥                          # noqa: E402
-import 重力桥                          # noqa: E402
-import 项目 as 项目清单                  # noqa: E402
-import 装配器                          # noqa: E402
+console_support.prepare_output()
+
+import contract                        # noqa: E402
 import experiment_cli                  # noqa: E402
+import model_bridge                    # noqa: E402
+import plugin_assembler                # noqa: E402
+import plugin_system                   # noqa: E402
+import project_registry                # noqa: E402
+import runtime_engine                  # noqa: E402
+import simulation_control              # noqa: E402
+import web_bridge                      # noqa: E402
 
 软件名 = "小软件"
 软件名英文 = "XiaoRuanJian Studio"
@@ -63,17 +65,16 @@ def _找模型() -> tuple[str, str]:
         return 空场景, "启动默认空场景（请在模型库中选择机器人）"
     # 空场景文件意外缺失时才回退到已有模型，避免整个程序无法启动。
     try:
-        import 模型桥
-        上次 = 模型桥.读取上次模型()
+        上次 = model_bridge.read_last_model()
         if 上次 and os.path.exists(上次):
             return 上次, "上次用过的模型"
     except Exception:                                                 # noqa: BLE001
         pass
     try:
-        for 名字 in sorted(项目清单.列出项目() or []):
-            项目 = 项目清单.读取项目(名字)
+        for 名字 in sorted(project_registry.list_projects() or []):
+            项目 = project_registry.load_project(名字)
             路径 = (项目 or {}).get("模型") or ""
-            绝对 = 项目清单.绝对路径(路径) if 路径 else ""
+            绝对 = project_registry.absolute_path(路径) if 路径 else ""
             if 绝对 and os.path.exists(绝对):
                 return 绝对, f"项目「{名字}」声明的模型"
     except Exception:                                                 # noqa: BLE001
@@ -88,11 +89,10 @@ def _选项目(模型路径: str, 指名: str | None) -> str:
             return str(指名)
         if os.path.basename(模型路径) == "空场景.xml":
             return ""
-        import 模型桥
-        上次 = 模型桥.读取设置("上次项目", "")
+        上次 = model_bridge.read_setting("上次项目", "")
         if 上次:
             return str(上次)
-        return 项目清单.按模型找项目(模型路径) if 模型路径 else ""
+        return project_registry.find_project_for_model(模型路径) if 模型路径 else ""
     except Exception:                                                 # noqa: BLE001
         return ""
 
@@ -116,9 +116,9 @@ def 检查() -> int:
 
     # ② 契约与生成物
     try:
-        import 契约
-        print(f"  ✓ 契约：版本 {契约.版本}，"
-              f"下行 {len(契约.下行主题)} / 上行 {len(契约.上行主题)} 个主题")
+        print(f"  ✓ 契约：版本 {contract.VERSION}，"
+              f"下行 {len(contract.OUTBOUND_TOPICS)} / "
+              f"上行 {len(contract.INBOUND_TOPICS)} 个主题")
     except Exception as 异常:                                         # noqa: BLE001
         坏 += 1
         print(f"  ✗ 契约不可用：{异常}")
@@ -137,7 +137,7 @@ def 检查() -> int:
 
     # ⑤ 端口占用
     import socket
-    口 = int(os.environ.get("驭臂_Web端口", "") or Web桥.默认端口)
+    口 = int(os.environ.get("驭臂_Web端口", "") or web_bridge.DEFAULT_PORT)
     with socket.socket() as s:
         if s.connect_ex(("127.0.0.1", 口)) == 0:
             print(f"  ⚠ 端口 {口} 已被占用（可能已经有一个在跑；换端口用 --web口）")
@@ -173,16 +173,21 @@ def _已在跑(主机: str, 端口: int) -> bool:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=f"{软件名} · 无窗宿主（浏览器界面）")
     ap.add_argument("--web口", "--web-port", dest="web口", type=int, default=None,
-                    help=f"Web 端口（默认 {Web桥.默认端口}）")
+                    help=f"Web 端口（默认 {web_bridge.DEFAULT_PORT}）")
     ap.add_argument("--不开浏览器", "--no-browser", dest="不开浏览器", action="store_true",
                     help="只起服务，不自动打开浏览器")
-    ap.add_argument("--项目", default=None, help="挂哪个项目的算法组")
-    ap.add_argument("--模型", default=None, help="加载哪个模型（.xml）")
+    ap.add_argument("--项目", "--project", dest="项目", default=None,
+                    help="挂哪个项目的算法组")
+    ap.add_argument("--模型", "--model", dest="模型", default=None,
+                    help="加载哪个模型（.xml）")
     experiment_cli.add_experiment_argument(ap)
-    ap.add_argument("--开重力", "--gravity", dest="开重力", action="store_true",
+    ap.add_argument("--开重力", "--gravity", "--enable-gravity", dest="开重力",
+                    action="store_true",
                     help="启动时就推进物理（默认冻结在默认位置，与原生界面一致）")
-    ap.add_argument("--检查", action="store_true", help="不开服务，只做自检")
-    ap.add_argument("--标题", default=f"{软件名} · 机器人仿真（基于 MuJoCo）")
+    ap.add_argument("--检查", "--check", dest="检查", action="store_true",
+                    help="不开服务，只做自检")
+    ap.add_argument("--标题", "--title", dest="标题",
+                    default=f"{软件名} · 机器人仿真（基于 MuJoCo）")
     args = ap.parse_args(argv)
 
     try:
@@ -199,7 +204,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.检查:
         return 检查()
 
-    口 = int(os.environ.get("驭臂_Web端口", "") or Web桥.默认端口)
+    口 = int(os.environ.get("驭臂_Web端口", "") or web_bridge.DEFAULT_PORT)
     地址 = f"http://127.0.0.1:{口}/"
 
     # ---- 0. 已经有一个在跑？那就别再起一个，直接把浏览器指过去 ----
@@ -219,12 +224,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     # ---- 1. 先把 Web 服务起起来（这样打印出来的地址立刻可用）----
-    桥 = Web桥.启动(端口=口)
+    桥 = web_bridge.start(port=口)
     if not 桥.启用:
         print(f"✗ Web 服务起不来：{桥.出错}", flush=True)
         print("  端口可能被别的程序占着。换个端口试试：--web口 8899", flush=True)
         return 1
-    地址 = Web桥.健康()["地址"]
+    地址 = web_bridge.health()["地址"]
     有前端 = os.path.exists(os.path.join(本目录, "web", "index.html"))
 
     print("=" * 74)
@@ -252,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     项目名 = _选项目(模型路径, args.项目)
     if args.开重力:
-        重力桥.设界面重力(True)
+        simulation_control.set_ui_gravity(True)
 
     print(f"  【模型】{os.path.basename(模型路径)}（{说明}）", flush=True)
     print(f"  【项目】{项目名 or '（无）'}", flush=True)
@@ -260,15 +265,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  【实验】{当前实验.key}（{当前实验.name}）", flush=True)
 
     # ---- 4. 装配并开跑（无窗模式：仿真在主线程）----
-    #   装配方式与 `主程序窗口.py` **完全一致** —— 同一个 `装配器.按项目装配`、
-    #   同一个 `安全注册表`。这就是 `启动外壳(无窗=True)` 的价值：
+    #   装配方式与桌面入口完全一致：同一个 `plugin_assembler.assemble_project`，
+    #   同一个 `plugin_system.SafeRegistry`。换前端不换算法运行方式。
     #   换前端不换装配，算法作者那边一行都不用改。
     插件清单: list = []
     报告: list[str] = []
     if 项目名:
         try:
-            插件清单, 报告 = 装配器.按项目装配(
-                项目清单.读项目(项目名) if 项目名 else None, 项目名)
+            插件清单, 报告 = plugin_assembler.assemble_project(
+                project_registry.load_project(项目名) if 项目名 else None, 项目名)
         except Exception as 异常:                                     # noqa: BLE001
             print(f"⚠ 项目装配失败（将不挂任何算法）：{type(异常).__name__}: {异常}",
                   flush=True)
@@ -282,18 +287,22 @@ def main(argv: list[str] | None = None) -> int:
 
     # 浏览器工作台也是无窗仿真宿主：使用明确的实时单步节拍，
     # 不依赖官方 Viewer 是否在发布刷新快照。
-    注册表 = 插件框架.安全注册表(
-        插件清单, 步进插件=插件框架.实时固定步进())
-    配置 = 插件框架.viewer_protocol.ViewerConfig(
+    注册表 = plugin_system.SafeRegistry(
+        插件清单, 步进插件=plugin_system.RealtimeFixedStep())
+    配置 = plugin_system.viewer_protocol.ViewerConfig(
         title=args.标题, width=1200, height=800, gfx=os.environ.get("驭臂_gfx", ""))
 
     # 同步浏览器入口会在启动函数开头清理旧队列，因此把已校验的实验消息显式
     # 交给启动函数，让它在清理之后再预置；桌面入口则在“已就绪”后直接入队。
     预置消息 = experiment_cli.initial_messages(当前实验)
-    return 启动.启动外壳(配置, 模型路径, None, 插件清单, 注册表,
-                        插件框架.通知模型加载, 项目名=项目名, 无窗=True,
-                        预置消息=预置消息,
-                        实验名=(当前实验.key if 当前实验 is not None else ""))
+    return runtime_engine.start(
+        配置, 模型路径, None, 插件清单, 注册表,
+        plugin_system.notify_model_loaded,
+        project_name=项目名,
+        headless=True,
+        initial_messages=预置消息,
+        experiment_name=(当前实验.key if 当前实验 is not None else ""),
+    )
 
 
 if __name__ == "__main__":

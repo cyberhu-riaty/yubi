@@ -3,17 +3,18 @@ from __future__ import annotations
 
 import numpy as np
 
-import 插件系统 as studio
-from 插件系统 import 控制插件, 每步
-from 界面桥 import 面板目标消息
+import plugin_system as studio
+from plugin_system import ControlPlugin, step_handler
+from ui_bridge import PanelTargetMessage
+from trajectory_runtime import matching_reference_velocity
 
 
-class JointPDPlainController(控制插件):
+class JointPDPlainController(ControlPlugin):
     名称 = "关节 PD 纯反馈"
     英文名 = "Joint PD (feedback only)"
     版本 = "1.0"
     作者 = "数字样机"
-    说明 = "只使用位置误差和速度反馈，不加入积分或重力前馈。"
+    说明 = "使用位置误差和目标/实际速度误差，不加入积分或重力前馈。"
     接管控制 = True
 
     KP = 86.0
@@ -34,15 +35,15 @@ class JointPDPlainController(控制插件):
             return f"当前对比控制器要求 nq==nv==nu（实际 {nq}/{nv}/{nu}）"
         return ""
 
-    @每步
-    def 收到面板目标(self, 消息: 面板目标消息) -> bool:
+    @step_handler
+    def 收到面板目标(self, 消息: PanelTargetMessage) -> bool:
         try:
             self.界面目标 = np.asarray(消息.ctrl_target, dtype=float).copy()
         except Exception:                                             # noqa: BLE001
             pass
         return False
 
-    @每步
+    @step_handler
     def 每步控制(self, event: studio.messages.StepEvent) -> bool:
         model, data = event.model, event.data
         if data.qpos.size == 0 or data.ctrl.size == 0:
@@ -55,7 +56,9 @@ class JointPDPlainController(控制插件):
             target = self.界面目标
 
         error = target - data.qpos
-        torque = self.KP * error - self.KD * data.qvel
+        target_velocity = matching_reference_velocity(data, target)
+        velocity_error = target_velocity - data.qvel
+        torque = self.KP * error + self.KD * velocity_error
         data.ctrl[:] = self._限制力矩(model, torque)
         self.当前误差 = float(np.max(np.abs(error)))
         self.最大误差 = max(self.最大误差, self.当前误差)

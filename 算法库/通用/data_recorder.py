@@ -1,5 +1,5 @@
 """
-数据录制.py —— 录制 / 回放 / 版本化元信息（第 4 步 D2）
+data_recorder.py —— 录制 / 回放 / 版本化元信息（第 4 步 D2）
 
 它解决什么问题：
     · 官方"时间倒带"只能存 **2048 帧 = 4.10 秒**（实测），而且**没有导出接口**；
@@ -31,7 +31,7 @@ import time
 
 import numpy as np
 
-from 官方层 import messages
+from official_api import messages
 
 # ★ 录制命令的定义**不在本文件里**，在 `软件/录制桥.py` —— 界面和仿真侧都从那里
 #   import，才能保证是同一个类对象。原因见 录制桥.py 的文件头（这个坑踩过两次：
@@ -43,7 +43,8 @@ _软件目录 = _os.path.normpath(_os.path.join(_os.path.dirname(_os.path.abspat
                                            "..", "..", "软件"))
 if _os.path.isdir(_软件目录) and _软件目录 not in _sys.path:
     _sys.path.insert(0, _软件目录)
-from 录制桥 import 录制命令                                                # noqa: E402
+from recording_bridge import RecordingCommand as 录制命令                   # noqa: E402
+import project_registry                                                     # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +161,7 @@ class 数据录制插件:
         self._模型 = getattr(event, "model", None)
         self._模型路径 = str(getattr(event, "path", "") or self._模型路径)
         # ★ 每次模型/项目变化都刷新"这次是哪组算法、参数多少" —— 写元信息时用它。
-        #   外壳在 `通知模型加载()` 里把 `算法信息` 挂在事件上（见 插件系统.py 的说明）。
+        #   外壳在 `notify_model_loaded()` 中把 `算法信息` 挂在事件上。
         #   这里**不缓存成插件实例列表**：实例会随项目切换被换掉，
         #   而元信息要的是"那一刻的参数快照"，所以直接留外壳算好的纯数据。
         新信息 = getattr(event, "算法信息", None)
@@ -293,15 +294,14 @@ class 数据录制插件:
           ① 和工程里其它产物（`输出/外观.json`、`输出/面板.json`）不在同一个地方；
           ② 从不同目录启动软件时 cwd 会变，录制文件就"跑"到别处去了（实测踩过）。
 
-        ★ 包根从 `项目.包根` 取，**不在这里数 `dirname` 的层数**。
+        ★ 包根从 `project_registry.PACKAGE_ROOT` 取，**不在这里数 `dirname` 的层数**。
           这个文件原来在 `算法库/通用/` 下，包根是"上三级"；方案 C 把它搬到
           `算法库/通用/` 之后，上三级变成了 `驭臂/算法库` —— 数层数的写法必然算错，
           而且算错之后是**静默**写到一个不存在的目录。路径只有一处定义才不会出这种事。
         """
         if self.输出目录:
             return self.输出目录
-        import 项目
-        return os.path.join(项目.包根, "输出", "04_记录")
+        return os.path.join(project_registry.PACKAGE_ROOT, "输出", "04_记录")
 
     # ---------------- 回放 ----------------
     def 开始回放(self) -> None:

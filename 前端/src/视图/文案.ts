@@ -299,9 +299,10 @@ const 表 = {
   ],
   "监控.告警": ["病态告警", "Fault alerts"],
   "监控.告警.说明": [
-    "这些是软件从时序数据里**判定**出的结论，不是原始数字：每条都带量化证据（频率/振幅/斜率/时段）。没检出不等于没问题，只等于没命中已知的四类。",
-    "These are conclusions the software reached from the time series, not raw numbers: each carries quantitative evidence (frequency, amplitude, slope, interval). No alert only means none of the four known patterns matched.",
+    "这些是软件根据已标定规则给出的实时筛查：当前可靠判断持续跟踪超差和执行器饱和。振荡/发散要等逐关节有符号信号，暂不从聚合峰值猜测。没检出不等于没有问题。",
+    "These are real-time checks based on calibrated rules. Persistent tracking error and actuator saturation are currently supported. Oscillation/divergence require signed per-joint signals and are not inferred from aggregate peaks. No alert does not prove that everything is healthy.",
   ],
+  "监控.告警.计数": ["{活动} 条活动 · {严重} 条严重", "{活动} active · {严重} severe"],
   "监控.告警.走势": ["走势（最近）", "Trend (last)"],
   "监控.告警.经验": [
     "建议是按经验规则给的，不是自动整定；改完请再看一段曲线确认。",
@@ -757,6 +758,9 @@ const 表 = {
   "验证.选中": ["显示", "Show"],
   "验证.全选": ["全选", "All"],
   "验证.全不选": ["全不选", "None"],
+  "验证.只看轨迹": ["只看目标/实际", "Target / actual"],
+  "验证.只看误差": ["只看误差", "Errors only"],
+  "验证.只看控制": ["只看控制量", "Control only"],
   "验证.没有指标": [
     "还没有收到任何指标帧。要么后端没在广播「指标」，要么没有算法在报数。",
     "No metric frame received yet. Either the backend is not broadcasting metrics, or no algorithm reports any.",
