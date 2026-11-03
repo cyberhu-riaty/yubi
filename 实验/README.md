@@ -19,13 +19,13 @@ GUI、3D 渲染和 MuJoCo 主循环是稳定平台；这里的 JSON 只描述一
 
 ```powershell
 # 可以启动时直接指定实验；进入 GUI 后点击“开始”即可自动记录、停止和导出
-& ".venv\Scripts\python.exe" "软件\主程序窗口.py" --实验 ur5e_pd_tracking
+& ".venv\Scripts\python.exe" "run_yubi.py" --experiment ur5e_pd_tracking
 
 # 无界面自动运行并导出 states.csv / metrics.json / curves.html
-& ".venv\Scripts\python.exe" "软件\run_experiment.py" ur5e_pd_tracking
+& ".venv\Scripts\python.exe" "run_experiment_cli.py" ur5e_pd_tracking
 
 # 查看已注册实验
-& ".venv\Scripts\python.exe" "软件\run_experiment.py" --列出
+& ".venv\Scripts\python.exe" "run_experiment_cli.py" --list
 ```
 
 普通方式打开 GUI 时，也可以在顶部“实验”下拉框中选择并加载。加载只准备模型、
@@ -70,10 +70,10 @@ GUI 模式使用实时固定步进器，按模型 timestep 节拍显示；无界
 
 ## 新增控制算法
 
-1. 在 `算法库/` 新增一个继承 `插件系统.控制插件` 的文件。
+1. 在 `算法库/` 新增一个继承 `plugin_system.ControlPlugin` 的文件。
 2. 在实验专用项目 JSON 的 `算法` 中写入插件文件名。
 3. 复制一个实验 JSON，修改 `key/controllers/project`。
 4. 运行 `工具/验证/实验注册自检.py`。
 
-不需要修改 GUI、渲染模块、`启动.py` 或命令桥。复杂 Python 实验也可以通过
+不需要修改 GUI、渲染模块、`runtime_engine.py` 或命令桥。复杂 Python 实验也可以通过
 `ExperimentRegistry.register()` 注册工厂，不必局限于 JSON。

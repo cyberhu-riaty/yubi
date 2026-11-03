@@ -52,7 +52,7 @@ from identification_bridge import (                                         # no
 # ★ 模型目录不在这里数 `dirname` 的层数：本文件原来在 `算法库/通用/` 下，
 #   方案 C 搬到 `算法库/通用/` 之后层数变了，数层数的写法会**静默**指到别的目录
 #   （读不到参数表 → 所有模型都显示"不支持辨识"，很难查）。
-#   统一从 `项目.py` 取，路径只有一处定义。
+#   统一从 `project_registry.py` 取，路径只有一处定义。
 import project_registry                                                    # noqa: E402
 _模型目录 = project_registry.MODEL_DIRECTORY
 _参数表路径 = os.path.join(_模型目录, "辨识参数表.json")
@@ -99,20 +99,20 @@ def 查参数表(模型路径: str) -> tuple[list[tuple] | None, str]:
     return None, f"模型库里没有「{键1}」的辨识参数配置"
 
 
-class 参数辨识插件:
+class ParameterIdentificationPlugin:
     """仿真侧插件：接收界面命令，执行辨识，回传状态。
 
     ★ 可辨识参数**按模型查表**（`模型/辨识参数表.json`），不再写死 UR5e 的连杆名。
       表里没有的模型会明确显示"不支持"，而不是假装跑一遍。
     """
 
-    名称 = "参数辨识"
-    版本 = "1.1"
-    英文名 = "System identification"   # 面板上显示用（官方 UI 字体没有中文字形，面板只能画 ASCII）
+    name = "参数辨识"
+    version = "1.1"
+    english_name = "System identification"
     # 不写 ctrl[:]（不抢方向盘）→ 不会和别的算法互相覆盖
-    接管控制 = False
-    说明 = "在界面上做闭环激励采样 → 后台辨识惯性参数 → 用新参数验证轨迹拟合。"
-    作者 = "数字样机"
+    takes_control = False
+    description = "在界面上做闭环激励采样 → 后台辨识惯性参数 → 用新参数验证轨迹拟合。"
+    author = "数字样机"
 
     def __init__(self, 模型路径: str = ""):
         self.模型路径 = 模型路径
@@ -150,18 +150,18 @@ class 参数辨识插件:
                 self.状态 = "空闲"
                 self.进度 = ""
 
-    def 收到模型(self, event) -> None:
+    def receive_model(self, event) -> None:
         self._模型 = getattr(event, "model", None)
         if not self.模型路径:
             self.模型路径 = getattr(event, "路径", "") or self.模型路径
             self._刷新参数表()
 
-    def 绑定模型路径(self, 路径: str) -> "参数辨识插件":
+    def bind_model_path(self, 路径: str) -> "ParameterIdentificationPlugin":
         self.模型路径 = 路径
         self._刷新参数表()
         return self
 
-    def 模型已切换(self, 路径: str, 模型, 数据) -> None:
+    def model_changed(self, 路径: str, 模型, 数据) -> None:
         """外壳在换模型后调用：清掉跟旧模型绑定的采样数据与结果。"""
         self.模型路径 = 路径
         self._数据 = None
@@ -288,10 +288,10 @@ class 参数辨识插件:
             self.进度 = ""
 
     # ------------------------------------------------------------------
-    def 指标(self) -> dict:
+    def metrics(self) -> dict:
         return {"已采样步数": float(self.采样步数)}
 
-    def 插件状态(self) -> dict:
+    def status(self) -> dict:
         return {"状态": self.状态, "采样": self.采样步数,
                 "拟合改善": (f"{self.拟合.get('标称',0)/max(self.拟合.get('辨识后',1),1e-12):.1f}×"
                             if "辨识后" in self.拟合 else "—")}
@@ -311,3 +311,6 @@ def _按参数造模型(模型路径: str, 参数们: list[参数定义]):
     for p in 参数们:
         _写参数(spec, p.目标, float(np.clip(p.初值, p.下界, p.上界)))
     return spec.compile()
+
+
+plugin_class = ParameterIdentificationPlugin

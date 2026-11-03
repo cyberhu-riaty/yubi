@@ -27,7 +27,7 @@ import {
   type 速率行,
 } from "../数据/日志";
 import { 标签 } from "../组件/标签";
-import { 命令, 用仓库, type 项目状态, type 诊断报告 } from "../数据/仓库";
+import { 命令, 用仓库, type ProjectState, type 诊断报告 } from "../数据/仓库";
 import { 请求跳步 } from "./跳步";
 import { 用节拍 } from "../数据/时钟";
 import { 连接键, use取, 时刻 } from "../视图/文案";
@@ -630,7 +630,7 @@ function 用问题(
   错误: string | null,
   握手: { 可用主题: string[] } | null,
   行: 日志行[],
-  项目: 项目状态 | null,
+  项目: ProjectState | null,
 ): 问题项[] {
   const t = use取();
   const 出: 问题项[] = [];
@@ -684,7 +684,7 @@ function 用问题(
     }
   }
 
-  const 不兼容 = (项目?.报告 ?? []).filter((行) => 行.includes("不兼容"));
+  const 不兼容 = (项目?.report ?? []).filter((行) => 行.includes("不兼容"));
   if (不兼容.length) {
     出.push({
       键: "兼容性",

@@ -98,33 +98,33 @@ def _规范化算法信息(原始) -> list[dict]:
                          if isinstance(v, (int, float))},
             })
         else:
-            名称 = getattr(项, "名称", None)
+            名称 = getattr(项, "name", None)
             if 名称:
                 结果.append({
                     "名称": str(名称),
-                    "版本": str(getattr(项, "版本", "-")),
-                    "英文名": str(getattr(项, "英文名", "") or ""),
+                    "版本": str(getattr(项, "version", "-")),
+                    "英文名": str(getattr(项, "english_name", "") or ""),
                     "参数": {},
                 })
     return 结果
 
 
-class 数据录制插件:
+class DataRecorderPlugin:
     """仿真侧插件：按固定间隔记录状态/控制/指标，支持回放。
 
     注意：它**不写 ctrl**（不是控制器），不会和你的控制律抢方向盘；
     只有"回放中"才会写 ctrl（那时它就是在替你把录下来的控制量重放一遍）。
     """
 
-    名称 = "数据录制与回放"
-    版本 = "1.0"
-    英文名 = "Recorder"   # 面板上显示用（官方 UI 字体没有中文字形，面板只能画 ASCII）
+    name = "数据录制与回放"
+    version = "1.0"
+    english_name = "Recorder"
     # 平时**不**写 ctrl[:]，所以不算"抢方向盘"的算法（不会和你的控制律互相覆盖）。
     # ★ 例外：**回放中**它会写 ctrl（那时它就是在替你把录下来的控制量重放一遍）——
     #   那是用户主动点 Replay 的结果，不是它默认的行为，所以这里仍声明 False。
-    接管控制 = False
-    说明 = "按固定频率录制状态/控制/指标到 CSV（含版本化元信息），并可回放复现。"
-    作者 = "数字样机"
+    takes_control = False
+    description = "按固定频率录制状态/控制/指标到 CSV（含版本化元信息），并可回放复现。"
+    author = "数字样机"
 
     def __init__(self, 输出目录: str | None = None, 频率: float = 100.0):
         self.输出目录 = 输出目录
@@ -157,17 +157,17 @@ class 数据录制插件:
         self._回放待复位 = False
 
     # ---------------- 模型（回放复位要用；顺便对齐录制频率） ----------------
-    def 收到模型(self, event) -> None:
+    def receive_model(self, event) -> None:
         self._模型 = getattr(event, "model", None)
         self._模型路径 = str(getattr(event, "path", "") or self._模型路径)
         # ★ 每次模型/项目变化都刷新"这次是哪组算法、参数多少" —— 写元信息时用它。
         #   外壳在 `notify_model_loaded()` 中把 `算法信息` 挂在事件上。
         #   这里**不缓存成插件实例列表**：实例会随项目切换被换掉，
         #   而元信息要的是"那一刻的参数快照"，所以直接留外壳算好的纯数据。
-        新信息 = getattr(event, "算法信息", None)
+        新信息 = getattr(event, "algorithm_info", None)
         if 新信息 is not None:
             self.算法信息 = list(新信息)
-        新项目 = getattr(event, "项目名", None)
+        新项目 = getattr(event, "project_name", None)
         if 新项目 is not None:
             self.项目名 = str(新项目)
         # ★ 关键：**记录控制量时，必须按物理步长采样才能精确复现**。
@@ -348,7 +348,7 @@ class 数据录制插件:
 
     # ---------------- 每步 ----------------
     @messages.handler
-    def 每步录制(self, event: messages.StepEvent) -> bool:
+    def step(self, event: messages.StepEvent) -> bool:
         """★ 时序很关键（本模块最容易写错的地方，实测踩过）：
 
         每个 StepEvent 里的顺序是：
@@ -463,10 +463,13 @@ class 数据录制插件:
         self.已写行数 += 1
 
     # ---------------- 状态上报 ----------------
-    def 指标(self) -> dict:
+    def metrics(self) -> dict:
         """把录制状态也上报成指标，监控面板能看出"现在在录"。"""
         return {"已录行数": float(self.已写行数)}
 
-    def 插件状态(self) -> dict:
+    def status(self) -> dict:
         return {"状态": self.状态, "已录": self.已写行数,
                 "文件": os.path.basename(self.最近文件) if self.最近文件 else "—"}
+
+
+plugin_class = DataRecorderPlugin

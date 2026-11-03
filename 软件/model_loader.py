@@ -1,4 +1,4 @@
-"""跨平台加载 MuJoCo XML，兼容 Windows 中文路径与公共场景组合。"""
+"""Load MuJoCo XML across platforms and compose the shared scene."""
 from __future__ import annotations
 
 import os
@@ -6,108 +6,113 @@ import re
 import warnings
 
 
-包根 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-公共场景路径 = os.path.join(包根, "模型", "公共场景.xml")
+PACKAGE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+COMMON_SCENE_PATH = os.path.join(PACKAGE_ROOT, "模型", "公共场景.xml")
 
 
-def _读取XML与资源(路径: str) -> tuple[str, dict[str, bytes], dict[str, bytes]]:
-    with open(路径, encoding="utf-8") as 文件:
-        xml = 文件.read()
+def _read_xml_and_assets(
+    path: str,
+) -> tuple[str, dict[str, bytes], dict[str, bytes]]:
+    """Read one XML plus sibling include files and binary assets."""
+    with open(path, encoding="utf-8") as source_file:
+        xml = source_file.read()
 
-    目录 = os.path.dirname(os.path.abspath(路径))
-    包含文件: dict[str, bytes] = {}
-    资源: dict[str, bytes] = {}
-    for 当前目录, _, 文件名们 in os.walk(目录):
-        for 文件名 in 文件名们:
-            文件路径 = os.path.join(当前目录, 文件名)
-            if os.path.normcase(文件路径) == os.path.normcase(os.path.abspath(路径)):
+    directory = os.path.dirname(os.path.abspath(path))
+    include_files: dict[str, bytes] = {}
+    assets: dict[str, bytes] = {}
+    for current_directory, _, filenames in os.walk(directory):
+        for filename in filenames:
+            file_path = os.path.join(current_directory, filename)
+            if os.path.normcase(file_path) == os.path.normcase(os.path.abspath(path)):
                 continue
-            相对路径 = os.path.relpath(文件路径, 目录).replace(os.sep, "/")
-            with open(文件路径, "rb") as 文件:
-                内容 = 文件.read()
-            if 文件名.lower().endswith(".xml"):
-                包含文件[相对路径] = 内容
+            relative_path = os.path.relpath(file_path, directory).replace(os.sep, "/")
+            with open(file_path, "rb") as asset_file:
+                content = asset_file.read()
+            if filename.lower().endswith(".xml"):
+                include_files[relative_path] = content
             else:
-                资源[相对路径] = 内容
-    return xml, 包含文件, 资源
+                assets[relative_path] = content
+    return xml, include_files, assets
 
 
-def _加载原模型(mujoco, 路径: str):
-    """不附加公共场景地加载一次模型。"""
+def _load_raw_model(mujoco, path: str):
+    """Load a model without attaching the shared scene."""
     try:
-        return mujoco.MjModel.from_xml_path(路径)
+        return mujoco.MjModel.from_xml_path(path)
     except ValueError:
-        if os.name != "nt" or str(路径).isascii() or not str(路径).lower().endswith(".xml"):
+        if os.name != "nt" or str(path).isascii() or not str(path).lower().endswith(".xml"):
             raise
 
-    with open(路径, encoding="utf-8") as 文件:
-        xml = 文件.read()
+    # MuJoCo may reject a non-ASCII Windows path even when Python can open it.
+    with open(path, encoding="utf-8") as source_file:
+        xml = source_file.read()
     try:
         return mujoco.MjModel.from_xml_string(xml)
     except ValueError:
         pass
 
-    xml, 包含文件, 资源 = _读取XML与资源(路径)
-    全部资源 = {**包含文件, **资源}
-    return mujoco.MjModel.from_xml_string(xml, assets=全部资源 or None)
+    xml, include_files, assets = _read_xml_and_assets(path)
+    all_assets = {**include_files, **assets}
+    return mujoco.MjModel.from_xml_string(xml, assets=all_assets or None)
 
 
-def _已有地面(mujoco, 模型) -> bool:
-    平面类型 = int(mujoco.mjtGeom.mjGEOM_PLANE)
-    return any(int(模型.geom_type[i]) == 平面类型 for i in range(int(模型.ngeom)))
-
-
-def _附加公共场景(mujoco, 路径: str):
-    """把独立的公共环境 XML 挂到机械臂规格上，再编译成一个 MjModel。"""
-    机械臂规格 = 加载规格(mujoco, 路径)
-    环境规格 = 加载规格(mujoco, 公共场景路径)
-    挂载点 = 机械臂规格.worldbody.add_frame(name="yubi_environment_frame")
-    # attach 会自动给环境中的材质、纹理、灯和地面改名并修正引用，
-    # 所以不用修改厂家机械臂 XML，也不会与模型自身名称冲突。
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message="Attaching a child without asset dict.*")
-        机械臂规格.attach(环境规格, prefix="yubi_env_", frame=挂载点)
-    return 机械臂规格.compile()
-
-
-def 加载模型(mujoco, 路径: str):
-    """加载模型；纯机械臂 XML 自动与 ``公共场景.xml`` 组合。"""
-    模型 = _加载原模型(mujoco, 路径)
-    if (not os.path.isfile(公共场景路径)
-            or os.path.normcase(os.path.abspath(路径))
-            == os.path.normcase(os.path.abspath(公共场景路径))
-            or _已有地面(mujoco, 模型)):
-        return 模型
-    return _附加公共场景(mujoco, 路径)
-
-
-def 加载规格(mujoco, 路径: str):
-    """加载 MjSpec，并为 Windows 中文 XML 路径提供相同的回退。"""
-    try:
-        return mujoco.MjSpec.from_file(路径)
-    except ValueError:
-        if os.name != "nt" or str(路径).isascii() or not str(路径).lower().endswith(".xml"):
-            raise
-
-    with open(路径, encoding="utf-8") as 文件:
-        xml = 文件.read()
-    if not re.search(r"\bfile\s*=", xml):
-        return mujoco.MjSpec.from_string(xml)
-
-    xml, 包含文件, 资源 = _读取XML与资源(路径)
-    return mujoco.MjSpec.from_string(
-        xml,
-        include=包含文件 or None,
-        assets=资源 or None,
+def _has_ground_plane(mujoco, model) -> bool:
+    plane_type = int(mujoco.mjtGeom.mjGEOM_PLANE)
+    return any(
+        int(model.geom_type[index]) == plane_type
+        for index in range(int(model.ngeom))
     )
 
 
-# Stable English public API
-PACKAGE_ROOT = 包根
-COMMON_SCENE_PATH = 公共场景路径
-load_model = 加载模型
-load_spec = 加载规格
+def _attach_common_scene(mujoco, path: str):
+    """Attach the shared environment to a robot specification and compile it."""
+    robot_spec = load_spec(mujoco, path)
+    environment_spec = load_spec(mujoco, COMMON_SCENE_PATH)
+    attachment_frame = robot_spec.worldbody.add_frame(name="yubi_environment_frame")
+    # MuJoCo prefixes attached assets and fixes their references automatically.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message="Attaching a child without asset dict.*")
+        robot_spec.attach(
+            environment_spec,
+            prefix="yubi_env_",
+            frame=attachment_frame,
+        )
+    return robot_spec.compile()
+
+
+def load_model(mujoco, path: str):
+    """Load a model and attach the shared scene when no ground plane exists."""
+    model = _load_raw_model(mujoco, path)
+    if (
+        not os.path.isfile(COMMON_SCENE_PATH)
+        or os.path.normcase(os.path.abspath(path))
+        == os.path.normcase(os.path.abspath(COMMON_SCENE_PATH))
+        or _has_ground_plane(mujoco, model)
+    ):
+        return model
+    return _attach_common_scene(mujoco, path)
+
+
+def load_spec(mujoco, path: str):
+    """Load an ``MjSpec`` with a Windows non-ASCII-path fallback."""
+    try:
+        return mujoco.MjSpec.from_file(path)
+    except ValueError:
+        if os.name != "nt" or str(path).isascii() or not str(path).lower().endswith(".xml"):
+            raise
+
+    with open(path, encoding="utf-8") as source_file:
+        xml = source_file.read()
+    if not re.search(r"\bfile\s*=", xml):
+        return mujoco.MjSpec.from_string(xml)
+
+    xml, include_files, assets = _read_xml_and_assets(path)
+    return mujoco.MjSpec.from_string(
+        xml,
+        include=include_files or None,
+        assets=assets or None,
+    )
 
 
 __all__ = ["PACKAGE_ROOT", "COMMON_SCENE_PATH", "load_model", "load_spec"]

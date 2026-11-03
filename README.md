@@ -175,36 +175,36 @@ yubi/
 # ① 复制模板
 cp 算法库/通用/controller_template.py 算法库/通用/my_controller.py
 
-# ② 改类名、名称、英文名、说明，在 每步控制() 里写控制律
+# ② 改类名和元信息，在 step() 里写控制律
 # ③ 在项目文件里登记，或在「插件」页启用
 ```
 
 一个最小插件长这样：
 
 ```python
-import 插件系统 as 插件
-from 插件系统 import 控制插件, 每步
+import plugin_system as studio
+from plugin_system import ControlPlugin, step_handler
 
 
-class 我的插件(控制插件):
-    名称 = "我的控制算法"
-    版本 = "0.1"
-    英文名 = "My controller"
-    说明 = "一句话说清它干什么"
+class MyController(ControlPlugin):
+    name = "我的控制算法"
+    version = "0.1"
+    english_name = "My controller"
+    description = "一句话说清它干什么"
 
-    @每步
-    def 每步控制(self, event: 插件.messages.StepEvent) -> bool:
-        数据 = event.data
-        数据.ctrl[:] = 数据.qfrc_bias      # 6 个关节的力矩，N·m
+    @step_handler
+    def step(self, event: studio.messages.StepEvent) -> bool:
+        data = event.data
+        data.ctrl[:] = data.qfrc_bias      # 6 个关节的力矩，N·m
         return False
 ```
 
 注意：
 
-- `@每步` 方法必须有类型标注 `event: 插件.messages.StepEvent`，否则官方插件系统会拒绝；
+- `@step_handler` 方法必须标注 `event: studio.messages.StepEvent`，否则官方插件系统会拒绝；
 - 文件名不能以数字开头；
 - 控制的是 `event.data.ctrl[:]`（关节力矩），不是位置；
-- `名称` / `说明` 用于中文界面，`英文名` 用于英文界面。
+- `name` / `description` 是显示信息，`english_name` 用于英文界面。
 
 登记到项目：
 
@@ -246,8 +246,8 @@ class 我的插件(控制插件):
 ```bash
 .venv/bin/python 工具/验证/契约自检.py
 .venv/bin/python 工具/验证/校验项目.py
-.venv/bin/python 工具/验证/轨迹规划自检.py
-.venv/bin/python 工具/验证/参数事务自检.py
+.venv/bin/python 工具/验证/trajectory_planning_selfcheck.py
+.venv/bin/python 工具/验证/parameter_transaction_selfcheck.py
 .venv/bin/python 工具/验证/病态检出自检.py
 .venv/bin/python 工具/验证/设备契约自检.py
 ```

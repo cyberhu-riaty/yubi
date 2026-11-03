@@ -3,11 +3,11 @@
  *
  * 两块都是**真数据**：
  *   · 曲线 ← 下行主题「指标」（`s.曲线`，最近 120 秒环形缓冲）
- *   · 参数表 ← 下行主题「参数表」（各算法自己声明的可调参数）
+ *   · 参数表 ← 下行主题 `parameter.table`（各算法自己声明的可调参数）
  *
  * 两块都各有一处**不能做**的事，所以就地写明：
  *   · 曲线：横轴用**墙钟**而不是仿真时间（物理暂停时仿真时间不动，曲线会挤成一坨）。
- *   · 参数表：**可编辑** —— 走下限主题里的 `命令.改参数`，等回执后参数表回灌最新值。
+ *   · 参数表：**可编辑** —— 走 `command.parameters`，等回执后参数表回灌最新值。
  *     所以这里是只读的真值，而不是一个按了没反应的滑块。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -19,7 +19,7 @@ import { 小表格, 数值文本, 文本, type 列 } from "../组件/数值表";
 import { 命令, 用仓库 } from "../数据/仓库";
 import { 用节拍 } from "../数据/时钟";
 import { 请求跳步 } from "../外壳/跳步";
-import type { 参数项 } from "../数据/仓库";
+import type { ParameterItem } from "../数据/仓库";
 import { 提示错误 } from "../数据/提示";
 import { use取 } from "./文案";
 
@@ -108,7 +108,7 @@ export function 验证视图() {
   const 曲线数 = 用仓库((s) => s.曲线);
   const 参数 = 用仓库((s) => s.参数.数据);
   const 参数帧号 = 用仓库((s) => s.参数.帧号);
-  const 仿真运行 = 用仓库((s) => s.仿真.数据?.状态 === "运行");
+  const 仿真运行 = 用仓库((s) => s.仿真.数据?.state === "running");
   const 节拍 = 用节拍();
 
   const 名们 = useMemo(() => Object.keys(曲线数).sort(), [曲线数]);
@@ -210,26 +210,26 @@ export function 验证视图() {
     { 标题: t("验证.点数"), 数字: true, 格: (行) => <span className="等宽">{String(行.点 ?? "")}</span> },
   ];
 
-  // ★ `参数表` 的负载形状是 `{参数: {全名: 项}}`（不是 {全名: 项}）。
+  // ★ `parameter.table` 的负载形状是 `{parameters: {full_name: item}}`。
   //   在**一个地方**解包，别让下面每处都记得多剥一层 ——
   //   实测踩过：少剥这一层会把 `参数` 这个包装键当成插件名，
   //   表格里出现 `值/单位/参数/插件/…` 一堆 `--` 行，看起来像"后端没报数据"。
-  const 参数项们: [string, 参数项][] = useMemo(() => {
-    const 原 = (参数 as unknown as { 参数?: Record<string, 参数项> } | null)?.参数;
+  const 参数项们: [string, ParameterItem][] = useMemo(() => {
+    const 原 = (参数 as unknown as { parameters?: Record<string, ParameterItem> } | null)?.parameters;
     if (!原 || typeof 原 !== "object") return [];
     return Object.keys(原).sort().map((全名) => [全名, 原[全名] ?? {}]);
   }, [参数]);
 
-  // ★ 参数项的真实形状（对着后端 `参数桥.采集可调参数()` 的产物核对的，不是猜的）：
-  //     {插件, 插件英文, 插件版本, 参数, 值, 范围:[最小,最大], 步长, 单位}
+  // ★ 参数项的真实形状来自 `parameter_bridge.collect_parameters()`：
+  //     {plugin, plugin_english, plugin_version, parameter, value, range, step, unit}
   //   早先这里按 `{值, 最小, 最大}` 渲染 —— 那是**按想象写的**，与实现不符，
   //   后果是 `范围`（一个数组）被当成对象逐字符渲染，表格里出现一堆 `0=N 1=·` 的乱码。
-  const 范围边 = (项: 参数项, 哪端: 0 | 1): number | undefined => {
-    const r = 项.范围;
+  const 范围边 = (项: ParameterItem, 哪端: 0 | 1): number | undefined => {
+    const r = 项.range;
     return Array.isArray(r) && typeof r[哪端] === "number" ? (r[哪端] as number) : undefined;
   };
 
-  // 改参数：走契约里的 `命令.改参数`，等回执再刷新（`参数表` 会自己回灌最新值）
+  // 改参数：走 `command.parameters`，等回执后由 `parameter.table` 回灌最新值。
   const [改中, 设改中] = useState<string | null>(null);
   async function 提交参数(全名: string, 原值: number | undefined, 新文本: string): Promise<boolean> {
     const 新值 = Number(新文本);
@@ -240,7 +240,7 @@ export function 验证视图() {
     if (新值 === 原值) return true;
     设改中(全名);
     try {
-      const 回执 = await 命令.改参数({ [全名]: 新值 });
+      const 回执 = await 命令.updateParameters({ [全名]: 新值 });
       if (!回执.通过) {
         提示错误(回执.说明);
         return false;
@@ -266,15 +266,15 @@ export function 验证视图() {
       数字: true,
       格: (行) => {
         // ★ 必须用 `行.全名`（「插件名·参数名」），**不是** `行.名`（短名）。
-        //   后端 `参数桥` 是按 `全名.partition("·")` 拆出插件名去找实例的：
+        //   后端 `parameter_bridge` 按完整名称中的分隔符拆出插件名并查找实例：
         //   发短名（KD）会拆不出插件 → 实例找不到 → 命令被静默忽略，
         //   界面看起来就是"改了没用"。实测踩过，而且因为回执是"已接受"，
         //   现象上极像"编辑功能没实现"。
         const 全名 = String(行.全名 ?? 行.名);
         const 值 = 行.值 as number | undefined;
-        const 最小 = 范围边(行 as unknown as 参数项, 0);
-        const 最大 = 范围边(行 as unknown as 参数项, 1);
-        const 步 = (行 as unknown as 参数项).步长;
+        const 最小 = 范围边(行 as unknown as ParameterItem, 0);
+        const 最大 = 范围边(行 as unknown as ParameterItem, 1);
+        const 步 = (行 as unknown as ParameterItem).step;
         return (
           <参数编辑框
             全名={全名}
@@ -292,12 +292,12 @@ export function 验证视图() {
     {
       标题: t("验证.参数.最小"),
       数字: true,
-      格: (行) => <数值文本 值={范围边(行 as unknown as 参数项, 0)} 位={6} />,
+      格: (行) => <数值文本 值={范围边(行 as unknown as ParameterItem, 0)} 位={6} />,
     },
     {
       标题: t("验证.参数.最大"),
       数字: true,
-      格: (行) => <数值文本 值={范围边(行 as unknown as 参数项, 1)} 位={6} />,
+      格: (行) => <数值文本 值={范围边(行 as unknown as ParameterItem, 1)} 位={6} />,
     },
     {
       标题: t("验证.参数.单位"),
@@ -309,23 +309,23 @@ export function 验证视图() {
    * 把一个参数项摊成一行。字段名与后端一致，多余键原样附在后面（不丢信息）。
    * `全名` 形如「插件名·参数名」——插件名从它取（后端也单独给了 `插件` 字段，优先用它）。
    */
-  function 摊开(全名: string, 项: 参数项): Record<string, unknown> {
-    const 插件 = String(项.插件 ?? 全名.split("·")[0] ?? "");
-    const 名 = String(项.参数 ?? 全名.split("·")[1] ?? 全名);
-    const 已知 = ["插件", "插件英文", "插件版本", "参数", "值", "范围", "步长", "单位"];
+  function 摊开(全名: string, 项: ParameterItem): Record<string, unknown> {
+    const 插件 = String(项.plugin ?? 全名.split("·")[0] ?? "");
+    const 名 = String(项.parameter ?? 全名.split("·")[1] ?? 全名);
+    const 已知 = ["plugin", "plugin_english", "plugin_version", "parameter", "value", "range", "step", "unit"];
     const 额外 = Object.keys(项).filter((k) => !已知.includes(k));
-    const 范围 = 项.范围;
+    const 范围 = 项.range;
     const 最小 = Array.isArray(范围) && typeof 范围[0] === "number" ? 范围[0] : undefined;
     const 最大 = Array.isArray(范围) && typeof 范围[1] === "number" ? 范围[1] : undefined;
     return {
       全名,
       插件,
       名,
-      值: 项.值,
+      值: 项.value,
       最小,
       最大,
-      单位: 项.单位,
-      步长: 项.步长,
+      单位: 项.unit,
+      步长: 项.step,
       范围,
       说明: 额外.length ? 额外.map((k) => `${k}=${文本(项[k])}`).join(" ") : undefined,
     };

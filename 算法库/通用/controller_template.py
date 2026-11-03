@@ -4,7 +4,7 @@ controller_template.py —— 复制这个文件开始写你自己的控制算�
 用法（三步，**主程序一行都不用改**）：
     ① 把这个文件复制成 算法库/通用/my_controller.py
        （★ 文件名不能以数字开头；只服务某个实验的算法就放 算法库/实验/）
-    ② 改类名、名称、英文名、说明，然后在 每步控制() 里写你的算法
+    ② 改类名和元信息，然后在 step() 里写你的算法
     ③ 让它被项目引用 —— 项目的 `算法` 字段写 `"*"` 时**自动就会加载它**，
        不用改任何代码；只想挂在某几个项目上，就在那些项目文件的 算法 列表里写上：
            {"插件": "my_controller"}
@@ -17,35 +17,35 @@ controller_template.py —— 复制这个文件开始写你自己的控制算�
     ./.venv/bin/python "工具/验证/校验项目.py"            # 项目↔模型↔算法 一致性
 
 ★ 元信息怎么显示：
-    · `名称` / `说明` 用于中文界面与终端；
-    · `英文名` 用于英文界面；
-    · `指标()` 返回的曲线名可以直接写中文（当前界面是 React，不受 ImGui 字体限制）。
+    · `name` / `description` 用于中文界面与终端；
+    · `english_name` 用于英文界面；
+    · `metrics()` 返回的曲线名可以直接写中文。
 
 ★ 换模型时会发生什么（方案 C 之后必须知道，否则容易写出"换个模型就乱"的算法）：
     · 点一个模型 → 外壳按项目**重新装配整组算法**：你写的算法可能被换成另一个文件
       （同一个算法名可以同时存在于 `算法库/通用/` 与 `算法库/实验/`，由项目决定用哪个）；
     · 新装配出来的是**全新对象**，`__init__` 会重跑 —— 别指望实例状态跨模型保留，
       该留的东西写进项目文件的 `参数` 字段（界面滑杆会自动存回去）；
-    · 想声明"我这个算法只跑得动某些模型"，实现 `模型兼容性(模型)` 并返回原因字符串。
+    · 想声明"我这个算法只跑得动某些模型"，实现 `check_model_compatibility(model)`。
       外壳会在装配时**跳过**它、把原因显示给用户 —— 这比"跑起来抛异常被永久停用"好得多；
     · 想清掉跟旧模型绑定的缓存（采样数据、索引、上一次的结果），实现
-      `模型已切换(路径, 模型, 数据)`。标准范例见 `parameter_identification_plugin.py`。
+      `model_changed(path, model, data)`。标准范例见 `parameter_identification_plugin.py`。
 """
 from __future__ import annotations
 
 import numpy as np
 
-import plugin_system as 插件
-from plugin_system import ControlPlugin as 控制插件, step_handler as 每步
+import plugin_system as studio
+from plugin_system import ControlPlugin, step_handler
 
 
-class 我的插件(控制插件):
+class MyController(ControlPlugin):
     # ---- 元信息（会显示在启动清单里）----
-    名称 = "我的控制算法"
-    版本 = "0.1"
-    英文名 = "My controller (template)"   # 英文界面显示用
-    说明 = "一句话说清这个算法干什么。"
-    作者 = "我"
+    name = "我的控制算法"
+    version = "0.1"
+    english_name = "My controller (template)"
+    description = "一句话说清这个算法干什么。"
+    author = "我"
 
     # ---- 如果你要调参，写在类属性里（改这里 → 重启就生效）----
     参数A = 1.0
@@ -57,14 +57,14 @@ class 我的插件(控制插件):
     # ------------------------------------------------------------------
     # 可选：模型加载后调一次。只有需要缓存 model/data（比如做逆运动学）时才写
     # ------------------------------------------------------------------
-    def 收到模型(self, event) -> None:
+    def receive_model(self, event) -> None:
         self.模型, self.数据 = event.model, event.data
 
     # ------------------------------------------------------------------
     # ★ 必写：每转一圈仿真调用一次
     # ------------------------------------------------------------------
-    @每步
-    def 每步控制(self, event: 插件.messages.StepEvent) -> bool:
+    @step_handler
+    def step(self, event: studio.messages.StepEvent) -> bool:
         # 可以用的东西：
         #   event.model      模型：关节数 nq、力矩上限 actuator_ctrlrange、关节限位 jnt_range…
         #   event.data       状态：qpos 关节角、qvel 角速度、qfrc_bias 重力项、时间 time、site(...) 末端位置
@@ -81,5 +81,8 @@ class 我的插件(控制插件):
     # ------------------------------------------------------------------
     # 可选：终端里定期显示的状态
     # ------------------------------------------------------------------
-    def 插件状态(self) -> dict:
+    def status(self) -> dict:
         return {"步数": self.步数}
+
+
+plugin_class = MyController

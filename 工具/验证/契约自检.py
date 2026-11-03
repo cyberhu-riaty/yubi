@@ -102,15 +102,15 @@ def 检查校验器() -> None:
     import 契约
     用例 = [
         # (主题, 负载, 期望通过, 说明)
-        ("命令.重力", {"重力开": True}, True, "合法布尔"),
-        ("命令.重力", {"重力开": "yes"}, False, "字符串冒充布尔"),
-        ("命令.重力", {"重力开": 1}, False, "数字冒充布尔（Python 里 1 == True，必须拦住）"),
-        ("命令.重力", {"重力开": True, "乱写": 1}, False, "多余字段"),
-        ("命令.重力", {}, True, "缺省字段交给 dataclass 默认值"),
-        ("命令.仿真", {"动作": "暂停"}, True, "合法仿真控制动作"),
-        ("命令.仿真", {"动作": "倒退"}, False, "非法仿真控制动作"),
-        ("命令.换模型", {"路径": "模型/x.xml"}, True, "只给必填"),
-        ("命令.换模型", {"路径": 123}, False, "路径给了数字"),
+        ("command.gravity", {"gravity_enabled": True}, True, "合法布尔"),
+        ("command.gravity", {"gravity_enabled": "yes"}, False, "字符串冒充布尔"),
+        ("command.gravity", {"gravity_enabled": 1}, False, "数字冒充布尔（Python 里 1 == True，必须拦住）"),
+        ("command.gravity", {"gravity_enabled": True, "乱写": 1}, False, "多余字段"),
+        ("command.gravity", {}, True, "缺省字段交给 dataclass 默认值"),
+        ("command.simulation", {"action": "pause"}, True, "合法仿真控制动作"),
+        ("command.simulation", {"action": "reverse"}, False, "非法仿真控制动作"),
+        ("command.model", {"path": "模型/x.xml"}, True, "只给必填"),
+        ("command.model", {"path": 123}, False, "路径给了数字"),
         ("命令.辨识", {"动作": "开始", "时长": 10}, True, "合法"),
         ("命令.辨识", {"动作": "起飞"}, False, "枚举外取值"),
         ("命令.辨识", {"动作": "开始", "时长": 0}, False, "时长超范围（<0.1）"),
@@ -118,7 +118,7 @@ def 检查校验器() -> None:
         ("命令.录制", {"动作": "停止", "频率": 0.5}, False, "频率超范围（<1）"),
         ("指标", {"数值": {}}, False, "下行主题不能当命令发"),
         ("命令.不存在", {}, False, "未登记主题"),
-        ("命令.重力", "不是对象", False, "负载不是对象"),
+        ("command.gravity", "不是对象", False, "负载不是对象"),
     ]
     for 主题, 负载, 期望, 说明 in 用例:
         通过否, _ = 契约.校验(主题, 负载)
@@ -152,7 +152,7 @@ def 检查桥模块的消息都已登记() -> None:
     内部消息 = {
         "面板目标消息":
             "viewer→sim 的滑杆目标（官方窗口内部用）。"
-            "Web 界面改参数走 `命令.改参数`，不走这条，所以它不该进契约。",
+            "Web 界面改参数走 `command.parameters`，不走这条，所以它不该进契约。",
     }
     # ★ 用文件顶部算好的 `软件目录`。我第一版这里又算了一遍，还少了一层
     #   （`工具/验证` → `工具`），于是 glob 到空目录、扫了 0 个类、"全部通过" ——

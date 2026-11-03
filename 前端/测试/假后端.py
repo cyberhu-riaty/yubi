@@ -68,7 +68,7 @@ except Exception:                                                     # noqa: BL
 
 # ★ 只承诺本对端真的会发的主题。契约全文可以很长（产品有十几条），
 #   但「问题」页签会拿 `可用主题` 对账，谎称全都会发只会制造假问题。
-可用主题 = ["指标", "参数表", "模型状态", "项目状态", "插件目录", "系统", "仿真状态"]
+可用主题 = ["指标", "parameter.table", "model.state", "model.library", "project.state", "插件目录", "系统", "simulation.state"]
 
 状态 = {
     "重力开": False,
@@ -82,7 +82,7 @@ except Exception:                                                     # noqa: BL
     "复位次数": 0,
     "最近墙钟": time.time(),
 }
-# 参数表的当前值（可被 命令.改参数 改写；广播时按它重发）
+# 参数表的当前值（可被 command.parameters 改写；广播时按它重发）
 参数值 = {
     "Joint PD·kp": 120.0,
     "Joint PD·kd": 8.0,
@@ -135,7 +135,7 @@ async def 服务(连接):
         "数据": {"可用主题": 可用主题, "广播间隔": 广播间隔, "契约": 契约全文},
     }, ensure_ascii=False))
 
-    def 项目状态():
+    def project_state():
         元信息 = {
             "joint_pd": {"名称": "Joint PD", "版本": "1.0", "接管控制": True},
             "gravity_comp": {"名称": "Gravity Comp", "版本": "0.3", "接管控制": False},
@@ -143,16 +143,26 @@ async def 服务(连接):
             "whole_body": {"名称": "Whole Body", "版本": "0.1", "接管控制": True},
         }
         return {
-            "项目": "冒烟项目",
-            "模型路径": 状态["路径"],
-            "模型显示名": 状态["模型"],
-            "算法": [元信息[x] for x in 状态["算法"] if x in 元信息],
-            "报告": ["装配 Joint PD → ctrl", "跳过 1 个（模型不兼容）"],
-            "算法库": ["Joint PD", "Gravity Comp", "OSC", "Whole Body"],
-            "已存盘": 状态["算法已存盘"],
-            "控盘": "Joint PD",
-            "被覆盖": ["Gravity Comp"],
-            "重力开": 状态["重力开"],
+            "project": "冒烟项目",
+            "model_path": 状态["路径"],
+            "model_display_name": 状态["模型"],
+            "algorithms": [元信息[x] for x in 状态["算法"] if x in 元信息],
+            "report": ["装配 Joint PD → ctrl", "跳过 1 个（模型不兼容）"],
+            "algorithm_library": ["Joint PD", "Gravity Comp", "OSC", "Whole Body"],
+            "saved": 状态["算法已存盘"],
+            "active_controller": "Joint PD",
+            "overridden_controllers": ["Gravity Comp"],
+            "gravity_enabled": 状态["重力开"],
+        }
+
+    def model_library():
+        return {
+            "count": 1,
+            "models": [{
+                "id": "smoke_arm", "display_name": "冒烟测试臂",
+                "category": "test", "dof": 7, "actuator_count": 7,
+                "license": "test", "controllable": True, "path": 状态["路径"],
+            }],
         }
 
     def 插件目录():
@@ -177,17 +187,20 @@ async def 服务(连接):
             "说明": "冒烟测试插件目录",
         }
 
-    def 仿真状态():
+    def simulation_state():
         return {
-            "状态": 状态["仿真状态"],
-            "仿真时间": 状态["仿真时间"],
-            "复位次数": 状态["复位次数"],
-            "说明": "冒烟测试仿真状态",
+            "state": "running" if 状态["仿真状态"] == "运行" else "paused",
+            "gravity_enabled": 状态["重力开"],
+            "simulation_time": 状态["仿真时间"],
+            "reset_count": 状态["复位次数"],
+            "speed_multiplier": 1.0,
+            "description": "冒烟测试仿真状态",
         }
 
-    await 发("项目状态", 项目状态())
+    await 发("project.state", project_state())
+    await 发("model.library", model_library())
     await 发("插件目录", 插件目录())
-    await 发("仿真状态", 仿真状态())
+    await 发("simulation.state", simulation_state())
 
     async def 收命令():
         async for 原文 in 连接:
@@ -198,20 +211,20 @@ async def 服务(连接):
             主题 = 消息.get("主题", "")
             请求号 = 消息.get("请求", "")
             数据 = 消息.get("数据", {})
-            if 主题 == "命令.重力":
-                状态["重力开"] = bool(数据.get("重力开"))
+            if 主题 == "command.gravity":
+                状态["重力开"] = bool(数据.get("gravity_enabled"))
                 说明 = f"重力开={状态['重力开']}（假后端已受理）"
-            elif 主题 == "命令.仿真":
-                动作 = str(数据.get("动作", ""))
-                if 动作 == "运行":
+            elif 主题 == "command.simulation":
+                动作 = str(数据.get("action", ""))
+                if 动作 == "run":
                     状态["仿真状态"] = "运行"
                     状态["重力开"] = True
                     说明 = "仿真已运行（假后端）"
-                elif 动作 == "暂停":
+                elif 动作 == "pause":
                     状态["仿真状态"] = "暂停"
                     状态["重力开"] = False
                     说明 = "仿真已暂停（假后端）"
-                elif 动作 == "复位":
+                elif 动作 == "reset":
                     状态["仿真状态"] = "暂停"
                     状态["重力开"] = False
                     状态["仿真时间"] = 0.0
@@ -219,9 +232,9 @@ async def 服务(连接):
                     说明 = "仿真已复位（假后端）"
                 else:
                     说明 = "假后端故意拒绝：未知仿真动作"
-            elif 主题 == "命令.换模型":
+            elif 主题 == "command.model":
                 状态["换模型次数"] += 1
-                状态["路径"] = str(数据.get("路径", ""))
+                状态["路径"] = str(数据.get("path", ""))
                 # 故意让第二次换模型失败：用来验证"失败要同时进控制台和提示"
                 if 状态["换模型次数"] % 2 == 0:
                     说明 = "假后端故意拒绝：这个路径不存在"
@@ -229,19 +242,19 @@ async def 服务(连接):
                     说明 = "已加载（假后端）"
             elif 主题 == "命令.辨识":
                 说明 = "辨识命令已受理（假后端）"
-            elif 主题 == "命令.改参数":
-                改动 = 数据.get("改动", {}) or {}
+            elif 主题 == "command.parameters":
+                改动 = 数据.get("updates", {}) or {}
                 for 键, 值 in 改动.items():
                     if 键 in 参数值:
                         参数值[键] = float(值)
                 说明 = "参数已更新（假后端）"
-            elif 主题 == "命令.应用算法":
+            elif 主题 == "command.algorithms":
                 状态["算法"] = [
-                    str(项.get("插件", ""))
-                    for 项 in (数据.get("算法", []) or [])
-                    if isinstance(项, dict) and 项.get("插件")
+                    str(项.get("plugin", ""))
+                    for 项 in (数据.get("algorithms", []) or [])
+                    if isinstance(项, dict) and 项.get("plugin")
                 ]
-                状态["算法已存盘"] = bool(数据.get("落盘", False))
+                状态["算法已存盘"] = bool(数据.get("persist", False))
                 说明 = "算法已保存（假后端）" if 状态["算法已存盘"] else "算法已临时应用（假后端）"
             else:
                 说明 = "这个主题假后端不认识"
@@ -250,9 +263,9 @@ async def 服务(连接):
                 "协议": 协议版本, "主题": "__回执__",
                 "数据": {"请求": 请求号, "主题": 主题, "通过": 通过, "说明": 说明},
             }, ensure_ascii=False))
-            await 发("项目状态", 项目状态())
+            await 发("project.state", project_state())
             await 发("插件目录", 插件目录())
-            await 发("仿真状态", 仿真状态())
+            await 发("simulation.state", simulation_state())
 
     async def 广播():
         起 = time.time()
@@ -287,34 +300,34 @@ async def 服务(连接):
                 # ★ 形状必须与产品一致：`{参数: {"插件名·参数名": 参数项}}`。
                 #   早先这里画成了 `{插件: {参数: {...}}}`，界面上只会出现两行 `--`，
                 #   参数编辑冒烟也就跟着失败 —— 是夹具漂移，不是产品坏了。
-                await 发("参数表", {"参数": {
+                await 发("parameter.table", {"parameters": {
                     "Joint PD·kp": {
-                        "插件": "Joint PD", "插件版本": "1.0", "参数": "kp",
-                        "值": 参数值["Joint PD·kp"], "范围": [0.0, 500.0], "步长": 1.0,
-                        "单位": "", "说明": "比例增益",
+                        "plugin": "Joint PD", "plugin_version": "1.0", "parameter": "kp",
+                        "value": 参数值["Joint PD·kp"], "range": [0.0, 500.0], "step": 1.0,
+                        "unit": "", "description": "比例增益",
                     },
                     "Joint PD·kd": {
-                        "插件": "Joint PD", "插件版本": "1.0", "参数": "kd",
-                        "值": 参数值["Joint PD·kd"], "范围": [0.0, 100.0], "步长": 0.5,
-                        "单位": "", "说明": "微分增益",
+                        "plugin": "Joint PD", "plugin_version": "1.0", "parameter": "kd",
+                        "value": 参数值["Joint PD·kd"], "range": [0.0, 100.0], "step": 0.5,
+                        "unit": "", "description": "微分增益",
                     },
                     "Joint PD·限幅": {
-                        "插件": "Joint PD", "插件版本": "1.0", "参数": "限幅",
-                        "值": 参数值["Joint PD·限幅"], "范围": [0.0, 200.0], "步长": 1.0,
-                        "单位": "N·m", "说明": "力矩上限",
+                        "plugin": "Joint PD", "plugin_version": "1.0", "parameter": "限幅",
+                        "value": 参数值["Joint PD·限幅"], "range": [0.0, 200.0], "step": 1.0,
+                        "unit": "N·m", "description": "力矩上限",
                     },
                     "OSC·刚度": {
-                        "插件": "OSC", "插件版本": "0.3", "参数": "刚度",
-                        "值": 参数值["OSC·刚度"], "范围": [10.0, 2000.0], "步长": 10.0,
-                        "单位": "N/m", "说明": "笛卡尔刚度",
+                        "plugin": "OSC", "plugin_version": "0.3", "parameter": "刚度",
+                        "value": 参数值["OSC·刚度"], "range": [10.0, 2000.0], "step": 10.0,
+                        "unit": "N/m", "description": "笛卡尔刚度",
                     },
                 }})
             if 现在 >= 下一模型:
                 下一模型 = 现在 + 0.5
-                await 发("项目状态", 项目状态())
-                await 发("模型状态", {
-                    "当前路径": 状态["路径"], "当前显示名": 状态["模型"],
-                    "自由度": 7, "执行器数": 7, "状态": "✓ 就绪", "耗时": 0.184,
+                await 发("project.state", project_state())
+                await 发("model.state", {
+                    "current_path": 状态["路径"], "current_display_name": 状态["模型"],
+                    "dof": 7, "actuator_count": 7, "status": "✓ 就绪", "duration_s": 0.184,
                 })
             if 现在 >= 下一系统:
                 下一系统 = 现在 + 1.0
@@ -330,7 +343,7 @@ async def 服务(连接):
                 })
             if 现在 >= 下一仿真状态:
                 下一仿真状态 = 现在 + 0.2
-                await 发("仿真状态", 仿真状态())
+                await 发("simulation.state", simulation_state())
             if 现在 >= 下一辨识:
                 下一辨识 = 现在 + 0.2
                 await 发("辨识状态", {

@@ -82,23 +82,30 @@ Examples: `数据录制` → `data_recorder`, `轨迹目标执行` →
 
 `runtime_engine.py` now contains the real shared simulation runtime instead of
 wrapping the legacy module.  Desktop, browser and headless experiment entry
-points execute this English-named core directly.  `启动.py` is now only a small
-compatibility shim for older tools and external scripts.
+points execute this English-named core directly.  The temporary `启动.py`
+compatibility shim was removed after callers migrated.
 
 ## Completed batch 7: plugin runtime implementation
 
 `plugin_system.py` now owns the real controller base class, Studio message
 handlers, fixed-step drivers, safe dispatch and plugin error isolation.
-`插件系统.py` is only a compatibility shim.  Runtime and algorithm code now use
-the English plugin core directly.
+Runtime and algorithm code now use the English plugin core directly.  The old
+`插件系统.py` compatibility shim was removed after its last callers migrated.
 
 ## Completed batch 8: project and plugin assembly implementations
 
 `project_registry.py` now owns project JSON loading, algorithm discovery,
 parameter persistence and legacy algorithm-id normalization.
 `plugin_assembler.py` now owns dynamic algorithm imports, plugin-class discovery,
-compatibility checks and project assembly.  `项目.py` and `装配器.py` remain only
-as compatibility shims.
+compatibility checks and project assembly.  The old `项目.py` and `装配器.py`
+compatibility shims were removed after their last callers migrated.
+
+## Completed batch 20: migration cleanup
+
+Removed obsolete compatibility shims for the plugin system, project registry,
+plugin assembler and runtime startup.  Removed the retired shell-fingerprint
+check and the one-off macOS view-composition spike scripts; Git history remains
+the source for those completed architecture experiments.
 
 ## Completed batch 9: model loading and model state bridge
 
@@ -108,25 +115,112 @@ model library, persistent model/project settings, model-switch commands and the
 model/project state publishers used by the UI.  Active runtime and Windows-host
 callers use their English public APIs.
 
-`模型加载.py` and `模型桥.py` remain thin compatibility shims, so older tools and
-third-party plugins can continue importing the former names during the gradual
-migration.
+At that stage, `模型加载.py` and `模型桥.py` remained thin compatibility shims.
+The model-loading shim was removed in batch 14 and the model-bridge shim in
+batch 15 after their callers and wire contracts moved.
 
 ## Completed batch 10: experiment bridge implementation
 
 `experiment_bridge.py` now owns experiment selection, Run/Pause/Reset event
 handling, timed result recording, automatic stop and result export.  The shared
 runtime and command/contract lookup tables resolve the English module directly.
-`实验桥.py` remains a compatibility shim for older callers.
 
-The current frontend contract still uses Chinese wire field names.  Those keys
-are deliberately unchanged in this batch because changing them requires a
-versioned contract and matching React migration; they are no longer used as the
-implementation's internal variable or method names.
+The experiment wire contract was migrated in contract version 17 together with
+its React consumers: `experiment.state`, `command.experiment`, and their payload
+fields are English.  The temporary `实验桥.py` shim has been deleted; this feature
+chain no longer depends on a Chinese module or compatibility alias.
 
 The plugin runtime now resolves the English `receive_model()` lifecycle hook
 first and falls back to legacy `收到模型()`, allowing new internal plugins to stay
 English without breaking existing controller plugins.
+
+## Completed batch 11: planning bridge and wire contract
+
+`planning_bridge.py` directly replaces the removed `规划桥.py`.  Runtime loading,
+planning commands, result snapshots, React state and command calls now use
+`PlanningCommand`, `PlanningResult`, `TrajectoryPlanner`, `command.planning` and
+`planning.result`.  Contract version 18 migrates every planning payload field to
+English; no Chinese planning-bridge compatibility module remains.
+
+## Completed batch 12: trajectory planning core
+
+`trajectory_planning.py` directly replaces `轨迹规划.py`.  The planning kernel,
+its dataclasses, functions, report fields and local identifiers now use English
+names.  `planning_bridge.py` and `trajectory_planning_selfcheck.py` call that
+English API directly; the former Chinese module and self-check filename were
+removed without compatibility shims.  User-facing Chinese diagnostics and GUI
+labels remain unchanged.
+
+## Completed batch 13: inverse kinematics core
+
+`inverse_kinematics.py` now owns the damped-least-squares solver, end-effector
+discovery, joint-limit handling and Cartesian-waypoint conversion directly.
+The former `逆解.py` implementation and the English wrapper around it were
+replaced by one English implementation, with no compatibility module or
+Chinese Python identifiers left in this feature chain.
+
+## Completed batch 14: model loading core
+
+`model_loader.py` now uses English identifiers throughout its XML, include-file,
+asset, Windows-path fallback and shared-scene composition code.  Runtime callers
+use the English module directly, and the former `模型加载.py` compatibility shim
+has been deleted.  Model XML paths and Chinese GUI labels are intentionally
+unchanged because they are data and user-facing text, not Python identifiers.
+
+## Completed batch 15: model management and wire contract
+
+`model_bridge.py` now directly owns the model library, model switching,
+model/project snapshots, algorithm-selection commands and related publishers
+with English Python identifiers.  Contract version 19 migrates the active wire
+topics to `model.state`, `model.library`, `project.state`, `command.model` and
+`command.algorithms`, including their payload fields and React consumers.  The
+former `模型桥.py` compatibility shim has been deleted.  Existing Chinese model
+catalog keys and GUI labels remain data or user-facing text and are therefore
+outside this code-identifier migration.
+
+## Completed batch 16: simulation and gravity control
+
+`simulation_control.py` now directly owns the Run/Pause/Reset gate, gravity
+switching, simulation-speed command and simulation-state publisher with English
+Python identifiers.  Contract version 20 migrates this wire chain to
+`command.simulation`, `command.gravity` and `simulation.state`, with English
+payload fields shared by Python and React.  The former `重力桥.py` implementation
+has been deleted.  Chinese button labels and operator-facing status messages
+remain user-interface text rather than code identifiers.
+
+## Completed batch 17: parameter editing and transactions
+
+`parameter_bridge.py` now directly owns parameter discovery, live parameter
+updates, atomic multi-parameter transactions, rollback and parameter-table
+publishing.  Contract version 21 migrates this feature chain to
+`parameter.table`, `parameter.transaction`, `command.parameters` and
+`command.parameter_transaction`, with English payload fields shared by Python
+and React.  The transaction self-check now exercises the English API directly,
+and the former `参数桥.py` module has been deleted without a compatibility shim.
+
+## Completed batch 18: controller parameter API
+
+The controller parameter extension point now uses
+`adjustable_parameters()` and `set_parameter()` throughout the base plugin,
+all six tunable built-in plugins, project-parameter restoration, algorithm
+metadata collection and the parameter bridge.  Parameter declarations now use
+`value`, `range`, `step` and `unit`.  The parameter bridge no longer probes the
+former Chinese method names or declaration fields, and the naming check rejects
+any reintroduction of those removed methods.  Existing experiment parameter
+keys such as `KP`, `KD`, `积分上限` and `监看关节` remain unchanged data, so saved
+projects continue to load without conversion.
+
+## Completed batch 19: plugin metadata and lifecycle API
+
+Built-in controller and support plugins now expose English metadata
+(`name`, `english_name`, `version`, `description`, `author`, `takes_control`)
+and English lifecycle hooks (`receive_model`, `check_model_compatibility`,
+`bind_model_path`, `model_changed`, `step`, `metrics`, `status`).  Explicit
+module exports use `plugin_class`.  The assembler, controller registry,
+parameter and metric collectors, project-parameter restoration, recorder
+metadata path and lifecycle event fields all consume that API directly; no
+runtime fallback probes the former Chinese names.  User-facing plugin names,
+metric labels and persisted metadata keys remain Chinese data where appropriate.
 
 ## Recommended migration order
 

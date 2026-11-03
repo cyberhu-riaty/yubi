@@ -6,8 +6,8 @@
  * 不放行号/编码/缩进/Prettier 这类"仿编辑器"的装饰。每一个数字都必须能追到
  * 一个真字段：
  *
- *   物理     ← `仿真状态.状态`；这里只读显示，控制按钮常驻在 3D 区上方
- *   仿真时间 ← `仿真状态.仿真时间`（仿真侧 data.time），**不是**连接后的墙钟
+ *   物理     ← `simulation.state.state`；这里只读显示，控制按钮常驻在 3D 区上方
+ *   仿真时间 ← `simulation.state.simulation_time`（仿真侧 data.time），**不是**连接后的墙钟
  *   实时倍率 ← `系统.RTF` = 仿真时间增量 ÷ 墙钟增量
  *   指标帧率 ← `指标` 主题最近一秒**实测**收到的帧数（没有就是 0，不编）
  *   连接     ← WebSocket 连接状态
@@ -25,8 +25,8 @@ export function 状态栏() {
   const 系统 = 用仓库((s) => s.系统.数据);
   const 指标速率 = 用仓库((s) => s.主题速率["指标"] ?? 0);
 
-  const 运行中 = 仿真?.状态 === "运行";
-  const 仿真秒 = 仿真?.仿真时间 ?? 系统?.仿真时间;
+  const 运行中 = 仿真?.state === "running";
+  const 仿真秒 = 仿真?.simulation_time ?? 系统?.仿真时间;
   const RTF = 系统?.RTF;
   // 冻结时 RTF 天然是 0，不算"跑不动"；只有推进中且明显掉速才提示。
   const RTF警示 = 运行中 && RTF !== undefined && RTF < 0.95;

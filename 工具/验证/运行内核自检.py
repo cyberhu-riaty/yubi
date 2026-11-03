@@ -24,7 +24,7 @@ import console_support as 控制台  # noqa: E402
 import runtime_engine as 启动  # noqa: E402
 import plugin_system as 插件系统  # noqa: E402
 import command_bridge as 命令桥  # noqa: E402
-import simulation_control as 重力桥  # noqa: E402
+import simulation_control  # noqa: E402
 import 控制桥  # noqa: E402
 
 
@@ -47,9 +47,11 @@ def 检查队列() -> None:
     assert len(结果) == 800, f"并发入队后应收到 800 条，实际 {len(结果)}"
     assert len(set(结果)) == 800, "队列中出现重复或丢失"
 
-    好, 说明 = 命令桥.命令入队(待测, "命令.重力", {"重力开": False}, 打印=False)
+    好, 说明 = 命令桥.命令入队(
+        待测, "command.gravity", {"gravity_enabled": False}, 打印=False)
     assert 好, 说明
-    好, 说明 = 命令桥.命令入队(待测, "命令.仿真", {"动作": "暂停"}, 打印=False)
+    好, 说明 = 命令桥.命令入队(
+        待测, "command.simulation", {"action": "pause"}, 打印=False)
     assert 好, 说明
     assert len(启动.drain_local_queue()) == 2, "Web 命令没有进入线程安全队列"
 
@@ -57,37 +59,42 @@ def 检查队列() -> None:
 def 检查仿真控制语义() -> None:
     复位调用: list[str] = []
     状态调用: list[str] = []
-    应用器 = 重力桥.重力应用器(
-        仿真复位回调=lambda: (复位调用.append("reset") or "已重建算法"),
-        状态回调=lambda: 状态调用.append("state"),
+    应用器 = simulation_control.GravityApplier(
+        simulation_reset=lambda: (复位调用.append("reset") or "已重建算法"),
+        state_callback=lambda: 状态调用.append("state"),
     )
     # 单元检查不需要真的向官方 StepControl 发快照；这里只验证三种动作的状态语义。
-    应用器._发官方暂停 = lambda 暂停: None                       # noqa: SLF001
+    应用器._send_official_pause = lambda paused: None              # noqa: SLF001
 
-    应用器.收仿真控制(重力桥.仿真控制命令(动作="运行"))
-    assert 应用器.运行中, "Run 应打开步进闸门"
-    assert 应用器.重力开, "Run 不应改写重力设置"
+    应用器.on_simulation_command(
+        simulation_control.SimulationControlCommand(action="run"))
+    assert 应用器.running, "Run 应打开步进闸门"
+    assert 应用器.gravity_enabled, "Run 不应改写重力设置"
     assert not 复位调用, "Run 不应触发复位"
 
-    应用器.收状态(重力桥.重力状态(重力开=False))
-    assert 应用器.运行中, "关闭重力不应顺带暂停仿真"
-    assert not 应用器.重力开, "重力命令没有独立生效"
+    应用器.on_gravity_state(simulation_control.GravityState(gravity_enabled=False))
+    assert 应用器.running, "关闭重力不应顺带暂停仿真"
+    assert not 应用器.gravity_enabled, "重力命令没有独立生效"
 
-    应用器.收仿真控制(重力桥.仿真控制命令(动作="暂停"))
-    assert not 应用器.运行中, "Pause 应关闭步进闸门"
-    assert not 应用器.重力开, "Pause 不应改写重力设置"
+    应用器.on_simulation_command(
+        simulation_control.SimulationControlCommand(action="pause"))
+    assert not 应用器.running, "Pause 应关闭步进闸门"
+    assert not 应用器.gravity_enabled, "Pause 不应改写重力设置"
     assert not 复位调用, "Pause 必须保持当前位置，不能偷偷复位"
 
-    应用器.收仿真控制(重力桥.仿真控制命令(动作="复位"))
-    assert not 应用器.运行中, "Reset 后应保持暂停"
+    应用器.on_simulation_command(
+        simulation_control.SimulationControlCommand(action="reset"))
+    assert not 应用器.running, "Reset 后应保持暂停"
     assert 复位调用 == ["reset"], "Reset 应且只应重建当前算法一次"
-    assert 应用器.复位次数 == 1, "Reset 次数没有记账"
+    assert 应用器.reset_count == 1, "Reset 次数没有记账"
     assert len(状态调用) == 4, "运行控制与重力修改都应主动回报真实状态"
 
     已发 = []
-    发布器 = 重力桥.仿真状态发布器(已发.append)
-    assert 发布器.发布(应用器, 0.0, 强制=True)
-    assert 已发[-1].状态 == "暂停" and not 已发[-1].重力开 and 已发[-1].仿真时间 == 0.0
+    发布器 = simulation_control.SimulationStatePublisher(已发.append)
+    assert 发布器.publish(应用器, 0.0, force=True)
+    assert (已发[-1].state == "paused"
+            and not 已发[-1].gravity_enabled
+            and 已发[-1].simulation_time == 0.0)
 
 
 def 检查控制目标() -> None:
@@ -95,7 +102,7 @@ def 检查控制目标() -> None:
     应用器 = 控制桥.控制目标应用器(lambda 目标: 已转发.append(目标.copy()))
     模型 = types.SimpleNamespace(nq=2)
     数据 = types.SimpleNamespace(qpos=__import__("numpy").array([0.1, -0.2]))
-    应用器.收到模型(types.SimpleNamespace(model=模型, data=数据))
+    应用器.receive_model(types.SimpleNamespace(model=模型, data=数据))
     应用器.收目标(控制桥.控制目标命令(目标=[0.3, -0.4]))
     assert len(已转发) == 2, "模型初始化与手动目标都应转发"
     assert 应用器.来源 == "手动输入"

@@ -12,9 +12,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY_MODULES = {
-    "插件系统", "界面桥", "模型加载", "逆解", "项目",
+    "插件系统", "界面桥", "项目",
     "装配器", "命令桥", "控制台", "启动", "官方层", "Web桥",
-    "重力桥", "模型桥", "契约", "平台适配层", "主程序窗口", "主程序Web",
+    "契约", "平台适配层", "主程序窗口", "主程序Web",
     "参数辨识", "辨识桥", "录制桥",
 }
 PUBLIC_MODULES = (
@@ -39,6 +39,9 @@ PUBLIC_MODULES = (
     "identification_bridge.py",
     "recording_bridge.py",
     "experiment_bridge.py",
+    "planning_bridge.py",
+    "trajectory_planning.py",
+    "parameter_bridge.py",
 )
 MIGRATED_FILES = (
     "run_yubi.py",
@@ -65,11 +68,21 @@ MIGRATED_FILES = (
     "工具/验证/校验项目.py",
     "工具/验证/运行内核自检.py",
     "工具/验证/实验GUI闭环自检.py",
+    "工具/验证/trajectory_planning_selfcheck.py",
+    "工具/验证/parameter_transaction_selfcheck.py",
 )
 LEGACY_ALGORITHM_IDS = {
     "关节pd控制", "关节pid控制", "参数辨识插件", "数据录制",
     "末端两点运动", "正弦摆动", "轨迹目标执行",
 }
+REMOVED_LEGACY_MODULES = {
+    "实验桥", "规划桥", "轨迹规划", "逆解", "模型加载", "模型桥", "重力桥", "参数桥",
+}
+REMOVED_PLUGIN_METHODS = {
+    "可调参数", "设置参数", "收到模型", "模型兼容性", "每步控制", "每步目标",
+    "每步录制", "指标", "插件状态", "绑定模型路径", "模型已切换",
+}
+REMOVED_PLUGIN_ATTRIBUTES = {"名称", "英文名", "版本", "作者", "说明", "接管控制"}
 
 
 def imported_modules(path: Path) -> list[tuple[int, str]]:
@@ -85,6 +98,17 @@ def imported_modules(path: Path) -> list[tuple[int, str]]:
 
 def main() -> int:
     errors: list[str] = []
+    for module in REMOVED_LEGACY_MODULES:
+        removed_path = ROOT / "软件" / f"{module}.py"
+        if removed_path.exists():
+            errors.append(f"removed legacy module still exists: 软件/{module}.py")
+    for path in ROOT.rglob("*.py"):
+        if ".venv" in path.parts or "__pycache__" in path.parts:
+            continue
+        for line, module in imported_modules(path):
+            if module in REMOVED_LEGACY_MODULES:
+                errors.append(
+                    f"{path.relative_to(ROOT)}:{line} imports removed module {module}")
     for name in PUBLIC_MODULES:
         path = ROOT / "软件" / name
         if not path.is_file():
@@ -102,6 +126,36 @@ def main() -> int:
     for path in algorithm_directory.glob("*.py"):
         if not path.name.isascii():
             errors.append(f"non-ASCII algorithm filename: {path.relative_to(ROOT)}")
+
+    parameter_api_paths = (
+        ROOT / "软件" / "plugin_system.py",
+        ROOT / "软件" / "parameter_bridge.py",
+        ROOT / "软件" / "控制桥.py",
+        ROOT / "软件" / "experiment_bridge.py",
+        *algorithm_directory.glob("*.py"),
+    )
+    for path in parameter_api_paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                    and node.name in REMOVED_PLUGIN_METHODS:
+                errors.append(
+                    f"{path.relative_to(ROOT)}:{node.lineno} defines removed plugin method {node.name}")
+        for class_node in (node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)):
+            for member in class_node.body:
+                if not isinstance(member, ast.Assign):
+                    continue
+                for target in member.targets:
+                    if isinstance(target, ast.Name) and target.id in REMOVED_PLUGIN_ATTRIBUTES:
+                        errors.append(
+                            f"{path.relative_to(ROOT)}:{member.lineno} defines removed plugin attribute {target.id}")
+        for node in tree.body:
+            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(target, ast.Name) and target.id == "插件类" for target in targets):
+                errors.append(
+                    f"{path.relative_to(ROOT)}:{node.lineno} defines removed plugin_class alias 插件类")
 
     for directory, fields in (
         (ROOT / "项目", ("算法",)),

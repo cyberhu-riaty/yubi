@@ -24,7 +24,7 @@ export function 监控视图() {
   const 告警 = 用仓库((s) => s.告警.数据);
   const 活动告警 = 告警?.活动 ?? [];
   const 严重数 = 活动告警.filter((a) => a.严重度 === "严重").length;
-  const 已冻结 = 仿真?.状态 === "暂停";
+  const 已冻结 = 仿真?.state === "paused";
   const 跑得动 = 系统?.RTF !== undefined && 系统.RTF >= 0.95;
 
   /** 冻结时 RTF=0 不是告警；只有推进中掉速才告警 */

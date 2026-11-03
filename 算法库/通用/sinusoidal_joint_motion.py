@@ -13,16 +13,16 @@ from __future__ import annotations
 
 import numpy as np
 
-import plugin_system as 插件
-from plugin_system import ControlPlugin as 控制插件, step_handler as 每步
+import plugin_system as studio
+from plugin_system import ControlPlugin, step_handler
 
 
-class 正弦摆动插件(控制插件):
-    名称 = "正弦摆动（轨迹跟踪雏形）"
-    版本 = "1.0"
-    英文名 = "Sinusoid swing"   # 面板上显示用（官方 UI 字体没有中文字形，面板只能画 ASCII）
-    说明 = "让 shoulder_lift 绕初始姿势做正弦摆动 —— 演示控制律如何随时间变化。"
-    作者 = "数字样机"
+class SinusoidalJointMotionController(ControlPlugin):
+    name = "正弦摆动（轨迹跟踪雏形）"
+    version = "1.0"
+    english_name = "Sinusoid swing"
+    description = "让 shoulder_lift 绕初始姿势做正弦摆动 —— 演示控制律如何随时间变化。"
+    author = "数字样机"
 
     # ---- 调参入口 ----
     振幅 = 0.35        # 摆动幅度（rad），0.35 rad ≈ 20°
@@ -35,7 +35,7 @@ class 正弦摆动插件(控制插件):
         self.步数 = 0
         self.当前目标 = None
 
-    def 模型兼容性(self, 模型) -> str:
+    def check_model_compatibility(self, 模型) -> str:
         """要求 nu == nq（同样要写 `ctrl[:]`）且至少有 3 个关节。
 
         ★ 关于"摆哪个关节"的诚实说明：下面的代码固定摆 `qpos[1]`（第 2 个关节），
@@ -52,8 +52,8 @@ class 正弦摆动插件(控制插件):
             return f"需要 nu==nq 的扭矩模型（本模型 nq={nq}、nu={nu}）"
         return ""
 
-    @每步
-    def 每步控制(self, event: 插件.messages.StepEvent) -> bool:
+    @step_handler
+    def step(self, event: studio.messages.StepEvent) -> bool:
         数据 = event.data
         # ★ 空场景没有关节：直接返回，别让 目标[1] 越界（越界会被"出错隔离"停用插件）
         if 数据.qpos.size < 3 or 数据.ctrl.size == 0:
@@ -70,8 +70,11 @@ class 正弦摆动插件(控制插件):
         self.步数 += 1
         return False
 
-    def 插件状态(self) -> dict:
+    def status(self) -> dict:
         if self.当前目标 is None:
             return {"状态": "等待第一步"}
         return {"步数": self.步数,
                 "摆动到": f"{np.degrees(self.当前目标[1] - self.基准[1]):+.1f}°"}
+
+
+plugin_class = SinusoidalJointMotionController

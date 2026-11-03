@@ -19,22 +19,22 @@ from __future__ import annotations
 
 import numpy as np
 
-import plugin_system as 插件                  # 统一走英文公共接口，不直接依赖旧模块文件名
-from plugin_system import ControlPlugin as 控制插件, step_handler as 每步
+import plugin_system as studio
+from plugin_system import ControlPlugin, step_handler
 
 try:                                          # 界面桥是可选的：没有它也能单独跑本插件
-    from ui_bridge import PanelTargetMessage as 面板目标消息
+    from ui_bridge import PanelTargetMessage
 except Exception:                             # noqa: BLE001
-    class 面板目标消息:                        # 占位类型（保证 @每步 的类型标注仍然合法）
+    class PanelTargetMessage:
         ctrl_target = None
 
 
-class 关节PD控制插件(控制插件):
-    名称 = "关节 PD 位置控制"
-    版本 = "1.1"
-    英文名 = "Joint PD position control"   # 面板上显示用（官方 UI 字体没有中文字形，面板只能画 ASCII）
-    说明 = "6 个关节各自做 PD + 重力补偿。可在界面的 Controls 面板里拖滑杆实时改目标。"
-    作者 = "数字样机"
+class JointPDController(ControlPlugin):
+    name = "关节 PD 位置控制"
+    version = "1.1"
+    english_name = "Joint PD position control"
+    description = "6 个关节各自做 PD + 重力补偿。可在界面的 Controls 面板里拖滑杆实时改目标。"
+    author = "数字样机"
 
     # ---- 调参入口（改这里就能调"性格"）----
     KP = 200.0            # 弹簧刚度：越大越硬、追得越快；太大 → 抖
@@ -56,7 +56,7 @@ class 关节PD控制插件(控制插件):
     # 兼容性预检：外壳换模型时会先问一句"这个模型你能跑吗"
     #   （契约见 软件/plugin_system.py 的 `ControlPlugin`）
     # ------------------------------------------------------------------
-    def 模型兼容性(self, 模型) -> str:
+    def check_model_compatibility(self, 模型) -> str:
         """要求"每个关节都有自己的力矩执行器"，也就是 nu == nq（扭矩模型）。
 
         为什么必须有这一条：本算法的核心就是
@@ -78,8 +78,8 @@ class 关节PD控制插件(控制插件):
     # ------------------------------------------------------------------
     # 可选：界面滑杆的值（界面桥.py 每帧发一条快照过来）
     # ------------------------------------------------------------------
-    @每步
-    def 收到面板目标(self, 消息: 面板目标消息) -> bool:
+    @step_handler
+    def on_panel_target(self, 消息: PanelTargetMessage) -> bool:
         try:
             self.界面目标 = 消息.ctrl_target.copy()
         except Exception:                                     # noqa: BLE001
@@ -89,8 +89,8 @@ class 关节PD控制插件(控制插件):
     # ------------------------------------------------------------------
     # ★ 每转一圈仿真，这个方法被调用一次
     # ------------------------------------------------------------------
-    @每步
-    def 每步控制(self, event: 插件.messages.StepEvent) -> bool:
+    @step_handler
+    def step(self, event: studio.messages.StepEvent) -> bool:
         模型, 数据 = event.model, event.data
 
         # 首步记下执行器力矩上限（给「饱和关节数」指标用）。
@@ -135,17 +135,17 @@ class 关节PD控制插件(控制插件):
     # ★ 可调参数：界面上会出现滑杆，拖动**实时生效**（不用改文件、不用重启）
     #   键名必须是本插件的类属性名（KP / KD）。
     # ------------------------------------------------------------------
-    def 可调参数(self) -> dict:
+    def adjustable_parameters(self) -> dict:
         return {
-            "KP": {"值": self.KP, "范围": (10.0, 20000.0), "单位": "N/m"},
-            "KD": {"值": self.KD, "范围": (0.0, 500.0), "单位": "N·s/m"},
+            "KP": {"value": self.KP, "range": (10.0, 20000.0), "unit": "N/m"},
+            "KD": {"value": self.KD, "range": (0.0, 500.0), "unit": "N·s/m"},
         }
 
     # ------------------------------------------------------------------
     # ★ 可选：给监控面板看的指标（键=曲线名，值=数字）
     #   写在这里的数会自动出现在界面的 Monitor 窗口里 —— 不用改外壳、不用改面板。
     # ------------------------------------------------------------------
-    def 指标(self) -> dict:
+    def metrics(self) -> dict:
         if self.目标 is None:
             return {}
         # ★ 「饱和关节数」是给**病态检出**用的（见 软件/观测核心.py）：
@@ -167,7 +167,7 @@ class 关节PD控制插件(控制插件):
         }
 
     # ------------------------------------------------------------------
-    def 插件状态(self) -> dict:
+    def status(self) -> dict:
         if self.目标 is None:
             return {"状态": "等待第一步"}
         来源 = "界面滑杆" if (self.听界面滑杆 and self.界面目标 is not None) else "文件里的目标"
@@ -175,3 +175,6 @@ class 关节PD控制插件(控制插件):
                 "当前误差": f"{np.degrees(self.当前误差):.3f}°",
                 "历史最大": f"{np.degrees(self.最大误差):.3f}°",
                 "目标来源": 来源}
+
+
+plugin_class = JointPDController

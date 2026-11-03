@@ -9,12 +9,12 @@
 怎么用（对写控制算法的人）：
     在你的插件里加一个方法，返回你想看的数（键=曲线名，值=数字）：
 
-        class 我的插件(控制插件):
-            def 指标(self) -> dict:
+        class MyPlugin(ControlPlugin):
+            def metrics(self) -> dict:
                 return {"跟踪误差(mm)": self.误差*1000, "力矩峰值": float(np.abs(数据.ctrl).max())}
 
     就这样。**不需要改外壳、不需要改面板** —— 面板会自动按"指标名字"建曲线。
-    不写 `指标()` 的插件就不出现在面板里，没有任何影响。
+    不写 `metrics()` 的插件就不出现在面板里，没有任何影响。
 
 数据流（和界面桥同一条已验证的路子）：
     仿真侧：启动.py 每约 1/30 秒 → 指标桥.发布指标(注册表, 发送函数)
@@ -47,19 +47,19 @@ class 指标消息(messages.Snapshot):
 
 
 def 采集(注册表) -> dict[str, float]:
-    """向每个插件要一次指标。插件没写 `指标()`、或写错了，都只跳过它，不影响别人。"""
+    """向每个插件要一次指标。插件没写 `metrics()`、或写错了，都只跳过它，不影响别人。"""
     结果: dict[str, float] = {}
     for 插件 in getattr(注册表, "_目标", []):
         # 跳过内置的步进插件（它没有指标）
-        getter = getattr(插件, "指标", None)
+        getter = getattr(插件, "metrics", None)
         if getter is None:
             continue
-        名字前缀 = str(getattr(插件, "名称", type(插件).__name__))
+        名字前缀 = str(getattr(插件, "name", type(插件).__name__))
         try:
             一条 = getter() or {}
         except Exception as 异常:                                  # noqa: BLE001
             # 指标采集失败不该影响控制回路
-            print(f"⚠ 插件【{名字前缀}】的 指标() 出错（已跳过）：{type(异常).__name__}: {异常}")
+            print(f"⚠ 插件【{名字前缀}】的 metrics() 出错（已跳过）：{type(异常).__name__}: {异常}")
             continue
         for 键, 值 in 一条.items():
             try:

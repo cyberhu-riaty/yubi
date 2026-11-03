@@ -34,12 +34,12 @@ import project_registry  # noqa: E402
 def main() -> int:
     passed = 0
     pd = controller_registry.create("joint_pd_control")
-    assert bool(getattr(pd, "接管控制", False))
+    assert bool(getattr(pd, "takes_control", False))
     print("[PASS] ControllerRegistry 按名称创建 PD")
     passed += 1
 
     pid = controller_registry.create("joint_pid_control")
-    assert bool(getattr(pid, "接管控制", False))
+    assert bool(getattr(pid, "takes_control", False))
     print("[PASS] ControllerRegistry 按名称创建 PID")
     passed += 1
 
@@ -75,7 +75,7 @@ def main() -> int:
         assert experiment.model_path.is_file()
         project = project_registry.load_project(experiment.project)
         instances, report = plugin_assembler.assemble_project(project, experiment.project)
-        assert sum(bool(getattr(x, "接管控制", True)) for x in instances) == 1
+        assert sum(bool(getattr(x, "takes_control", True)) for x in instances) == 1
         assert not any(line.startswith("✗") for line in report), report
     print("[PASS] 全部定点与轨迹实验的模型、控制器、辅助插件与项目装配一致")
     passed += 1
@@ -162,7 +162,7 @@ def main() -> int:
         home = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
         if home >= 0:
             mujoco.mj_resetDataKeyframe(model, data, home)
-        controller.每步控制(messages.StepEvent(model=model, data=data))
+        controller.step(messages.StepEvent(model=model, data=data))
         controls.append(np.asarray(data.ctrl, dtype=float).copy())
     assert np.max(np.abs(controls[0])) < 1e-12
     assert np.max(np.abs(controls[1])) < 1e-12
@@ -180,15 +180,15 @@ def main() -> int:
     for step in range(1, 31):
         target = base.copy()
         target[1] += step * 0.001
-        tracking_pid.收到面板目标(PanelTargetMessage(ctrl_target=target))
-        tracking_pid.每步控制(messages.StepEvent(model=model, data=data))
+        tracking_pid.on_panel_target(PanelTargetMessage(ctrl_target=target))
+        tracking_pid.step(messages.StepEvent(model=model, data=data))
     assert float(tracking_pid.积分[1]) > 1e-5, "连续目标更新不应逐拍清空积分"
     jumped = target.copy()
     jumped[1] += 0.3
-    tracking_pid.收到面板目标(PanelTargetMessage(ctrl_target=jumped))
+    tracking_pid.on_panel_target(PanelTargetMessage(ctrl_target=jumped))
     assert np.max(np.abs(tracking_pid.积分)) < 1e-12, "大幅目标跳变应清空旧积分"
     tracking_pid.KP = 5000.0
-    tracking_pid.每步控制(messages.StepEvent(model=model, data=data))
+    tracking_pid.step(messages.StepEvent(model=model, data=data))
     assert abs(float(tracking_pid.积分[1])) < 1e-12, "力矩饱和且误差同向时不应继续积分"
     print("[PASS] PID 连续轨迹保留积分，大幅跳变清零，饱和时停止同向积分")
     passed += 1

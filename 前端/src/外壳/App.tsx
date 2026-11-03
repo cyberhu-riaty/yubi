@@ -324,7 +324,7 @@ export function App() {
       style={{ background: "var(--bg)" }}
     >
       {/* 全局运行控制不能放在会随可用宽度隐藏的“中区”里。
-          固定顶栏始终可见，状态仍只认后端返回的 `仿真状态`。 */}
+          固定顶栏始终可见，状态仍只认后端返回的 `simulation.state`。 */}
       <div
         className="flex flex-none items-center px-2.5 py-1.5"
         style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-title)" }}

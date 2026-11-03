@@ -53,15 +53,17 @@ def main() -> int:
 
         queue = 启动.command_queue()
         ok, reason = 命令桥.命令入队(
-            queue, "命令.实验", {"动作": "加载", "实验": experiment.key}, 打印=False)
+            queue, "command.experiment",
+            {"action": "load", "experiment": experiment.key}, 打印=False)
         assert ok, reason
         deadline = time.monotonic() + 15.0
-        while os.environ.get("驭臂_当前实验") != experiment.key and time.monotonic() < deadline:
+        while (os.environ.get("YUBI_CURRENT_EXPERIMENT") != experiment.key
+               and time.monotonic() < deadline):
             time.sleep(0.02)
-        assert os.environ.get("驭臂_当前实验") == experiment.key, "实验加载命令未生效"
+        assert os.environ.get("YUBI_CURRENT_EXPERIMENT") == experiment.key, "实验加载命令未生效"
 
         ok, reason = 命令桥.命令入队(
-            queue, "命令.仿真", {"动作": "运行"}, 打印=False)
+            queue, "command.simulation", {"action": "run"}, 打印=False)
         assert ok, reason
         deadline = time.monotonic() + 25.0
         created: list[Path] = []

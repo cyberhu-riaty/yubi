@@ -24,7 +24,7 @@ console_support.prepare_output()
 def run(name: str, duration_override: float | None = None) -> str:
     experiment = _experiments.experiment_registry.create(name)
     # 轨迹目标执行插件通过这个稳定实验名读取同一份实验定义；GUI 加载实验时也设置它。
-    os.environ["驭臂_当前实验"] = experiment.key
+    os.environ["YUBI_CURRENT_EXPERIMENT"] = experiment.key
     project_data = project_registry.load_project(experiment.project)
     plugins, report = plugin_assembler.assemble_project(project_data, experiment.project)
     for line in report:
@@ -62,7 +62,7 @@ def run(name: str, duration_override: float | None = None) -> str:
             }, 打印=False)
         experiment_cli.enqueue_initial_commands(experiment, runtime_engine.command_queue())
         command_bridge.enqueue_command(
-            runtime_engine.command_queue(), "命令.仿真", {"动作": "运行"}, 打印=False)
+            runtime_engine.command_queue(), "command.simulation", {"action": "run"}, 打印=False)
 
         duration = float(duration_override) if duration_override is not None else experiment.duration
         deadline = time.monotonic() + max(20.0, duration * 10.0)
@@ -73,7 +73,7 @@ def run(name: str, duration_override: float | None = None) -> str:
                 f"实验没有在期限内到达 {duration:g}s（当前 {recorder.latest_time:g}s）")
 
         command_bridge.enqueue_command(
-            runtime_engine.command_queue(), "命令.仿真", {"动作": "暂停"}, 打印=False)
+            runtime_engine.command_queue(), "command.simulation", {"action": "pause"}, 打印=False)
         if bool(experiment.recording.get("enabled", True)):
             command_bridge.enqueue_command(
                 runtime_engine.command_queue(), "命令.录制", {"动作": "停止"}, 打印=False)

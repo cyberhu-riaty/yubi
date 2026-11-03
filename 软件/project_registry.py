@@ -40,8 +40,8 @@ project_registry.py —— 模型、算法列表与参数项目的唯一数据�
       "项目": "UR5e_基础PD",
       "模型": "模型/universal_robots_ur5e/ur5e_torque.xml",
       "算法": [
-        {"插件": "关节PD控制", "类": "关节PD控制插件"},
-        {"插件": "数据录制",   "类": "数据录制插件"}
+        {"插件": "joint_pd_control", "类": "JointPDController"},
+        {"插件": "data_recorder",    "类": "DataRecorderPlugin"}
       ],
       或者 "算法": "*"  = 用算法库里的全部算法（探索阶段省事，加新算法不用改项目文件）
       "参数": {"关节 PD 位置控制": {"KP": 320.0, "KD": 42.0}},
@@ -53,7 +53,7 @@ project_registry.py —— 模型、算法列表与参数项目的唯一数据�
     · 绝对路径                 "/Users/…/ur5e_torque.xml"
     · 相对包根（**推荐**）      "模型/universal_robots_ur5e/ur5e_torque.xml"
     · 只写文件名               "ur5e_torque.xml"      —— 按 `模型库.json` 反查
-`算法[].类` 可以省：省了就用该模块里唯一的 `控制插件` 子类；有多个才必须写。
+`算法[].类` 可以省：省了就用该模块里唯一的 `ControlPlugin` 子类；有多个才必须写。
 
 怎么找项目
 ----------------------------------------------------------------------------
@@ -64,11 +64,10 @@ project_registry.py —— 模型、算法列表与参数项目的唯一数据�
 
 用法
 ----------------------------------------------------------------------------
-    import 项目
-    表 = 项目.读项目("UR5e_基础PD")          # → dict 或 None
-    名 = 项目.按模型找项目(模型绝对路径)      # → 项目名 或 ""
-    项目.保存参数(项目名, 插件名, {"KP": 320.0})
-    项目.保存上次项目(项目名) / 项目.读取上次项目()
+    import project_registry
+    data = project_registry.load_project("UR5e_基础PD")
+    name = project_registry.find_project_by_model(model_path)
+    project_registry.save_parameters(name, plugin_name, {"KP": 320.0})
 """
 from __future__ import annotations
 
@@ -329,8 +328,8 @@ def 算法文件(条目) -> str:
     """算法条目 → 绝对文件路径。
 
     条目可以是两种写法：
-        {"插件": "关节PD控制", "类": "关节PD控制插件"}      ← 推荐
-        "关节PD控制"                                        ← 简写（类由扫描推断）
+        {"插件": "joint_pd_control", "类": "JointPDController"}
+        "joint_pd_control"                                  ← 简写（类由扫描推断）
     """
     模块名 = 规范算法名(
         (条目 or {}).get("插件") if isinstance(条目, dict) else 条目 or "")

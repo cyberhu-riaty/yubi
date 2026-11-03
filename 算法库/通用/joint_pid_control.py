@@ -2,18 +2,18 @@
 from __future__ import annotations
 
 import numpy as np
-import plugin_system as 插件
-from plugin_system import ControlPlugin as 控制插件, step_handler as 每步
-from ui_bridge import PanelTargetMessage as 面板目标消息
+import plugin_system as studio
+from plugin_system import ControlPlugin, step_handler
+from ui_bridge import PanelTargetMessage
 
 
-class 关节PID控制插件(控制插件):
-    名称 = "关节 PID 位置控制"
-    英文名 = "Joint PID position control"
-    版本 = "1.0"
-    作者 = "数字样机"
-    说明 = "按关节计算 PID 力矩，带重力补偿、积分限幅和执行器限幅。"
-    接管控制 = True
+class JointPIDController(ControlPlugin):
+    name = "关节 PID 位置控制"
+    english_name = "Joint PID position control"
+    version = "1.0"
+    author = "数字样机"
+    description = "按关节计算 PID 力矩，带重力补偿、积分限幅和执行器限幅。"
+    takes_control = True
 
     KP = 200.0
     KI = 12.0
@@ -29,7 +29,7 @@ class 关节PID控制插件(控制插件):
         self.步数 = 0
         self.最后力矩 = np.zeros(0)
 
-    def 模型兼容性(self, 模型) -> str:
+    def check_model_compatibility(self, 模型) -> str:
         nq, nv, nu = int(模型.nq), int(模型.nv), int(模型.nu)
         if nq == 0 or nu == 0:
             return "模型没有关节或执行器"
@@ -37,8 +37,8 @@ class 关节PID控制插件(控制插件):
             return f"当前 PID 示例要求 nq==nv==nu（实际 {nq}/{nv}/{nu}）"
         return ""
 
-    @每步
-    def 收到面板目标(self, 消息: 面板目标消息) -> bool:
+    @step_handler
+    def on_panel_target(self, 消息: PanelTargetMessage) -> bool:
         try:
             new_target = np.asarray(消息.ctrl_target, dtype=float).copy()
             if (self.界面目标 is None
@@ -52,8 +52,8 @@ class 关节PID控制插件(控制插件):
             pass
         return False
 
-    @每步
-    def 每步控制(self, event: 插件.messages.StepEvent) -> bool:
+    @step_handler
+    def step(self, event: studio.messages.StepEvent) -> bool:
         model, data = event.model, event.data
         if data.qpos.size == 0 or data.ctrl.size == 0:
             self.目标 = self.积分 = None
@@ -84,15 +84,15 @@ class 关节PID控制插件(控制插件):
         self.最后力矩 = torque.copy()
         return False
 
-    def 可调参数(self) -> dict:
+    def adjustable_parameters(self) -> dict:
         return {
-            "KP": {"值": self.KP, "范围": (1.0, 5000.0), "步长": 1.0},
-            "KI": {"值": self.KI, "范围": (0.0, 1000.0), "步长": 0.5},
-            "KD": {"值": self.KD, "范围": (0.0, 500.0), "步长": 0.5},
-            "积分上限": {"值": self.积分上限, "范围": (0.01, 2.0), "步长": 0.01, "单位": "rad·s"},
+            "KP": {"value": self.KP, "range": (1.0, 5000.0), "step": 1.0},
+            "KI": {"value": self.KI, "range": (0.0, 1000.0), "step": 0.5},
+            "KD": {"value": self.KD, "range": (0.0, 500.0), "step": 0.5},
+            "积分上限": {"value": self.积分上限, "range": (0.01, 2.0), "step": 0.01, "unit": "rad·s"},
         }
 
-    def 指标(self) -> dict:
+    def metrics(self) -> dict:
         if not np.isfinite(self.最后误差):
             return {}
         return {
@@ -101,7 +101,7 @@ class 关节PID控制插件(控制插件):
             "积分峰值": float(np.max(np.abs(self.积分))) if self.积分 is not None else 0.0,
         }
 
-    def 插件状态(self) -> dict:
+    def status(self) -> dict:
         if self.目标 is None:
             return {"状态": "等待第一步"}
         return {
@@ -112,4 +112,4 @@ class 关节PID控制插件(控制插件):
         }
 
 
-插件类 = 关节PID控制插件
+plugin_class = JointPIDController

@@ -10,12 +10,12 @@ from trajectory_runtime import matching_reference_velocity
 
 
 class JointPIDPlainController(ControlPlugin):
-    名称 = "关节 PID 纯反馈"
-    英文名 = "Joint PID (feedback only)"
-    版本 = "1.0"
-    作者 = "数字样机"
-    说明 = "使用位置/速度误差并增加误差积分；不加入重力前馈。"
-    接管控制 = True
+    name = "关节 PID 纯反馈"
+    english_name = "Joint PID (feedback only)"
+    version = "1.0"
+    author = "数字样机"
+    description = "使用位置/速度误差并增加误差积分；不加入重力前馈。"
+    takes_control = True
 
     # 与另外两组共用 KP/KD，只增加 KI，便于解释差异来源。
     KP = 86.0
@@ -34,7 +34,7 @@ class JointPIDPlainController(ControlPlugin):
         self.最大误差 = 0.0
         self.最后力矩 = np.zeros(0)
 
-    def 模型兼容性(self, 模型) -> str:
+    def check_model_compatibility(self, 模型) -> str:
         nq, nv, nu = int(模型.nq), int(模型.nv), int(模型.nu)
         if nq == 0 or nu == 0:
             return "模型没有关节或执行器"
@@ -43,7 +43,7 @@ class JointPIDPlainController(ControlPlugin):
         return ""
 
     @step_handler
-    def 收到面板目标(self, 消息: PanelTargetMessage) -> bool:
+    def on_panel_target(self, 消息: PanelTargetMessage) -> bool:
         try:
             target = np.asarray(消息.ctrl_target, dtype=float).copy()
             形状变化 = self.界面目标 is not None and self.界面目标.shape != target.shape
@@ -60,7 +60,7 @@ class JointPIDPlainController(ControlPlugin):
         return False
 
     @step_handler
-    def 每步控制(self, event: studio.messages.StepEvent) -> bool:
+    def step(self, event: studio.messages.StepEvent) -> bool:
         model, data = event.model, event.data
         if data.qpos.size == 0 or data.ctrl.size == 0:
             self.目标 = self.积分 = None
@@ -108,15 +108,15 @@ class JointPIDPlainController(ControlPlugin):
             result[limited] = np.clip(result[limited], ranges[limited, 0], ranges[limited, 1])
         return result
 
-    def 可调参数(self) -> dict:
+    def adjustable_parameters(self) -> dict:
         return {
-            "KP": {"值": self.KP, "范围": (1.0, 5000.0), "步长": 1.0},
-            "KI": {"值": self.KI, "范围": (0.0, 1000.0), "步长": 0.5},
-            "KD": {"值": self.KD, "范围": (0.0, 500.0), "步长": 0.5},
-            "积分上限": {"值": self.积分上限, "范围": (0.01, 2.0), "步长": 0.01, "单位": "rad·s"},
+            "KP": {"value": self.KP, "range": (1.0, 5000.0), "step": 1.0},
+            "KI": {"value": self.KI, "range": (0.0, 1000.0), "step": 0.5},
+            "KD": {"value": self.KD, "range": (0.0, 500.0), "step": 0.5},
+            "积分上限": {"value": self.积分上限, "range": (0.01, 2.0), "step": 0.01, "unit": "rad·s"},
         }
 
-    def 指标(self) -> dict:
+    def metrics(self) -> dict:
         if not np.isfinite(self.当前误差):
             return {}
         return {
@@ -126,4 +126,4 @@ class JointPIDPlainController(ControlPlugin):
         }
 
 
-插件类 = JointPIDPlainController
+plugin_class = JointPIDPlainController

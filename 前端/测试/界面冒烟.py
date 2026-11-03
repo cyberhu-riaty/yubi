@@ -305,7 +305,7 @@ async def 主(输出目录: str) -> int:
                 失败.append(f"曲线 canvas 没画出内容：{非空}")
 
             # 参数编辑链路：真在输入框里改一个值，看它有没有经
-            # 命令.改参数 → 回执 → 参数表回灌 走一圈回到界面上。
+            # command.parameters → 回执 → parameter.table 回灌后回到界面。
             #   ★ 必须用原生 setter + input 事件：直接改 `.value` 不会触发 React 的 onChange，
             #     那样测的是"我自己改的 DOM"，不是产品代码。
             输入框数 = await P.执行("document.querySelectorAll('input.参数输入').length")
@@ -315,7 +315,7 @@ async def 主(输出目录: str) -> int:
             全名 = await P.执行("""
             (() => {
               const s = window.驭臂 && window.驭臂.取状态();
-              const 表 = (s && s.参数 && s.参数.数据 && s.参数.数据.参数) || {};
+              const 表 = (s && s.参数 && s.参数.数据 && s.参数.数据.parameters) || {};
               const k = Object.keys(表).sort()[0];
               return k || null;
             })()
@@ -355,7 +355,7 @@ async def 主(输出目录: str) -> int:
                 真值 = await P.执行("""
                 (() => {
                   const s = window.驭臂 && window.驭臂.取状态();
-                  const 表 = (s && s.参数 && s.参数.数据 && s.参数.数据.参数) || {};
+                  const 表 = (s && s.参数 && s.参数.数据 && s.参数.数据.parameters) || {};
                   const k = Object.keys(表).sort()[0];
                   return k ? 表[k].值 : null;
                 })()

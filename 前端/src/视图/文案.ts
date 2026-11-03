@@ -403,6 +403,13 @@ const 表 = {
   "仿真控制.加载实验": ["加载", "Load"],
   "仿真控制.加载实验说明": ["加载实验声明的模型、项目、控制器和目标", "Load the experiment model, project, controller, and target"],
   "仿真控制.实验完成说明": ["实验已完成；复位或重新加载后才能再次开始", "Experiment completed; reset or reload before running again"],
+  "simulation.experiment.status.not_selected": ["未选择", "not selected"],
+  "simulation.experiment.status.loaded": ["已加载", "loaded"],
+  "simulation.experiment.status.load_failed": ["加载失败", "load failed"],
+  "simulation.experiment.status.running": ["运行中", "running"],
+  "simulation.experiment.status.paused": ["已暂停", "paused"],
+  "simulation.experiment.status.completed": ["完成", "completed"],
+  "simulation.experiment.status.export_failed": ["导出失败", "export failed"],
   "仿真控制.等待": ["等待状态", "waiting"],
   "仿真控制.运行中": ["运行中", "running"],
   "仿真控制.已暂停": ["已暂停", "paused"],
@@ -567,7 +574,7 @@ const 表 = {
     "Simulation run state; use Run / Pause / Reset at the top of the workbench. This is not a hardware e-stop.",
   ],
   "状态栏.提示.仿真时间": [
-    "真实的 MuJoCo data.time（来自 仿真状态），不是连接后的墙钟时间",
+    "真实的 MuJoCo data.time（来自 simulation.state），不是连接后的墙钟时间",
     "The real MuJoCo data.time (from Simulation state), not wall-clock since the link came up",
   ],
   "状态栏.提示.实时率": [
@@ -663,8 +670,8 @@ const 表 = {
   "定义.没项目": ["后端没有报项目。", "The backend reports no project."],
   "定义.资产库": ["资产库（模型库）", "Asset library (model library)"],
   "定义.资产库.说明": [
-    "点一台即可直接加载（走 `命令.换模型`，不搞「点了就算成功」—— 每条命令都有回执）。",
-    "Click a robot to load it right away (via `命令.换模型`; every command gets an ack).",
+    "点一台即可直接加载（走 `command.model`，不搞「点了就算成功」—— 每条命令都有回执）。",
+    "Click a robot to load it right away (via `command.model`; every command gets an ack).",
   ],
   "定义.资产库.空": [
     "后端没有报上来任何资产。可能模型清单还没读出来，或一个模型都没导入。",

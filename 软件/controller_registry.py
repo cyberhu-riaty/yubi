@@ -57,11 +57,12 @@ class ControllerRegistry:
             instance = self._factories[key](**kwargs)
         else:
             if kwargs:
-                raise TypeError(f"算法库控制器「{key}」不接受构造参数；请通过可调参数接口配置")
+                raise TypeError(
+                    f"算法库控制器「{key}」不接受构造参数；请通过 adjustable_parameters 接口配置")
             instance, _meta, error = _assembler.create_plugin(key)
             if instance is None:
                 raise KeyError(f"无法创建控制器「{key}」：{error}")
-        if not bool(getattr(instance, "接管控制", True)):
+        if not bool(getattr(instance, "takes_control", True)):
             raise TypeError(f"「{key}」是辅助插件，不是控制器（接管控制=False）")
         return instance
 
@@ -72,16 +73,16 @@ class ControllerRegistry:
             meta = self._metadata.get(key, {})
             return ControllerInfo(
                 key=key,
-                name=meta.get("name", str(getattr(instance, "名称", key))),
-                version=meta.get("version", str(getattr(instance, "版本", "-"))),
-                description=meta.get("description", str(getattr(instance, "说明", ""))),
-                author=meta.get("author", str(getattr(instance, "作者", ""))),
+                name=meta.get("name", str(getattr(instance, "name", key))),
+                version=meta.get("version", str(getattr(instance, "version", "-"))),
+                description=meta.get("description", str(getattr(instance, "description", ""))),
+                author=meta.get("author", str(getattr(instance, "author", ""))),
                 source="registered factory",
             )
         instance, meta, error = _assembler.create_plugin(key)
         if instance is None:
             raise KeyError(f"无法读取控制器「{key}」：{error}")
-        if not bool(getattr(instance, "接管控制", True)):
+        if not bool(getattr(instance, "takes_control", True)):
             raise TypeError(f"「{key}」不是控制器")
         return ControllerInfo(
             key=key,

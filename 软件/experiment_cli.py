@@ -8,22 +8,22 @@ from experiment_registry import Experiment, experiment_registry
 
 def add_experiment_argument(parser) -> None:
     parser.add_argument(
-        "--实验", "--experiment", dest="实验", default=None,
+        "--experiment", dest="experiment", default=None,
         help="按注册名加载完整实验（例如 ur5e_pd_tracking）",
     )
 
 
 def apply_experiment(args) -> Experiment | None:
-    name = str(getattr(args, "实验", "") or "").strip()
+    name = str(getattr(args, "experiment", "") or "").strip()
     if not name:
         return None
     if getattr(args, "模型", None) or getattr(args, "项目", None):
-        raise ValueError("--实验 已经包含模型和项目，不能同时再给 --模型/--项目")
+        raise ValueError("--experiment 已经包含模型和项目，不能同时再给 --模型/--项目")
     experiment = experiment_registry.create(name)
     args.模型 = str(experiment.model_path)
     args.项目 = experiment.project
     os.environ["驭臂_模型"] = str(experiment.model_path)
-    os.environ["驭臂_当前实验"] = experiment.key
+    os.environ["YUBI_CURRENT_EXPERIMENT"] = experiment.key
     return experiment
 
 

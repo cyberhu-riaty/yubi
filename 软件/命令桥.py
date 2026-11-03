@@ -9,7 +9,7 @@
         只有持有官方端点的那个线程（界面/绘制线程）才能发命令。
 
     网络线程直接发 = 跨线程改状态，正是本项目一直在避免的那类问题
-    （见 `启动.py` 顶部关于线程排法的说明）。所以链路做成：
+    （见 `runtime_engine.py` 顶部关于线程排法的说明）。所以链路做成：
 
         Web 客户端 ──► WebSocket 线程：只做「契约校验 + 入队」
                               ↓
@@ -44,20 +44,20 @@ import 契约 as _契约                                                      # 
 #   ★ 与 `契约.查漂移()` 里那张表是同一份知识，所以两边都只登记"类名 → 模块"，
 #     新增一条上行命令时只改 `契约.py`，本文件自动跟上（`契约.按类名` 提供映射）。
 源模块 = {
-    "重力状态": "重力桥",
-    "仿真控制命令": "重力桥",
-    "实验命令": "experiment_bridge",
+    "GravityState": "simulation_control",
+    "SimulationControlCommand": "simulation_control",
+    "ExperimentCommand": "experiment_bridge",
     "控制目标命令": "控制桥",
-    "参数消息": "参数桥",
-    "换模型命令": "模型桥",
-    "应用算法命令": "模型桥",
+    "ParameterUpdate": "parameter_bridge",
+    "SwitchModelCommand": "model_bridge",
+    "ApplyAlgorithmsCommand": "model_bridge",
     "辨识命令": "辨识桥",
     "录制命令": "录制桥",
     "诊断命令": "诊断桥",
     "高亮命令": "高亮桥",
     "部署命令": "部署桥",
-    "规划命令": "规划桥",
-    "批量参数命令": "参数桥",
+    "PlanningCommand": "planning_bridge",
+    "ParameterTransactionCommand": "parameter_bridge",
     "连接命令": "设备.连接桥",
 }
 
@@ -161,7 +161,7 @@ def _同步界面侧共享状态(主题名: str, 负载: dict) -> None:
 
     ★ 这不是可选的收尾工作，而是踩出来的坑。以重力开关为例：
       它是"界面是真相源"的设计 —— 展示面板 **每帧（10 Hz）**都会把
-      `重力桥.界面重力开` 这份共享状态发给仿真侧（见 `重力桥.发布器.也许发布共享`）。
+      `simulation_control.UI_GRAVITY_ENABLED` 这份共享状态发给仿真侧。
       于是：Web 命令把仿真侧设成"开" → 下一帧界面就把"关"重新盖上 →
       **物理又被冻回去**。实测现象就是"命令回执说转发成功，但仿真时间不推进"。
 
@@ -172,10 +172,10 @@ def _同步界面侧共享状态(主题名: str, 负载: dict) -> None:
       为什么这个知识放这里：契约把 `命令.重力` 登记为"界面→仿真"，但真正的事实是
       **它是两处状态的一次同步**。把这个不对称性写在一个地方，比让每个调用方自己记得更可靠。
     """
-    if 主题名 == "命令.重力":
+    if 主题名 == "command.gravity":
         try:
-            import 重力桥
-            重力桥.设界面重力(bool(负载.get("重力开", False)))
+            import simulation_control
+            simulation_control.set_ui_gravity(bool(负载.get("gravity_enabled", False)))
         except Exception:                                             # noqa: BLE001
             pass
 

@@ -45,7 +45,12 @@ class 插件目录(messages.Snapshot):
 
 
 # 插件类上我们认识的元信息（与 算法库/通用/我的控制律_模板.py 里的一致）
-元信息字段 = ("名称", "版本", "说明", "作者")
+元信息字段 = {
+    "name": "名称",
+    "version": "版本",
+    "description": "说明",
+    "author": "作者",
+}
 
 
 def _读类属性(路径: str) -> dict[str, str]:
@@ -70,7 +75,7 @@ def _读类属性(路径: str) -> dict[str, str]:
                     continue
                 if isinstance(子.value, ast.Constant) and isinstance(子.value.value, str):
                     # 第一个带字面量值的类优先（一个文件里通常只有一个插件类）
-                    出.setdefault(目标.id, 子.value.value)
+                    出.setdefault(元信息字段[目标.id], 子.value.value)
     return 出
 
 

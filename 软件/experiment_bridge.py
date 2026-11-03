@@ -20,42 +20,25 @@ class ExperimentCommand(messages.Snapshot):
     migrated only together with the contract and React client.
     """
 
-    动作: str = "加载"
-    实验: str = ""
+    action: str = "load"
+    experiment: str = ""
 
 
 @dataclasses.dataclass(frozen=True)
 class ExperimentState(messages.Snapshot):
     """Latest experiment state published to the workbench."""
 
-    当前: str = ""
-    名称: str = ""
-    状态: str = "未选择"
-    可选: list = dataclasses.field(default_factory=list)
-    模型: str = ""
-    项目: str = ""
-    控制器: list = dataclasses.field(default_factory=list)
-    停止秒: float = 0.0
-    已运行秒: float = 0.0
-    结果目录: str = ""
-    说明: str = ""
-
-
-# The Web bridge currently routes messages by Python class name.  Preserve the
-# existing wire names while exposing English source-level class names.
-ExperimentCommand.__name__ = "实验命令"
-ExperimentCommand.__qualname__ = "实验命令"
-ExperimentState.__name__ = "实验状态"
-ExperimentState.__qualname__ = "实验状态"
-
-# Explicit wire aliases keep the current contract stable while the Python source
-# uses English class names.  Contract validation reads this mapping as data.
-WIRE_CLASS_ALIASES = {
-    "ExperimentCommand": "实验命令",
-    "ExperimentState": "实验状态",
-}
-实验命令 = ExperimentCommand
-实验状态 = ExperimentState
+    current: str = ""
+    name: str = ""
+    status: str = "not_selected"
+    available: list = dataclasses.field(default_factory=list)
+    model: str = ""
+    project: str = ""
+    controllers: list = dataclasses.field(default_factory=list)
+    duration_s: float = 0.0
+    elapsed_s: float = 0.0
+    result_directory: str = ""
+    description: str = ""
 
 
 class ExperimentRunner:
@@ -70,11 +53,6 @@ class ExperimentRunner:
     version = "1.0"
     takes_control = False
 
-    # Plugin metadata is still read by the existing plugin runtime using these
-    # legacy attribute names.  Keep them until that metadata contract migrates.
-    名称 = name
-    版本 = version
-    接管控制 = takes_control
 
     def __init__(
         self,
@@ -95,7 +73,7 @@ class ExperimentRunner:
         self._data = None
         self._recorder: ExperimentResultRecorder | None = None
         self._start_simulation_time = 0.0
-        self._status = "已加载" if initial_experiment is not None else "未选择"
+        self._status = "loaded" if initial_experiment is not None else "not_selected"
         self._description = (
             "点击开始运行实验" if initial_experiment is not None else "请先选择并加载实验"
         )
@@ -110,16 +88,16 @@ class ExperimentRunner:
             try:
                 experiment = experiment_registry.create(key)
                 items.append({
-                    "注册名": experiment.key,
-                    "名称": experiment.name,
-                    "模型": experiment.model,
-                    "项目": experiment.project,
-                    "控制器": list(experiment.controllers),
-                    "停止秒": experiment.duration,
-                    "说明": experiment.description,
+                    "key": experiment.key,
+                    "name": experiment.name,
+                    "model": experiment.model,
+                    "project": experiment.project,
+                    "controllers": list(experiment.controllers),
+                    "duration_s": experiment.duration,
+                    "description": experiment.description,
                 })
             except Exception as exc:                                  # noqa: BLE001
-                items.append({"注册名": key, "名称": key, "错误": str(exc)})
+                items.append({"key": key, "name": key, "error": str(exc)})
         return items
 
     def receive_model(self, event) -> None:
@@ -128,22 +106,22 @@ class ExperimentRunner:
 
     @messages.handler
     def on_experiment_command(self, command: ExperimentCommand) -> bool:
-        action = str(getattr(command, "动作", "加载") or "加载")
-        name = str(getattr(command, "实验", "") or "").strip()
-        if action not in ("加载", "load"):
+        action = str(getattr(command, "action", "load") or "load")
+        name = str(getattr(command, "experiment", "") or "").strip()
+        if action != "load":
             self._description = f"不支持的实验动作：{action}"
             self.publish(force=True)
             return False
         experiment, reason = self._load_experiment(name)
         if experiment is None:
-            self._status = "加载失败"
+            self._status = "load_failed"
             self._description = reason
             self.publish(force=True)
             return False
         self._experiment = experiment
         self._recorder = None
         self._start_simulation_time = float(getattr(self._data, "time", 0.0))
-        self._status = "已加载"
+        self._status = "loaded"
         self._description = reason or "实验已加载，点击开始运行"
         self._result_directory = ""
         self.publish(force=True)
@@ -153,9 +131,9 @@ class ExperimentRunner:
     def on_simulation_command(self, command: SimulationControlCommand) -> bool:
         if self._experiment is None:
             return False
-        action = str(getattr(command, "动作", "暂停") or "暂停")
+        action = str(getattr(command, "action", "pause") or "pause")
         if action in ("运行", "run"):
-            if self._status == "完成":
+            if self._status == "completed":
                 self._description = "实验已完成；请先复位或重新加载再运行"
                 self._pause()
                 self.publish(force=True)
@@ -167,10 +145,10 @@ class ExperimentRunner:
                 )
                 self._start_simulation_time = float(getattr(self._data, "time", 0.0))
                 self._record_current_state()
-            self._status = "运行中"
+            self._status = "running"
             self._description = "正在自动记录；达到停止时间后自动暂停并导出"
-        elif action in ("暂停", "pause") and self._status == "运行中":
-            self._status = "已暂停"
+        elif action in ("暂停", "pause") and self._status == "running":
+            self._status = "paused"
             self._description = "记录保留；再次开始将继续本次实验"
         elif action in ("复位", "reset"):
             if self._clear_observations is not None:
@@ -179,7 +157,7 @@ class ExperimentRunner:
             self._result_directory = ""
             self._start_simulation_time = float(getattr(self._data, "time", 0.0))
             self._reset_target(self._experiment)
-            self._status = "已加载"
+            self._status = "loaded"
             self._description = "实验已复位，点击开始重新运行"
         self.publish(force=True)
         return False
@@ -187,7 +165,7 @@ class ExperimentRunner:
     @messages.handler
     def on_step(self, event: messages.StepEvent) -> bool:
         self._model, self._data = event.model, event.data
-        if self._experiment is None or self._recorder is None or self._status != "运行中":
+        if self._experiment is None or self._recorder is None or self._status != "running":
             self.publish()
             return False
         self._record_current_state()
@@ -197,11 +175,11 @@ class ExperimentRunner:
             try:
                 output = self._recorder.export()
                 self._result_directory = str(output)
-                self._status = "完成"
+                self._status = "completed"
                 self._description = "已自动暂停并导出 CSV、指标和曲线"
                 print(f"【实验】✓ {self._experiment.key} 完成 → {output}", flush=True)
             except Exception as exc:                                  # noqa: BLE001
-                self._status = "导出失败"
+                self._status = "export_failed"
                 self._description = f"{type(exc).__name__}: {exc}"
                 print(f"⚠ 【实验】结果导出失败：{self._description}", flush=True)
             self.publish(force=True)
@@ -255,21 +233,18 @@ class ExperimentRunner:
                 float(getattr(self._data, "time", 0.0)) - self._start_simulation_time,
             )
         self._send(ExperimentState(
-            当前=experiment.key if experiment else "",
-            名称=experiment.name if experiment else "",
-            状态=self._status,
-            可选=self._available,
-            模型=experiment.model if experiment else "",
-            项目=experiment.project if experiment else "",
-            控制器=list(experiment.controllers) if experiment else [],
-            停止秒=experiment.duration if experiment else 0.0,
-            已运行秒=elapsed,
-            结果目录=self._result_directory,
-            说明=self._description,
+            current=experiment.key if experiment else "",
+            name=experiment.name if experiment else "",
+            status=self._status,
+            available=self._available,
+            model=experiment.model if experiment else "",
+            project=experiment.project if experiment else "",
+            controllers=list(experiment.controllers) if experiment else [],
+            duration_s=experiment.duration if experiment else 0.0,
+            elapsed_s=elapsed,
+            result_directory=self._result_directory,
+            description=self._description,
         ))
 
 
-__all__ = [
-    "ExperimentCommand", "ExperimentState", "ExperimentRunner",
-    "实验命令", "实验状态", "WIRE_CLASS_ALIASES",
-]
+__all__ = ["ExperimentCommand", "ExperimentState", "ExperimentRunner"]

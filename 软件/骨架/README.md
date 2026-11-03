@@ -88,7 +88,7 @@ ViewerApp = 官方.取("viewer_app.ViewerApp")      # 按编号取，第一次�
 
 ```
 ✗ messages.handler    取不到（AttributeError: module '...messages' has no attribute 'handler'）
-    → 该改我们这边：插件系统.py → 每步 = messages.handler；若参数名变了，改这一行
+    → 该改我们这边：plugin_system.py → step_handler = messages.handler
     → 受影响：算法库/通用/*
 ```
 
@@ -97,15 +97,14 @@ ViewerApp = 官方.取("viewer_app.ViewerApp")      # 按编号取，第一次�
 | 情况 | 做法 |
 |---|---|
 | **只是想赶紧能用**（推荐先做这个） | 退回实测版本：`.venv/bin/pip install -r requirements.lock` |
-| 确实需要新版本 | 按自检给的指引改外壳（通常只改 `插件系统.py` 或 `启动.py` 的一两行），改完跑一遍验收：`--自检` 21 项全绿 + 开窗 + 控制律收敛 |
+| 确实需要新版本 | 按自检指引修改 `plugin_system.py` 或 `runtime_engine.py`，再完成自检、开窗和控制律收敛验证 |
 
 ### 第三步：改完要更新台账
 
 ```bash
 # 1) 更新版本锁（改 requirements.lock 里的版本号）
-# 2) 刷新"零改动自检"的基准（否则它会把你的正当修改报成"越界"）
-.venv/bin/python 软件/零改动自检.py --建立
-# 3) 若清单本身也要加条目，同步更新 官方接口清单.py
+# 2) 运行项目校验、运行内核自检和实验注册自检
+# 3) 若官方接口清单也要增加条目，同步更新它
 ```
 
 ---

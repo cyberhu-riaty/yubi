@@ -15,9 +15,10 @@ runtime_engine.py —— 桌面、浏览器与无界面实验共用的仿真运�
 
 这个文件就是上面那套排法的落地。**你不需要改它**，除非官方修好了 launch_passive。
 
-★ 方案 C 之后本文件多了一项职责：**换模型时按项目重新装配控制算法**
-  （见 `启动外壳` 里的 `_装配项目()`）。所以它同时是"线程排法"和"项目装配的执行点"。
-  装配的规则本身在 `项目.py`（读声明）和 `装配器.py`（把声明变成实例），
+★ 方案 C 之后本文件多了一项职责：**换模型时按项目重新装配控制算法**。
+  所以它同时是"线程排法"和"项目装配的执行点"。
+  装配规则在 `project_registry.py`（读声明）和
+  `plugin_assembler.py`（把声明变成实例），
   本文件只负责"什么时候装、装完通知谁"。
 """
 from __future__ import annotations
@@ -28,22 +29,22 @@ import sys
 import threading
 import traceback
 
-# 让本模块无论在哪个目录被导入，都能 import 到同目录的 项目 / 装配器 / 模型桥
+# 让本模块无论在哪个目录被导入，都能 import 到同目录的核心模块
 _软件目录 = os.path.dirname(os.path.abspath(__file__))
 if _软件目录 not in sys.path:
     sys.path.insert(0, _软件目录)
 
 import plugin_system as 插件框架                                           # noqa: E402
 import project_registry as _项目                                           # noqa: E402
-import model_loader as _模型加载                                            # noqa: E402
+import model_loader as _model_loader                                           # noqa: E402
 
 # `模型桥` 同时被界面侧和仿真侧用，这里在模块级导入一次：
 # `_装配项目()` 与主循环都要发 `项目状态`（方案 C：算法列表随项目变化）。
 # 它只依赖官方 messages 与标准库，不建窗口，所以导入是安全的。
-import model_bridge as _模型桥                                               # noqa: E402
-import simulation_control as _重力桥                                        # noqa: E402
+import model_bridge as _model_bridge                                            # noqa: E402
+import simulation_control as _simulation_control                              # noqa: E402
 import 控制桥 as _控制桥                                                  # noqa: E402
-from model_bridge import ProjectState as 项目状态                           # noqa: E402
+from model_bridge import ProjectState                                           # noqa: E402
 
 # Web 桥（方案 B 的 P0）：给仿真侧的消息再开一个出口，送给浏览器。
 # ★ 它是**只读旁路**：官方面板照旧收消息，Web 只是多一个订阅者。
@@ -249,22 +250,22 @@ def 取命令队列() -> queue.Queue:
 
 def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注册表, 通知模型加载,
             项目名: str = "", 无窗: bool = False, 后台线程: bool = False,
-            预置消息: list | tuple | None = None, 实验名: str = ""):
+            预置消息: list | tuple | None = None, experiment_name: str = ""):
     """启动官方 Studio 窗口 + 我们的插件。
 
     参数
       配置        : 官方 ViewerConfig（标题、宽高、gfx 模式）
       模型路径    : 要加载的 MJCF/XML
       窗口类      : 官方 viewer_app.ViewerApp（19 个现成面板都靠它）。**无窗模式不用**
-      插件列表    : 启动时按项目装配出来的控制算法实例（方案 C：见 项目.py / 装配器.py）
-      注册表      : 插件系统.安全注册表（带出错隔离）
-      通知模型加载: 插件系统.通知模型加载（让插件拿到 model/data）
+      插件列表    : 启动时按项目装配出来的控制算法实例
+      注册表      : plugin_system.SafeRegistry（带出错隔离）
+      通知模型加载: plugin_system.notify_model_loaded（让插件拿到 model/data）
       项目名      : 启动时选中的项目名（换模型后会被换成新项目的名字）
       后台线程    : 仅在 `无窗=True` 时有意义 —— 让仿真跑在**后台线程**，
                     把主线程让给宿主窗口（AppKit）。宿主窗口形态用这个。
       预置消息    : 清理上一次会话残留后，为本次会话预先放入的通用命令消息。
                     同步浏览器入口用它装载实验初值；不包含任何实验或机器人逻辑。
-      实验名      : 可选的 ExperimentRegistry 注册名；只启用通用实验运行器，
+      experiment_name: 可选的 ExperimentRegistry 注册名；只启用通用实验运行器，
                     空字符串表示普通工作台模式。
       无窗        : **不开官方窗口**（P2 的"无窗宿主"）。此时：
                     · 不建线程端点、不建 ViewerHandle、不加载 ImGui 面板；
@@ -288,7 +289,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
 
     # ★ 把"这次加载哪个模型"告诉外面（放进环境变量）：
     #   宿主窗口的 **3D 视口**需要自己再装一份模型（渲染在自己的线程/上下文里，
-    #   不与仿真线程共享 MjData —— 见 `工具/spike/spike_验收.py` 的教训）。
+    #   不与仿真线程共享 MjData；相关架构验证记录保留在 CHANGELOG 和 Git 历史中）。
     #   与其让两个入口各自猜路径，不如由**已经决定好的那一处**发出来。
     os.environ["驭臂_当前模型"] = str(模型路径 or "")
     os.environ["驭臂_当前项目"] = str(项目名 or "")
@@ -435,7 +436,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             # ★ 为什么允许它们是 None：装配通道和参数/发布通道是**互相独立**的，
             #   任何一条起不来都不应该让另一条失效（各自 try/except 兜底）。
             #   启动时的第一次装配发生在它们就绪之前，所以必须能容忍 None。
-            参数应用器 = None
+            parameter_applier = None
             项目发布 = None
             模型应用器 = None
             重力应用器 = None            # 内置件，注册在下面；这里先占位给 `_装配项目` 用
@@ -450,7 +451,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             当前已存盘 = True            # 当前这组算法是否与项目文件一致（界面 Save 按钮用）
             当前算法库: list = []        # 算法库里全部可选算法（算法变化时才重算，见 装配前刷新）
 
-            model = _模型加载.load_model(mujoco, 模型路径)
+            model = _model_loader.load_model(mujoco, 模型路径)
             data = mujoco.MjData(model)
             当前模型, 当前数据 = model, data
             关键字 = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
@@ -519,8 +520,8 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             # 轨迹规划器：记录航点 → 调内核 → 发结果
             #   ★ 必须在 `_装配项目` 之前建好（它是闭包变量，见上面的规矩）
             try:
-                import 规划桥 as _规划桥
-                _规划器 = _规划桥.规划器(
+                import planning_bridge as _planning_bridge
+                _规划器 = _planning_bridge.TrajectoryPlanner(
                     _发布出口,
                     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
                 注册表.加插件(_规划器)
@@ -623,11 +624,11 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 #    ★ 用 `is not None` 判断而不是无条件调用：启动时的第一次装配
                 #      发生在参数桥建好**之前**（那时它还不存在），这是正常的 ——
                 #      装配和参数桥是两条独立的通道，谁先就绪都不该让另一个失败。
-                if 参数应用器 is not None:
-                    参数应用器.重绑(注册表)
+                if parameter_applier is not None:
+                    parameter_applier.rebind(注册表)
 
                 # ④ 通知每个插件"模型 + 这一组算法是什么"
-                算法信息 = 插件框架.收集算法信息(新实例)
+                算法信息 = 插件框架.collect_algorithm_info(新实例)
                 #   谁在控盘 / 谁被覆盖 —— 供界面显示（见 装配器._抢方向盘体检 的说明）。
                 #   判定依据是算法自己声明的 `接管控制`（默认 True）：
                 #   多个都声明接管时，**只有最后一个真正生效**，前面的被整体覆盖。
@@ -650,16 +651,16 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 通知模型加载(list(getattr(注册表, "_目标", 新实例)), 新模型, 新数据,
                               算法信息, 新项目名)
                 for _p in 新实例:
-                    if hasattr(_p, "绑定模型路径"):
+                    if hasattr(_p, "bind_model_path"):
                         try:
-                            _p.绑定模型路径(新模型路径)
+                            _p.bind_model_path(新模型路径)
                         except Exception as _异常:                         # noqa: BLE001
-                            print(f"⚠ 插件【{getattr(_p, '名称', _p)}】的 绑定模型路径() 出错：{_异常}")
-                    if hasattr(_p, "模型已切换"):
+                            print(f"⚠ 插件【{getattr(_p, 'name', _p)}】的 bind_model_path() 出错：{_异常}")
+                    if hasattr(_p, "model_changed"):
                         try:
-                            _p.模型已切换(新模型路径, 新模型, 新数据)
+                            _p.model_changed(新模型路径, 新模型, 新数据)
                         except Exception as _异常:                         # noqa: BLE001
-                            print(f"⚠ 插件【{getattr(_p, '名称', _p)}】的 模型已切换() 出错：{_异常}")
+                            print(f"⚠ 插件【{getattr(_p, 'name', _p)}】的 model_changed() 出错：{_异常}")
 
                 插件列表 = 新实例
                 当前项目名 = str(新项目名 or "")
@@ -688,12 +689,12 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 #   `切换模型()` 负责"换物理对象"，`_装配项目()` 负责"换工作环境"，
                 #   同一个状态只在**一个地方**写，才不会出现两边不一致。
                 if 模型应用器 is not None:
-                    模型应用器.当前路径 = str(新模型路径 or "")
-                    模型应用器.当前显示名 = (_项目.display_model_name(新模型路径)
+                    模型应用器.current_path = str(新模型路径 or "")
+                    模型应用器.current_display_name = (_项目.display_model_name(新模型路径)
                                             if 新模型路径 else "（外来模型）")
                     if 新模型路径:
                         try:
-                            _模型桥.remember_model(新模型路径)  # 记录最近选择；普通启动仍进空场景
+                            _model_bridge.remember_model(新模型路径)  # 记录最近选择；普通启动仍进空场景
                         except Exception:                              # noqa: BLE001
                             pass
 
@@ -701,17 +702,17 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 #    这里**主动发**、不等节拍：节拍是 2 秒一次的兜底，
                 #    而"点一下就要看到算法列表变了"是交互体验的硬要求。
                 if 项目发布 is not None:
-                    项目发布.发布(项目状态(
-                        项目=当前项目名,
-                        模型路径=新模型路径,
-                        模型显示名=_项目.display_model_name(新模型路径) if 新模型路径 else "",
-                        算法=算法信息,
-                        报告=报告,
-                        算法库=当前算法库,
-                        已存盘=当前已存盘,
-                        控盘=控盘,
-                        被覆盖=被覆盖,
-                        重力开=bool(重力应用器.重力开) if 重力应用器 is not None else False,
+                    项目发布.publish(ProjectState(
+                        project=当前项目名,
+                        model_path=新模型路径,
+                        model_display_name=_项目.display_model_name(新模型路径) if 新模型路径 else "",
+                        algorithms=算法信息,
+                        report=报告,
+                        algorithm_library=当前算法库,
+                        saved=当前已存盘,
+                        active_controller=控盘,
+                        overridden_controllers=被覆盖,
+                        gravity_enabled=bool(重力应用器.gravity_enabled) if 重力应用器 is not None else False,
                     ))
                     # 同一时刻把插件目录也发一份：「当前启用」是根据这组装好的算法算的，
                     # 所以它必须跟 项目状态 在同一个时机更新，否则界面上的勾会落后一拍。
@@ -719,7 +720,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                         try:
                             _目录 = _插件桥.取插件目录(
                                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                [str(getattr(p, "名称", "")) for p in 新实例])
+                                [str(getattr(p, "name", "")) for p in 新实例])
                             _发布出口(_插件桥.插件目录(
                                 数量=_目录["数量"],
                                 插件=tuple(_目录["插件"]),
@@ -747,9 +748,9 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     return ""
                 恢复数 = 0
                 for _p in 实例表:
-                    该插件 = 存的.get(str(getattr(_p, "名称", ""))) or {}
+                    该插件 = 存的.get(str(getattr(_p, "name", ""))) or {}
                     for _参数名, _值 in 该插件.items():
-                        设 = getattr(_p, "设置参数", None)
+                        设 = getattr(_p, "set_parameter", None)
                         if 设 is None:
                             continue
                         try:
@@ -796,7 +797,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             def _仿真复位回调() -> str:
                 """Reset = 清 MuJoCo 状态 + 用同一配置重建当前算法实例。"""
                 原存盘状态 = 当前已存盘
-                当前路径 = (模型应用器.当前路径 if 模型应用器 is not None
+                当前路径 = (模型应用器.current_path if 模型应用器 is not None
                          else str(模型路径 or ""))
                 报告 = _装配项目(
                     当前项目名, model, data, 当前路径,
@@ -808,19 +809,20 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     控制目标应用器.重置为当前位置()
                 return next((行 for 行 in 报告 if "重置到默认姿态" in 行), "已重建当前算法")
 
-            仿真状态发布 = _重力桥.仿真状态发布器(_发布出口)
+            仿真状态发布 = _simulation_control.SimulationStatePublisher(_发布出口)
 
             def _仿真状态变了() -> None:
                 if 仿真状态发布 is not None and 重力应用器 is not None:
-                    仿真状态发布.发布(重力应用器, float(getattr(data, "time", 0.0)), 强制=True)
+                    仿真状态发布.publish(
+                        重力应用器, float(getattr(data, "time", 0.0)), force=True)
 
-            重力应用器 = _重力桥.重力应用器(
-                复位回调=_重置姿态回调,
-                仿真复位回调=_仿真复位回调,
-                状态回调=_仿真状态变了,
+            重力应用器 = _simulation_control.GravityApplier(
+                reset_callback=_重置姿态回调,
+                simulation_reset=_仿真复位回调,
+                state_callback=_仿真状态变了,
             )
             注册表.加插件(重力应用器)          # 让它收到 重力状态
-            重力应用器.登记到注册表(注册表)     # ★ 登记"世界冻结"判据 —— 冻结靠这个生效
+            重力应用器.register_with_registry(注册表)  # ★ 登记"世界冻结"判据
                                                 #   （不能用"改暂停快照"实现：官方不发快照）
             print("【仿真】默认暂停；重力默认按模型 XML 开启，两者已相互独立", flush=True)
 
@@ -837,7 +839,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
 
             # 启动时也走同一条装配路径（保证"启动"和"点模型"行为完全一致）
             try:
-                项目发布 = _模型桥.ProjectStatePublisher(_发布出口)
+                项目发布 = _model_bridge.ProjectStatePublisher(_发布出口)
                 报告 = _装配项目(当前项目名, model, data, 模型路径)
                 for _行 in 报告:
                     print(f"  {_行}", flush=True)
@@ -847,7 +849,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
 
             # 资产库清单：启动时发一次就够（清单不变；运行期真变了再发）
             try:
-                _模型桥.AssetLibraryPublisher(_发布出口).发布()
+                _model_bridge.AssetLibraryPublisher(_发布出口).publish()
             except Exception as 异常:                                      # noqa: BLE001
                 print(f"⚠ 资产库清单发布失败（不影响控制）："
                       f"{type(异常).__name__}: {异常}")
@@ -874,37 +876,37 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
             # ------------------------------------------------------------------
             模型应用器 = None
             try:
-                def 切换模型(模型=None, 路径: str = "", 通知窗口: bool = True,
-                          指定项目: str = ""):
+                def switch_model_callback(model=None, path: str = "", notify_window: bool = True,
+                          project_override: str = ""):
                     """加载并重绑一个新模型。返回 (是否成功, 给人看的一句话)。"""
                     nonlocal 当前模型, 当前数据
-                    if 模型 is None:
-                        if not 路径 or not os.path.exists(路径):
-                            return False, f"模型文件不存在：{路径 or '（空路径）'}"
-                        起点 = _time.perf_counter()
+                    if model is None:
+                        if not path or not os.path.exists(path):
+                            return False, f"模型文件不存在：{path or '（空路径）'}"
+                        started_at = _time.perf_counter()
                         try:
-                            模型 = _模型加载.load_model(mujoco, 路径)
-                        except Exception as 异常:                          # noqa: BLE001
+                            model = _model_loader.load_model(mujoco, path)
+                        except Exception as exc:                          # noqa: BLE001
                             # ★ 加载失败绝不能影响正在跑的旧模型（用户可能只是选错了文件）
-                            return False, f"加载失败（已保留原模型）：{type(异常).__name__}: {异常}"
-                        耗时 = _time.perf_counter() - 起点
+                            return False, f"加载失败（已保留原模型）：{type(exc).__name__}: {exc}"
+                        duration_s = _time.perf_counter() - started_at
                     else:
-                        耗时 = 0.0
+                        duration_s = 0.0
 
-                    数据 = mujoco.MjData(模型)
-                    键 = mujoco.mj_name2id(模型, mujoco.mjtObj.mjOBJ_KEY, "home")
-                    if 键 >= 0:
-                        mujoco.mj_resetDataKeyframe(模型, 数据, 键)
-                    mujoco.mj_forward(模型, 数据)
+                    new_data = mujoco.MjData(model)
+                    key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
+                    if key_id >= 0:
+                        mujoco.mj_resetDataKeyframe(model, new_data, key_id)
+                    mujoco.mj_forward(model, new_data)
 
                     # ① 重绑外壳正在用的这一份（循环末尾会从 句柄 读回去）
                     if 无窗:
-                        当前模型, 当前数据 = 模型, 数据
+                        当前模型, 当前数据 = model, new_data
                     else:
-                        句柄.model, 句柄.data = 模型, 数据
+                        句柄.model, 句柄.data = model, new_data
                     # ② 告诉窗口侧（拖拽那条路窗口自己已经有了，就不用回发）
-                    if 通知窗口:
-                        _模型事件 = messages.ModelEvent(model=模型, path=路径)
+                    if notify_window:
+                        _模型事件 = messages.ModelEvent(model=model, path=path)
                         发送出口.发送(_模型事件)
                         _广播模型事件(_模型事件)
                     # ③ ★ 换算法组：按模型反查项目，再按项目重新装配
@@ -925,42 +927,42 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     #
                     #   修法：① 当前项目自己就声明了这个模型 → 就用它，不去反查；
                     #         ② 模型路径没变 → 根本不重新装配（没变化就没有理由动它）。
-                    当前项目也声明了这个模型 = False
-                    if 当前项目名 and 路径:
-                        _当前配置 = _项目.load_project(当前项目名)
-                        if _当前配置:
-                            _声明路径 = str(_当前配置.get("模型") or "")
-                            当前项目也声明了这个模型 = (
-                                bool(_声明路径)
-                                and os.path.normpath(_项目.absolute_path(_声明路径)) == os.path.normpath(路径))
-                    模型没变 = bool(模型应用器 is not None
-                                and getattr(模型应用器, "当前路径", "")
-                                and os.path.normpath(str(模型应用器.当前路径)) == os.path.normpath(路径))
-                    if 指定项目:
-                        新项目名 = str(指定项目)
-                    elif 当前项目也声明了这个模型:
-                        新项目名 = 当前项目名
-                    elif 模型没变 and 当前项目名:
+                    current_project_uses_model = False
+                    if 当前项目名 and path:
+                        current_config = _项目.load_project(当前项目名)
+                        if current_config:
+                            declared_path = str(current_config.get("模型") or "")
+                            current_project_uses_model = (
+                                bool(declared_path)
+                                and os.path.normpath(_项目.absolute_path(declared_path)) == os.path.normpath(path))
+                    model_unchanged = bool(模型应用器 is not None
+                                and getattr(模型应用器, "current_path", "")
+                                and os.path.normpath(str(模型应用器.current_path)) == os.path.normpath(path))
+                    if project_override:
+                        new_project_name = str(project_override)
+                    elif current_project_uses_model:
+                        new_project_name = 当前项目名
+                    elif model_unchanged and 当前项目名:
                         # 同一模型重复通知 → 保持现状，别动用户的算法
-                        新项目名 = 当前项目名
+                        new_project_name = 当前项目名
                     else:
-                        新项目名 = _项目.find_project_for_model(路径) if 路径 else ""
+                        new_project_name = _项目.find_project_for_model(path) if path else ""
                     # 换模型也重置姿态：这是新加载的 MjData，本来就该从默认姿态开始
                     # （否则若模型没换、只是重新加载，同样会把"上一次的姿态"当基准）
-                    报告 = _装配项目(新项目名, 模型, 数据, 路径, 重置姿态=True)
-                    for _行 in 报告:
-                        print(f"  {_行}", flush=True)
+                    report = _装配项目(new_project_name, model, new_data, path, 重置姿态=True)
+                    for line in report:
+                        print(f"  {line}", flush=True)
 
                     if 模型应用器 is not None:
-                        模型应用器.自由度 = int(模型.nq)
-                        模型应用器.执行器数 = int(模型.nu)
-                        模型应用器.耗时 = 耗时
-                    显示 = _模型桥.display_name(路径) if 路径 else "（外来模型）"
-                    return True, (f"已切换到 {显示}（{int(模型.nq)} 轴、"
-                                  f"{len(插件列表)} 个算法、耗时 {耗时*1000:.0f} ms）" if 耗时
-                                  else f"已切换到 {显示}（{int(模型.nq)} 轴、{len(插件列表)} 个算法）")
+                        模型应用器.dof = int(model.nq)
+                        模型应用器.actuator_count = int(model.nu)
+                        模型应用器.duration_s = duration_s
+                    display = _model_bridge.display_name(path) if path else "（外来模型）"
+                    return True, (f"已切换到 {display}（{int(model.nq)} 轴、"
+                                  f"{len(插件列表)} 个算法、耗时 {duration_s*1000:.0f} ms）" if duration_s
+                                  else f"已切换到 {display}（{int(model.nq)} 轴、{len(插件列表)} 个算法）")
 
-                模型应用器 = _模型桥.ModelApplier(切换模型)
+                模型应用器 = _model_bridge.ModelApplier(switch_model_callback)
                 # ★ 路径/显示名**立刻**填上；自由度等模型到位后由主循环补（见下）。
                 #   为什么不能等 `句柄.model`：这是**跨线程竞态** —— 实测过，本段执行时
                 #   仿真线程往往还没把 model 交给窗口（`句柄.model` 是 None）。
@@ -968,17 +970,17 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 #   （`_装配项目()` 早于本行执行、那时 `模型应用器` 还是 None，
                 #     所以它那次"填路径"被跳过了 —— 这正是【模型库】面板一直显示
                 #     "当前："为空、`模型状态` 里路径为空的原因。）
-                模型应用器.当前路径 = str(模型路径 or "")
-                模型应用器.当前显示名 = (_项目.display_model_name(模型路径)
+                模型应用器.current_path = str(模型路径 or "")
+                模型应用器.current_display_name = (_项目.display_model_name(模型路径)
                                         if 模型路径 else "（外来模型）")
                 if 无窗 or 当前模型 is not None:
                     # 无窗模式下模型早已装好（本地变量就是权威），直接填；
                     # 有窗模式这里是"恰好已到位就一起填"，没到位就等主循环补。
                     if 当前模型 is not None:
-                        模型应用器.自由度 = int(当前模型.nq)
-                        模型应用器.执行器数 = int(当前模型.nu)
+                        模型应用器.dof = int(当前模型.nq)
+                        模型应用器.actuator_count = int(当前模型.nu)
                 注册表.加插件(模型应用器)          # 让它收到 换模型命令 / 拖拽的 ModelEvent
-                模型发布 = _模型桥.ModelPublisher(_发布出口, 频率=2.0)
+                模型发布 = _model_bridge.ModelPublisher(_发布出口, frequency=2.0)
 
                 # ---- 【Algorithms】面板的落地端：界面选了算法 → 在这里重新装配 ----
                 #   ★ 为什么要有这个回调：装配必须换掉**正在被仿真的那批插件实例**，
@@ -988,7 +990,7 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     """界面选了一组算法 → 按它重新装配。返回 (是否成功, 给人看的一句话)。"""
                     if not 算法列表:
                         return False, "一个算法都没选（至少勾一个；只想空跑请用 --无插件）"
-                    报告 = _装配项目(当前项目名, 当前模型, 当前数据, 模型应用器.当前路径,
+                    报告 = _装配项目(当前项目名, 当前模型, 当前数据, 模型应用器.current_path,
                                      算法覆盖=算法列表, 落盘=落盘, 重置姿态=重置姿态)
                     失败 = [行 for 行 in 报告 if str(行).startswith("✗")]
                     已装 = len(插件列表)
@@ -996,9 +998,9 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     return (not 失败), f"已装配 {已装} 个算法{尾巴}" + (
                         f"；{len(失败)} 个失败（见终端）" if 失败 else "")
 
-                算法选择器 = _模型桥.AlgorithmSelector(换算法)
+                算法选择器 = _model_bridge.AlgorithmSelector(换算法)
                 注册表.加插件(算法选择器)          # 让它收到 应用算法命令
-                print(f"【模型】模型库已就绪（当前：{模型应用器.当前显示名}）"
+                print(f"【模型】模型库已就绪（当前：{模型应用器.current_display_name}）"
                       f"—— 界面【模型库】面板可切换，也可以把 .xml 拖进窗口", flush=True)
                 print("【算法】算法选择面板已就绪（界面【Algorithms】页签可勾选/调序/应用）",
                       flush=True)
@@ -1012,17 +1014,19 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                 import experiment_bridge as _experiment_bridge
                 import trajectory_runtime as _trajectory_runtime
 
-                初始实验 = (_experiment_registry.experiment_registry.create(实验名)
-                        if str(实验名 or "").strip() else None)
+                initial_experiment = (
+                    _experiment_registry.experiment_registry.create(experiment_name)
+                    if str(experiment_name or "").strip() else None
+                )
 
-                def _应用实验目标(experiment) -> None:
+                def _apply_experiment_target(experiment) -> None:
                     if 控制目标应用器 is None:
                         return
                     target = experiment.trajectory.get("target_qpos")
                     if target is not None:
                         控制目标应用器.收目标(_控制桥.控制目标命令(目标=list(target)))
 
-                def _准备实验轨迹显示(experiment) -> None:
+                def _prepare_experiment_trajectory_visualization(experiment) -> None:
                     """实验一加载就生成目标末端线；实际线仍由运行中的轨迹插件记录。"""
                     _trajectory_runtime.clear_trajectory_visualization()
                     if str(experiment.trajectory.get("type") or "") != "joint_waypoints":
@@ -1030,41 +1034,46 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     _trajectory_runtime.prepare_trajectory_visualization(
                         model, experiment.key, experiment.trajectory, 插件框架.mujoco)
 
-                def _加载实验(name: str):
+                def _load_experiment(name: str):
                     try:
                         experiment = _experiment_registry.experiment_registry.create(name)
                     except Exception as error:                           # noqa: BLE001
                         return None, f"实验不可用：{error}"
                     # 换实验前先暂停；指定项目避免“同一模型多个项目”时反查到错误算法。
                     if 重力应用器 is not None:
-                        重力应用器.收仿真控制(_重力桥.仿真控制命令(动作="暂停"))
-                    ok, reason = 切换模型(
-                        路径=str(experiment.model_path), 通知窗口=True,
-                        指定项目=experiment.project)
+                        重力应用器.on_simulation_command(
+                            _simulation_control.SimulationControlCommand(action="pause"))
+                    ok, reason = switch_model_callback(
+                        path=str(experiment.model_path), notify_window=True,
+                        project_override=experiment.project)
                     if not ok:
                         return None, reason
-                    _应用实验目标(experiment)
-                    os.environ["驭臂_当前实验"] = experiment.key
+                    _apply_experiment_target(experiment)
+                    os.environ["YUBI_CURRENT_EXPERIMENT"] = experiment.key
                     try:
-                        _准备实验轨迹显示(experiment)
+                        _prepare_experiment_trajectory_visualization(experiment)
                     except Exception as error:                           # noqa: BLE001
                         print(f"⚠ 目标轨迹 3D 预览生成失败：{type(error).__name__}: {error}",
                               flush=True)
                     return experiment, f"已加载 {experiment.name}；点击开始运行"
 
-                def _暂停实验() -> None:
+                def _pause_experiment() -> None:
                     if 重力应用器 is not None:
-                        重力应用器.收仿真控制(_重力桥.仿真控制命令(动作="暂停"))
+                        重力应用器.on_simulation_command(
+                            _simulation_control.SimulationControlCommand(action="pause"))
 
                 experiment_runner = _experiment_bridge.ExperimentRunner(
-                    _发布出口, _加载实验, _暂停实验, _应用实验目标, 初始实验,
+                    _发布出口, _load_experiment, _pause_experiment,
+                    _apply_experiment_target, initial_experiment,
                     clear_observations=(_观测.清空 if _观测 is not None else None))
                 注册表.加插件(experiment_runner)
                 # 它是在首次项目装配之后加入的，所以手动补一次当前模型上下文。
                 experiment_runner.receive_model(
                     type("模型事件", (), {"model": model, "data": data})())
                 experiment_runner.publish(force=True)
-                print(f"【实验】已就绪（当前：{初始实验.key if 初始实验 else '未选择'}）", flush=True)
+                print(f"【实验】已就绪（当前："
+                      f"{initial_experiment.key if initial_experiment else '未选择'}）",
+                      flush=True)
             except Exception as 异常:                                     # noqa: BLE001
                 print(f"⚠ 实验运行器不可用（普通模型/控制功能不受影响）："
                       f"{type(异常).__name__}: {异常}", flush=True)
@@ -1072,9 +1081,9 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
 
             # 参数通道：把"插件声明了哪些可调参数"周期性发给界面（第 4 步 参数面板）
             try:
-                import 参数桥 as _参数桥
+                import parameter_bridge as _parameter_bridge
 
-                def _参数存盘(插件名: str, 值表: dict) -> None:
+                def _persist_parameters(plugin_name: str, values: dict) -> None:
                     """把界面上拖出来的参数写回**当前项目文件**（方案 C：参数可复现）。
 
                     ★ 为什么由外壳提供这个回调、而不是让参数桥自己读写项目文件：
@@ -1083,20 +1092,21 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     """
                     if not 当前项目名:
                         return                     # 没有项目 → 参数无处可存（正常，不是错误）
-                    _项目.save_parameters(当前项目名, 插件名, 值表)
+                    _项目.save_parameters(当前项目名, plugin_name, values)
 
-                参数发布 = _参数桥.发布器(_发布出口)
+                parameter_publisher = _parameter_bridge.ParameterPublisher(_发布出口)
                 # 绑定发布：事务式批量应用要把"提交/回滚"的结果发回界面
-                应用器 = (_参数桥.参数应用器(参数存盘=_参数存盘)
-                          .绑定(注册表)
-                          .绑定发布(_发布出口))
-                参数应用器 = 应用器              # 给 `_装配项目()` 用（它每次装配后会重绑）
-                注册表.加插件(应用器)                          # 让它也收到参数消息
+                applier = (_parameter_bridge.ParameterApplier(
+                    persist_parameters=_persist_parameters)
+                    .bind(注册表)
+                    .bind_publisher(_发布出口))
+                parameter_applier = applier        # `_装配项目()` 每次装配后会重绑
+                注册表.加插件(applier)                          # 让它也收到参数消息
                 print("【参数】控制器参数面板已就绪"
                       "（界面里拖滑杆即可实时改参数；改动会写回当前项目文件）", flush=True)
             except Exception as 异常:                                     # noqa: BLE001
                 print(f"⚠ 参数桥不可用（参数面板将无法改参数）：{type(异常).__name__}: {异常}")
-                参数发布, 应用器 = None, None
+                parameter_publisher, parameter_applier = None, None
 
             # 辨识通道：把"参数辨识插件"的状态周期性发给界面（第 4 步 D3 界面化）
             try:
@@ -1208,15 +1218,16 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     try:
                         # ★ 本文件里 numpy 的别名是 `_np`（不是 `np`）—— 写错会 NameError，
                         #   而它只在使用时才暴露（这里），启动日志里表现为"记录航点失败"。
-                        _个数 = _规划器.记录航点(_np.asarray(data.qpos, dtype=float).ravel())
+                        _个数 = _规划器.record_waypoint(
+                            _np.asarray(data.qpos, dtype=float).ravel())
                         print(f"【规划】已记录第 {_个数} 个航点", flush=True)
-                        _规划器.发航点数()
+                        _规划器.publish_waypoint_count()
                     except Exception as _e:                               # noqa: BLE001
                         print(f"⚠ 记录航点失败：{type(_e).__name__}: {_e}", flush=True)
 
                 # 送一帧指标给界面（内部按 30 Hz 限频，不会每圈都发）
                 if (指标发布 is not None and 重力应用器 is not None
-                        and 重力应用器.运行中):
+                        and 重力应用器.running):
                     # ★ 只有**真的发了一帧**才喂观测核心：指标是 30 Hz 限频的，
                     #   而物理是 500 Hz。若每步都喂，缓冲里会塞进 16 倍重复值，
                     #   "过零次数"和"频率"会被严重低估（判定直接失效）。
@@ -1254,15 +1265,16 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                         len(getattr(注册表, "_目标", [])), _time.perf_counter())
                 # 仿真控制状态（5 Hz）：Run/Pause/Reset 工具栏的权威数据源。
                 if 仿真状态发布 is not None and 重力应用器 is not None:
-                    仿真状态发布.也许发布(
+                    仿真状态发布.maybe_publish(
                         重力应用器, float(data.time), _time.perf_counter())
                 # 关节目标输入区（10 Hz）：当前位置来自 MjData，目标来自控制目标应用器。
                 if 控制状态发布 is not None and 控制目标应用器 is not None:
                     控制状态发布.也许发布(
                         控制目标应用器, model, data, _time.perf_counter())
                 # 周期性送"可调参数表"给界面（10 Hz 够了，滑杆不需要更密）
-                if 参数发布 is not None:
-                    参数发布.也许发布(注册表, float(data.time), _time.perf_counter())
+                if parameter_publisher is not None:
+                    parameter_publisher.maybe_publish(
+                        注册表, float(data.time), _time.perf_counter())
                 # 辨识状态（5 Hz 够了：采样/辨识都是秒级过程）
                 if 辨识发布 is not None:
                     辨识发布.也许发布(注册表, _time.perf_counter())
@@ -1273,34 +1285,34 @@ def 启动外壳(配置, 模型路径: str, 窗口类, 插件列表: list, 注�
                     #   拿它算自由度会永远停在起手那一刻的值（实测：nq 一直是 0）。
                     #   换模型时 `切换模型()` 已经写过一次，这里是从权威对象兜底且幂等。
                     if 模型应用器 is not None and model is not None:
-                        模型应用器.自由度 = int(model.nq)
-                        模型应用器.执行器数 = int(model.nu)
-                    模型发布.也许发布(模型应用器, _time.perf_counter())
+                        模型应用器.dof = int(model.nq)
+                        模型应用器.actuator_count = int(model.nu)
+                    模型发布.maybe_publish(模型应用器, _time.perf_counter())
                 # 当前项目状态（哪个项目 / 挂了哪些算法 / 参数多少）。
                 # ★ 装配完成时会**主动发**一条（点模型立刻更新），这里只是兜底重发：
                 #   内容没变时 `也许发布` 内部会跳过，所以不构成额外负担。
                 #   算法信息用装配时算好的快照，**不在这个循环里重算** ——
                 #   这里是 ~500 Hz 的热路径，而 `收集算法信息()` 要遍历全部插件、
-                #   还会调用它们的 `可调参数()`，放在循环里是纯浪费。
+                #   还会调用它们的 `adjustable_parameters()`，放在循环里是纯浪费。
                 if 项目发布 is not None:
-                    项目发布.也许发布(项目状态(
-                        项目=当前项目名,
-                        模型路径=(模型应用器.当前路径 if 模型应用器 is not None else ""),
-                        模型显示名=(模型应用器.当前显示名 if 模型应用器 is not None else ""),
-                        算法=当前算法信息,
-                        算法库=当前算法库,
-                        已存盘=当前已存盘,
-                        控盘=当前控盘,
-                        被覆盖=当前被覆盖,
-                        重力开=bool(重力应用器.重力开) if 重力应用器 is not None else False,
+                    项目发布.maybe_publish(ProjectState(
+                        project=当前项目名,
+                        model_path=(模型应用器.current_path if 模型应用器 is not None else ""),
+                        model_display_name=(模型应用器.current_display_name if 模型应用器 is not None else ""),
+                        algorithms=当前算法信息,
+                        algorithm_library=当前算法库,
+                        saved=当前已存盘,
+                        active_controller=当前控盘,
+                        overridden_controllers=当前被覆盖,
+                        gravity_enabled=bool(重力应用器.gravity_enabled) if 重力应用器 is not None else False,
                     ), _time.perf_counter())
 
-                _快照复位 = int(重力应用器.复位次数) if 重力应用器 is not None else 0
+                _快照复位 = int(重力应用器.reset_count) if 重力应用器 is not None else 0
                 _快照时间 = float(data.time)
                 _需发快照 = (
                     not 无窗
                     or 重力应用器 is None
-                    or 重力应用器.运行中
+                    or 重力应用器.running
                     or model is not 上次快照模型
                     or _快照时间 != 上次快照时间
                     or _快照复位 != 上次快照复位
@@ -1479,7 +1491,7 @@ def start(
         无窗=headless,
         后台线程=background_thread,
         预置消息=initial_messages,
-        实验名=experiment_name,
+        experiment_name=experiment_name,
     )
 
 

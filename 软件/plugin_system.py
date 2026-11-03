@@ -70,9 +70,9 @@ def _导入官方():
 
 # 全局仿真速度命令属于工作台外壳，不属于用户控制器。放在实时步进器里处理，
 # 这样倍率只改变每个物理步之间的墙钟等待，不会改 MuJoCo timestep。
-from simulation_control import SimulationControlCommand as 仿真控制命令  # noqa: E402
+from simulation_control import SimulationControlCommand  # noqa: E402
 
-每步 = messages.handler                      # 贴标签：让这个方法参与每一步仿真
+step_handler = messages.handler              # Mark a method as a Studio message handler.
 
 # ---------------------------------------------------------------------------
 # 优先级：**仿真侧不参与排序**（但别搞混 —— 窗口侧是参与的，两侧行为不一样）
@@ -80,7 +80,7 @@ from simulation_control import SimulationControlCommand as 仿真控制命令  #
 # ★ 先记住这条分界线，把两侧混起来想会得出错误结论：
 #
 #   ┌ 窗口侧（面板 / 界面桥 …）：走**官方**派发 → priority **有效**
-#   │   插件由 `启动.py` 通过 `launch_native.run_native_viewer(..., plugins=窗口插件)`
+#   │   插件由 `runtime_engine.py` 通过 `launch_native.run_native_viewer(..., plugins=窗口插件)`
 #   │   交给官方；官方 `Viewer.dispatch` → `PluginRegistry.dispatch` 把同类型处理器
 #   │   收成一条链并**按 priority 降序执行**（`sort(key=…, reverse=True)`，实测见
 #   │   `mujoco/experimental/studio/plugin_registry.py`）。
@@ -106,13 +106,13 @@ from simulation_control import SimulationControlCommand as 仿真控制命令  #
 # 想让某个算法赢：在界面【Algorithms】面板把它调到列表最后，或改项目文件的算法列表。
 # 历史教训：曾有 5 个项目都写 `"算法": "*"`，扫描顺序让【正弦摆动】排到最后，
 # 于是它偷偷盖住了关节 PD（表现为"机械臂按正弦来回摆"）。见 CHANGELOG v0.4.1。
-优先级 = messages.Priority                   # CRITICAL=1000 > USER=100（默认）> LIBRARY=10 > INTERNAL=1
+Priority = messages.Priority                 # CRITICAL=1000 > USER=100 > LIBRARY=10 > INTERNAL=1
 
 
 # ---------------------------------------------------------------------------
 # ② 插件基类：给用户一个"填空题"模板
 # ---------------------------------------------------------------------------
-class 控制插件:
+class ControlPlugin:
     """所有控制算法的爸爸。子类只需要写：名称 + 每步控制()。
 
     类属性（写在子类里，纯数据，不执行代码）：
@@ -127,10 +127,11 @@ class 控制插件:
             ★ 返回 False = 不拦截（让别人也能看到）；返回 True = 吃掉消息（后面的人收不到）。
     """
 
-    名称 = "未命名插件"
-    版本 = "0.0"
-    说明 = ""
-    作者 = ""
+    name = "未命名插件"
+    version = "0.0"
+    english_name = ""
+    description = ""
+    author = ""
     # 本算法是否"接管方向盘"——也就是会不会往 `event.data.ctrl[:]` 里写力矩。
     #
     # ★ 为什么要声明这件事（踩过的真实困扰）：
@@ -150,10 +151,10 @@ class 控制插件:
     #     否则会被算进"抢方向盘"的名单里、制造假警告；
     #   · 像"数据录制"这种**平时不写、回放时才写**的，仍算 False
     #     —— 回放是用户主动点的，不是它的默认行为。
-    接管控制 = True
+    takes_control = True
 
     # ---- 插件自己的状态（比如"跑了多少步"），由外壳负责收集 ----
-    def 插件状态(self) -> dict:
+    def status(self) -> dict:
         """返回要在启动清单里显示的一行摘要，例如 {'跟踪误差': '0.12 mm'}。"""
         return {}
 
@@ -162,20 +163,20 @@ class 控制插件:
     #
     # 你在插件里声明"哪些类属性可以调"，界面上就会出现对应的滑杆：
     #
-    #     def 可调参数(self) -> dict:
-    #         return {"KP": {"值": self.KP, "范围": (10.0, 20000.0)},
-    #                 "KD": {"值": self.KD, "范围": (0.0, 500.0)}}
+    #     def adjustable_parameters(self) -> dict:
+    #         return {"KP": {"value": self.KP, "range": (10.0, 20000.0)},
+    #                 "KD": {"value": self.KD, "range": (0.0, 500.0)}}
     #
     # 键名必须是**插件的类属性名**（例如 KP）。界面拖动后，外壳会自动改它，
     # 你的 每步控制() 下一次执行就直接用上新值 —— 不需要写任何接收代码。
     #
-    # 不声明 `可调参数()` 的插件不会出现在参数面板里，没有任何影响。
+    # 不声明 `adjustable_parameters()` 的插件不会出现在参数面板里，没有任何影响。
     # ------------------------------------------------------------------
-    def 可调参数(self) -> dict:
-        """返回 {参数名: {"值": 当前值, "范围": (最小, 最大), "步长": 可选, "单位": 可选}}。"""
+    def adjustable_parameters(self) -> dict:
+        """Return {name: {value, range, step?, unit?}} for GUI editing."""
         return {}
 
-    def 设置参数(self, 名: str, 值: float) -> str:
+    def set_parameter(self, name: str, value: float) -> str:
         """外壳调这个来改参数。返回 "" 表示成功，否则返回失败原因。
 
         ★ 这里会**按插件自己声明的 `范围` 校验**（P1 加）。
@@ -185,39 +186,39 @@ class 控制插件:
             实测踩过：Web 端发了 KP=99999（范围是 10~20000），
             基类不校验 → 照单全收 → 写回项目文件 → 界面上显示的仍是旧值，
             而**实际生效的是那个越界值**。这种"显示和实际不一致"比直接报错危险得多。
-          校验点放在基类而不是各插件里：`可调参数()` 声明的范围就是契约，
+          校验点放在基类而不是各插件里：`adjustable_parameters()` 声明的范围就是契约，
           基类照着执行一次，所有插件自动受益，也让"范围"这个字段真的有意义。
         """
-        if not hasattr(self, 名):
-            return f"插件 {type(self).__name__} 没有参数「{名}」"
-        数值 = float(值)
-        范围 = None
+        if not hasattr(self, name):
+            return f"插件 {type(self).__name__} 没有参数「{name}」"
+        numeric_value = float(value)
+        value_range = None
         try:
-            声明 = self.可调参数() or {}
-            项 = 声明.get(名) or {}
-            范围 = 项.get("范围")
+            declarations = self.adjustable_parameters() or {}
+            item = declarations.get(name) or {}
+            value_range = item.get("range")
         except Exception:                                                # noqa: BLE001
-            # 插件的 可调参数() 出错不该让"改参数"整个失败：退回旧行为（不校验）
-            范围 = None
-        if 范围 is not None:
+            # 参数声明出错不该让"改参数"整个失败：退回旧行为（不校验）
+            value_range = None
+        if value_range is not None:
             try:
-                低, 高 = float(范围[0]), float(范围[1])
-                if not (低 <= 数值 <= 高):
-                    return (f"【{getattr(self, '名称', type(self).__name__)}】"
-                            f"参数「{名}」超出范围：{数值:g} 不在 [{低:g}, {高:g}] 内")
+                low, high = float(value_range[0]), float(value_range[1])
+                if not (low <= numeric_value <= high):
+                    return (f"【{getattr(self, 'name', type(self).__name__)}】"
+                            f"参数「{name}」超出范围：{numeric_value:g} 不在 [{low:g}, {high:g}] 内")
             except (TypeError, ValueError, IndexError):
                 pass                       # 范围写得不规范就跳过校验，不因它拦住改参数
         try:
-            setattr(self, 名, 数值)
+            setattr(self, name, numeric_value)
             return ""
-        except Exception as 异常:                                        # noqa: BLE001
-            return f"设置 {名} 失败：{异常}"
+        except Exception as exc:                                        # noqa: BLE001
+            return f"设置 {name} 失败：{exc}"
 
-    def 收到模型(self, event) -> None:
+    def receive_model(self, event) -> None:
         """可选：模型加载后调一次。要记住模型/数据对象时在这里拿（比如做逆运动学）。"""
         return None
 
-    def 模型兼容性(self, 模型) -> str:
+    def check_model_compatibility(self, model) -> str:
         """可选：**切换模型前**的兼容性预检。返回 "" = 兼容；否则返回人话原因。
 
         ★ 为什么要有这个钩子（这是踩过坑才加的）：
@@ -239,7 +240,7 @@ class 控制插件:
         """
         return ""
 
-    def 绑定模型路径(self, 路径: str) -> None:
+    def bind_model_path(self, path: str) -> None:
         """可选：模型文件路径变化时调一次（要按路径查表、重建模型的插件用它）。
 
         ★ 以前这个钩子只存在于 `外壳/启动.py` 的 `hasattr` 探测里，基类没声明，
@@ -247,7 +248,7 @@ class 控制插件:
         """
         return None
 
-    def 模型已切换(self, 路径: str, 模型, 数据) -> None:
+    def model_changed(self, path: str, model, data) -> None:
         """可选：换模型**之后**调一次 —— 清掉跟旧模型绑定的缓存与中间结果。
 
         与 `模型兼容性` 的分工：
@@ -264,20 +265,11 @@ class 控制插件:
 # ---------------------------------------------------------------------------
 # ③ 安全注册表：插件出错隔离（官方没有，这是我们要补的第一个功能）
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# ★★ 契约例外（2026-09-22，第 7 步"显示模式"）★★
-# 本文件属于被 `零改动自检.py` 哈希钉住的 3 个核心文件之一。为了让仿真侧插件能
-# "再派发一条消息"（【Display】展示模式要在官方 StepControl 之前改写暂停快照），
-# 在这里加了下面这一小段（`_当前注册表` + `取注册表()`，共 ~10 行），
-# 并在 `安全注册表.__init__` 里登记一行。**这是目前唯一的例外**，
-# 已用 `零改动自检.py --建立` 更新基准；日后若要去掉，请同步删除这两处。
-# 之所以不放在 启动.py：那样改的是"外壳主循环"，风险比加一个只读访问器大得多。
-# ---------------------------------------------------------------------------
 # 当前生效的注册表（给"仿真侧插件"一个正规的取用入口）
 #
 # ★ 为什么需要它：插件有时要"再派发一条消息"（例如【Display】展示模式要在官方 StepControl
 #   之前把暂停状态改写掉）。派发的唯一入口是 `安全注册表.处理消息`，而插件拿不到它 —— 
-#   这个函数就是那个入口。放在本文件而不是 启动.py，是为了**不动被哈希钉住的外壳核心文件**。
+#   这个函数就是那个受控入口。
 # ---------------------------------------------------------------------------
 _当前注册表 = None
 
@@ -292,23 +284,12 @@ def 取注册表():
 
 
 # ---------------------------------------------------------------------------
-# ★★ 契约例外 ②（方案 C，项目清单驱动装配）★★
 # 背景：以前"用哪些算法"写在 `主程序.py` 的【插件清单】里，启动后永不改变；
 #       方案 C 改成由 `项目/xxx.json` 声明，**点模型 → 换一组算法**。
 #       于是需要"运行期替换用户算法集合"这个能力 —— 而它就是 `安全注册表` 的本职
 #       （它拥有 `_用户插件` 这本账），所以加在这里，而不是让外壳去 append 私有列表。
 #
-# 加的东西（只有两处）：
-#       ① `设用户插件(插件列表)` —— 把这个方法加在 `安全注册表` 上（见类里）
-#       ② 本注释块（不影响行为，只是把这次例外登记在案）
-#
-# 与例外 ① 的关系：例外 ① 是"给插件一个只读入口"，例外 ② 是"让外壳换一组插件"。
-# 两条都是**受控的、有名字的**改动，不是把私有属性捅开随便改。
-#
-# 日后若要去掉：删掉 `设用户插件` 这个方法 + 本注释块，并把 启动.py 里的
-# `注册表.设用户插件(...)` 调用一起删掉；然后跑
-#       .venv/bin/python 软件/零改动自检.py --建立
-# 刷新哈希基准，并在 CHANGELOG 记一行"为什么改、删了什么"。
+# `SafeRegistry` 负责替换用户插件集合，运行引擎无需直接修改它的私有列表。
 # ---------------------------------------------------------------------------
 class 固定一步:
     """每次 StepEvent 恰好推进一个物理步；供离线批处理实验使用。
@@ -337,11 +318,13 @@ class 实时固定步进:
         self._速度倍率 = 1.0
 
     @messages.handler
-    def 设置速度(self, 命令: 仿真控制命令) -> bool:
-        动作 = str(getattr(命令, "动作", "") or "")
-        if 动作 not in ("设置速度", "speed"):
+    def 设置速度(self, 命令: SimulationControlCommand) -> bool:
+        动作 = str(getattr(命令, "action", "") or "")
+        if 动作 != "speed":
             return False
-        self._速度倍率 = max(0.25, min(4.0, float(getattr(命令, "倍率", 1.0))))
+        self._速度倍率 = max(
+            0.25, min(4.0, float(getattr(命令, "speed_multiplier", 1.0)))
+        )
         # 重新从当前墙钟对齐，防止切换倍率后追赶旧节拍而突然连跑。
         self._下一步时刻 = None
         return False
@@ -420,6 +403,10 @@ class 安全注册表:
         if 判据 not in self._冻结判据:
             self._冻结判据.append(判据)
 
+    def add_freeze_predicate(self, predicate) -> None:
+        """English runtime entry point for built-in simulation controls."""
+        self.加冻结判据(predicate)
+
     def 移走冻结判据(self, 判据) -> None:
         """注销判据（换模型/卸载内置件时用）。"""
         try:
@@ -471,7 +458,7 @@ class 安全注册表:
             if 名 in self._已停用:
                 continue
             try:
-                细节 = 插件.插件状态()
+                细节 = 插件.status()
             except Exception:                                 # noqa: BLE001
                 continue
             行.append(名 + "(" + "、".join(f"{k}={v}" for k, v in 细节.items()) + ")")
@@ -480,7 +467,9 @@ class 安全注册表:
     @staticmethod
     def _名字(插件) -> str:
         # 允许实例自带名字，否则用类名
-        return str(getattr(插件, "名称", None) or type(插件).__name__)
+        return str(
+            getattr(插件, "name", None) or type(插件).__name__
+        )
 
     def 处理消息(self, 消息) -> None:
         """带隔离地派发一条消息。
@@ -506,6 +495,10 @@ class 安全注册表:
             if 名 in self._已停用:
                 continue
             self._单独派发(插件, 消息)
+
+    def process_message(self, message) -> None:
+        """English runtime entry point for redispatched Studio messages."""
+        self.处理消息(message)
 
     def _单独派发(self, 插件, 消息) -> None:
         """只把消息交给这一个插件；它崩了就隔离它。"""
@@ -589,7 +582,7 @@ def 版本自检() -> dict:
 # ---------------------------------------------------------------------------
 # ⑤ 插件清单
 # ---------------------------------------------------------------------------
-def 打印插件清单(插件列表: list, 项目名: str = "") -> None:
+def print_plugin_list(插件列表: list, 项目名: str = "") -> None:
     """打印"这一组装了哪些算法"。
 
     ★ 方案 C 之后加算法**不再改代码**：把 .py 放进 `算法库/`，在项目的 `算法`
@@ -601,15 +594,15 @@ def 打印插件清单(插件列表: list, 项目名: str = "") -> None:
           f"（加算法：把 .py 放进 算法库/，在项目文件的 算法 字段里写上它；"
           f"参见 --列项目）")
     for i, 插件 in enumerate(插件列表, 1):
-        名 = str(getattr(插件, "名称", type(插件).__name__))
-        版 = str(getattr(插件, "版本", "-"))
-        作 = str(getattr(插件, "作者", "") or "")
-        说 = str(getattr(插件, "说明", "") or "")
+        名 = str(getattr(插件, "name", type(插件).__name__))
+        版 = str(getattr(插件, "version", "-"))
+        作 = str(getattr(插件, "author", "") or "")
+        说 = str(getattr(插件, "description", "") or "")
         print(f"  {i}. 【{名}】 v{版}" + (f"  —— {作}" if 作 else ""))
         if 说:
             print(f"     {说}")
         try:
-            额外 = 插件.插件状态()
+            额外 = 插件.status()
         except Exception:                                     # noqa: BLE001
             额外 = {}
         if 额外:
@@ -617,8 +610,8 @@ def 打印插件清单(插件列表: list, 项目名: str = "") -> None:
     print()
 
 
-def 通知模型加载(插件列表: list, model, data, 算法信息: list | None = None,
-                项目名: str = "") -> None:
+def notify_model_loaded(插件列表: list, model, data, 算法信息: list | None = None,
+                        项目名: str = "") -> None:
     """模型准备好 / 换了模型之后，告诉每个插件一声。
 
     插件要缓存 model/data 时用 `event.model` / `event.data`。
@@ -627,37 +620,38 @@ def 通知模型加载(插件列表: list, model, data, 算法信息: list | Non
       一段"这次装的是哪些算法、各自参数多少"的描述，由外壳用
       `收集算法信息()` 现算出来。事件对象上带 `算法信息` 属性，插件直接取用：
 
-          def 收到模型(self, event):
-              self.算法信息 = getattr(event, "算法信息", [])   # 写录制元信息用
+          def receive_model(self, event):
+              self.algorithm_info = getattr(event, "algorithm_info", [])
 
       为什么由外壳算、而不是让插件去问注册表：注册表里混着内部插件
       （模型应用器/参数应用器/StepControl），"哪些是用户算法"这本账只有外壳清楚。
       数据录制插件原来就是因为没有这条信息，写出来的元信息里算法清单一直是空的。
 
-    ★ `项目名` 同样挂在事件上（`event.项目名`）：元信息里记下"这次属于哪个项目"，
+    ★ `project_name` 同样挂在事件上：元信息里记下"这次属于哪个项目"，
       配合项目文件里的模型/参数，一条录制数据才真正可追溯。
     """
     信息 = list(算法信息 or [])
     # 事件对象用 type(...) 现场造：官方没有"模型加载"事件类型（StepEvent 是每步的），
     # 这里只要一个能挂属性的轻量载体，不值得为它往 messages 里加一个新类型。
-    事件 = type("模型事件", (), {"model": model, "data": data,
-                                 "算法信息": 信息, "插件列表": 插件列表,
-                                 "项目名": str(项目名 or "")})()
+    事件 = type("ModelLifecycleEvent", (), {
+        "model": model,
+        "data": data,
+        "algorithm_info": 信息,
+        "plugins": 插件列表,
+        "project_name": str(项目名 or ""),
+    })()
     for 插件 in 插件列表:
-        # New plugins use the English lifecycle hook; legacy plugins keep the
-        # original Chinese hook during the incremental migration.
         回调 = getattr(插件, "receive_model", None)
-        if 回调 is None:
-            回调 = getattr(插件, "收到模型", None)
         if 回调 is None:
             continue
         try:
             回调(事件)
         except Exception as 异常:                                  # noqa: BLE001
-            print(f"⚠ 插件【{getattr(插件, '名称', 插件)}】处理模型时出错：{异常}")
+            插件名 = getattr(插件, "name", None) or 插件
+            print(f"⚠ 插件【{插件名}】处理模型时出错：{异常}")
 
 
-def 收集算法信息(插件列表: list) -> list[dict]:
+def collect_algorithm_info(插件列表: list) -> list[dict]:
     """把"这一组装了哪些算法、各自参数现在是多少"整理成可 JSON 序列化的描述。
 
     这是**可复现性**的关键一环：录制元信息、项目快照都靠它回答
@@ -668,28 +662,28 @@ def 收集算法信息(插件列表: list) -> list[dict]:
         [{"名称": "关节 PD 位置控制", "版本": "1.1", "英文名": "Joint PD position control",
           "参数": {"KP": 200.0, "KD": 30.0}}, …]
 
-    只收"插件自己声明过的可调参数"（`可调参数()` 的键），不 dump 整个 `__dict__` ——
+    只收"插件自己声明过的可调参数"（`adjustable_parameters()` 的键），不 dump 整个 `__dict__` ——
     那里有 model/data 引用、numpy 数组、文件句柄，序列化不了也没意义。
     """
     结果: list[dict] = []
     for 插件 in 插件列表:
-        名称 = str(getattr(插件, "名称", None) or type(插件).__name__)
+        名称 = str(getattr(插件, "name", None) or type(插件).__name__)
         条目 = {
             "名称": 名称,
-            "版本": str(getattr(插件, "版本", "-")),
-            "英文名": str(getattr(插件, "英文名", "") or ""),
+            "版本": str(getattr(插件, "version", "-")),
+            "英文名": str(getattr(插件, "english_name", "") or ""),
             # ★ `接管控制` 必须一起带上：外壳要靠它判断"几个算法在抢同一个方向盘"
             #   （多个都写 ctrl[:] 时只有最后一个生效，被覆盖的等于没挂）。
             #   漏带这个键的后果实测过：会被当成"全都接管"，于是默认项目也误报冲突。
-            "接管控制": bool(getattr(插件, "接管控制", True)),
+            "接管控制": bool(getattr(插件, "takes_control", True)),
             "参数": {},
         }
-        问 = getattr(插件, "可调参数", None)
+        问 = getattr(插件, "adjustable_parameters", None)
         if 问 is not None:
             try:
                 for 参数名, 信息 in (问() or {}).items():
                     try:
-                        条目["参数"][str(参数名)] = float(信息.get("值"))
+                        条目["参数"][str(参数名)] = float(信息.get("value"))
                     except (TypeError, ValueError, AttributeError):
                         continue          # 不是数字的参数不进元信息（元信息要能 JSON 化）
             except Exception as 异常:                                  # noqa: BLE001
@@ -715,7 +709,7 @@ def 滑块目标(ux_state, 默认):
     return 默认
 
 
-def 打印插件状态(插件列表: list, 间隔秒: float = 5.0) -> None:
+def print_plugin_status(插件列表: list, 间隔秒: float = 5.0) -> None:
     """（可选）定期在终端打印插件的运行状态。想要就在主程序里用。"""
     import time
     上次 = time.time()
@@ -727,8 +721,8 @@ def 打印插件状态(插件列表: list, 间隔秒: float = 5.0) -> None:
         行 = []
         for 插件 in 插件列表:
             try:
-                行.append(f"{getattr(插件, '名称', '?')}: " +
-                          "、".join(f"{k}={v}" for k, v in 插件.插件状态().items()))
+                行.append(f"{getattr(插件, 'name', '?')}: " +
+                          "、".join(f"{k}={v}" for k, v in 插件.status().items()))
             except Exception:                                 # noqa: BLE001
                 continue
         if 行:
@@ -738,20 +732,13 @@ def 打印插件状态(插件列表: list, 间隔秒: float = 5.0) -> None:
 # ---------------------------------------------------------------------------
 # Stable English public API
 # ---------------------------------------------------------------------------
-ControlPlugin = 控制插件
-step_handler = 每步
-Priority = 优先级
 FixedStep = 固定一步
 RealtimeFixedStep = 实时固定步进
 SafeRegistry = 安全注册表
 
 get_registry = 取注册表
 check_version = 版本自检
-print_plugin_list = 打印插件清单
-notify_model_loaded = 通知模型加载
-collect_algorithm_info = 收集算法信息
 slider_target = 滑块目标
-print_plugin_status = 打印插件状态
 
 
 __all__ = [

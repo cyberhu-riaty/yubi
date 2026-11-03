@@ -18,30 +18,30 @@
 import { useSyncExternalStore } from "react";
 import { 连接, 猜地址, type 回执, type 帧, type 握手, type 连接状态, type 采样点 } from "./连接";
 
-export interface 项目状态 {
-  项目?: string;
-  模型路径?: string;
-  模型显示名?: string;
-  算法?: Record<string, unknown>[];
-  报告?: string[];
-  算法库?: string[];
-  已存盘?: boolean;
-  控盘?: string;
-  被覆盖?: string[];
-  重力开?: boolean;
+export interface ProjectState {
+  project?: string;
+  model_path?: string;
+  model_display_name?: string;
+  algorithms?: Record<string, unknown>[];
+  report?: string[];
+  algorithm_library?: string[];
+  saved?: boolean;
+  active_controller?: string;
+  overridden_controllers?: string[];
+  gravity_enabled?: boolean;
 }
 
-/** 资产库里的一台机器人（来自后端 `模型桥.取资产清单()` 的真实产物） */
-export interface 资产项 {
-  标识?: string;
-  显示名?: string;
-  类别?: string;
-  自由度?: number;
-  执行器数?: number;
-  许可?: string;
-  可控制?: boolean;
+/** 资产库里的一台机器人（来自后端 `model_bridge.asset_manifest()` 的真实产物） */
+export interface AssetItem {
+  id?: string;
+  display_name?: string;
+  category?: string;
+  dof?: number;
+  actuator_count?: number;
+  license?: string;
+  controllable?: boolean;
   /** 可直接加载的那个文件（= 清单里的「扭矩模型」绝对路径） */
-  路径?: string;
+  path?: string;
 }
 
 /** 运行期系统指标（来自 `系统桥`，1 Hz 一条） */
@@ -57,39 +57,39 @@ export interface 系统状态 {
 }
 
 /** Run / Pause / Reset 后由仿真侧确认的状态；不根据按钮点击自行猜。 */
-export interface 仿真状态 {
-  状态?: "运行" | "暂停" | string;
-  重力开?: boolean;
-  仿真时间?: number;
-  复位次数?: number;
-  速度倍率?: number;
-  说明?: string;
+export interface SimulationState {
+  state?: "running" | "paused" | string;
+  gravity_enabled?: boolean;
+  simulation_time?: number;
+  reset_count?: number;
+  speed_multiplier?: number;
+  description?: string;
 }
 
-export interface 实验项 {
-  注册名?: string;
-  名称?: string;
-  模型?: string;
-  项目?: string;
-  控制器?: string[];
-  停止秒?: number;
-  说明?: string;
-  错误?: string;
+export interface ExperimentItem {
+  key?: string;
+  name?: string;
+  model?: string;
+  project?: string;
+  controllers?: string[];
+  duration_s?: number;
+  description?: string;
+  error?: string;
 }
 
 /** 注册实验的选择、进度和自动导出结果。 */
-export interface 实验状态 {
-  当前?: string;
-  名称?: string;
-  状态?: string;
-  可选?: 实验项[];
-  模型?: string;
-  项目?: string;
-  控制器?: string[];
-  停止秒?: number;
-  已运行秒?: number;
-  结果目录?: string;
-  说明?: string;
+export interface ExperimentState {
+  current?: string;
+  name?: string;
+  status?: string;
+  available?: ExperimentItem[];
+  model?: string;
+  project?: string;
+  controllers?: string[];
+  duration_s?: number;
+  elapsed_s?: number;
+  result_directory?: string;
+  description?: string;
 }
 
 /** 关节目标输入区的权威状态：当前位置来自 MjData，目标来自后端确认。 */
@@ -182,47 +182,47 @@ export interface 告警表 {
   已检出?: number;
 }
 
-/** 轨迹规划结果（来自 `规划桥`） */
-export interface 规划结果 {
-  状态?: string;
-  航点数?: number;
-  自由度?: number;
-  总时长?: number;
-  路径长度?: number;
-  最大关节速度?: number;
-  最大关节加速度?: number;
-  最大关节加加速度?: number;
-  速度余量?: number;
-  加速度余量?: number;
-  加加速度余量?: number;
-  终端速度?: number;
-  平滑偏差?: number;
-  瓶颈关节?: number;
-  瓶颈类型?: string;
-  瓶颈位置?: number;
-  最优下界?: number;
-  实际比下界?: number;
-  限位来源?: string;
-  时间?: string;
-  原因?: string;
-  对比?: {
-    上次时长?: number;
-    本次时长?: number;
-    "时长变化%"?: number;
-    上次最大速度?: number;
-    本次最大速度?: number;
-    上次约束?: string;
-    本次约束?: string;
-    上次sd?: number[];
-    本次sd?: number[];
+/** Trajectory planning result published by ``planning_bridge``. */
+export interface PlanningResult {
+  status?: string;
+  waypoint_count?: number;
+  dof?: number;
+  duration_s?: number;
+  path_length?: number;
+  max_joint_velocity?: number;
+  max_joint_acceleration?: number;
+  max_joint_jerk?: number;
+  velocity_margin?: number;
+  acceleration_margin?: number;
+  jerk_margin?: number;
+  terminal_velocity?: number;
+  smoothing_deviation?: number;
+  bottleneck_joint?: number;
+  bottleneck_type?: string;
+  bottleneck_position?: number;
+  optimal_lower_bound?: number;
+  actual_to_lower_bound?: number;
+  limit_source?: string;
+  timestamp?: string;
+  reason?: string;
+  comparison?: {
+    previous_duration?: number;
+    current_duration?: number;
+    duration_change_percent?: number;
+    previous_max_velocity?: number;
+    current_max_velocity?: number;
+    previous_constraint?: string;
+    current_constraint?: string;
+    previous_speed_axis?: number[];
+    current_speed_axis?: number[];
   };
-  逆解?: string;
-  存盘路径?: string;
-  执行状态?: string;
-  执行进度?: number;
-  包络?: number[];
-  s轴?: number[];
-  sd轴?: number[];
+  inverse_kinematics?: string;
+  output_path?: string;
+  execution_status?: string;
+  execution_progress?: number;
+  envelope?: number[];
+  path_axis?: number[];
+  speed_axis?: number[];
 }
 
 export interface 部署项 {
@@ -242,35 +242,35 @@ export interface 部署状态 {
   出错?: string;
 }
 
-export interface 资产库 {
-  数量?: number;
-  模型?: 资产项[];
+export interface AssetLibrary {
+  count?: number;
+  models?: AssetItem[];
 }
 
-export interface 模型状态 {
-  当前路径?: string;
-  当前显示名?: string;
-  自由度?: number;
-  执行器数?: number;
-  状态?: string;
-  耗时?: number;
+export interface ModelState {
+  current_path?: string;
+  current_display_name?: string;
+  dof?: number;
+  actuator_count?: number;
+  status?: string;
+  duration_s?: number;
 }
 
 /**
  * 一个可调参数。
- * ★ 形状来自后端 `参数桥.采集可调参数()` 的真实产物 —— 不是想象的。
+ * ★ 形状来自后端 `parameter_bridge.collect_parameters()` 的真实产物。
  *   （早先这里写的是 `{值, 最小, 最大}`，与实现不符，导致 `范围` 数组被当对象渲染成乱码。）
  */
-export interface 参数项 {
-  插件?: string;
-  插件英文?: string;
-  插件版本?: string;
-  参数?: string;
-  值?: number;
+export interface ParameterItem {
+  plugin?: string;
+  plugin_english?: string;
+  plugin_version?: string;
+  parameter?: string;
+  value?: number;
   /** [最小, 最大] —— 注意是**数组**，不是两个字段 */
-  范围?: number[];
-  步长?: number;
-  单位?: string;
+  range?: number[];
+  step?: number;
+  unit?: string;
   [键: string]: unknown;
 }
 
@@ -296,16 +296,16 @@ export interface 界面状态 {
   握手: 握手 | null;
   主题计数: Record<string, number>;
   主题速率: Record<string, number>;
-  项目: 快照域<项目状态>;
-  模型: 快照域<模型状态>;
+  项目: 快照域<ProjectState>;
+  模型: 快照域<ModelState>;
   /** 可选模型清单。★ 与 `模型` 区分：那是"当前装的哪台"，这是"能选哪些" */
-  资产: 快照域<资产库>;
+  资产: 快照域<AssetLibrary>;
   /** 运行期系统指标（RTF/步频/内存）。只在仿真侧能量到的量在这里 */
   系统: 快照域<系统状态>;
   /** 全局仿真运行状态（Run / Pause / Reset） */
-  仿真: 快照域<仿真状态>;
+  仿真: 快照域<SimulationState>;
   /** 当前注册实验及自动运行结果 */
-  实验: 快照域<实验状态>;
+  experiment: 快照域<ExperimentState>;
   /** 简单关节控制目标与当前状态 */
   控制: 快照域<控制状态>;
   /** 自检报告 */
@@ -315,17 +315,17 @@ export interface 界面状态 {
   /** 部署包导出状态 */
   部署: 快照域<部署状态>;
   /** 轨迹规划结果 */
-  规划: 快照域<规划结果>;
+  planning: 快照域<PlanningResult>;
   /** 病态告警 */
   告警: 快照域<告警表>;
   /** 设备链路 */
   设备: 快照域<设备连接>;
   /**
-   * 参数表。★ 负载形状是 `{参数: {全名: 参数项}}` —— 外面还包着一层 `参数`。
+   * 参数表。负载形状是 `{parameters: {full_name: ParameterItem}}`。
    * 这里如实声明，别在类型上"美化"成扁平结构：类型与实现对不上时，
    * 错的是类型（实测踩过：少剥一层导致表格渲染出一堆 `--` 行）。
    */
-  参数: 快照域<{ 参数?: Record<string, 参数项> }>;
+  参数: 快照域<{ parameters?: Record<string, ParameterItem> }>;
   辨识: 快照域<辨识状态>;
   /** {曲线名: 采样点[]} —— 只留最近 N 个点 */
   曲线: Record<string, 采样点[]>;
@@ -351,12 +351,12 @@ let 状态: 界面状态 = {
   资产: { ...空快照 },
   系统: { ...空快照 },
   仿真: { ...空快照 },
-  实验: { ...空快照 },
+  experiment: { ...空快照 },
   控制: { ...空快照 },
   诊断: { ...空快照 },
   插件: { ...空快照 },
   部署: { ...空快照 },
-  规划: { ...空快照 },
+  planning: { ...空快照 },
   告警: { ...空快照 },
   设备: { ...空快照 },
   参数: { ...空快照 },
@@ -426,8 +426,8 @@ export function 起连接(): () => void {
 function 收帧(帧: 帧): void {
   const 墙钟 = (帧.墙钟 ?? Date.now() / 1000) as number;
   switch (帧.主题) {
-    case "资产库":
-      换((s) => ({ ...s, 资产: { 数据: 帧.数据 as 资产库, 帧号: 帧.序号 ?? 0, 墙钟 } }));
+    case "model.library":
+      换((s) => ({ ...s, 资产: { 数据: 帧.数据 as AssetLibrary, 帧号: 帧.序号 ?? 0, 墙钟 } }));
       return;
     case "设备连接":
       换((s) => ({ ...s, 设备: { 数据: 帧.数据 as 设备连接, 帧号: 帧.序号 ?? 0, 墙钟 } }));
@@ -435,8 +435,11 @@ function 收帧(帧: 帧): void {
     case "告警":
       换((s) => ({ ...s, 告警: { 数据: 帧.数据 as 告警表, 帧号: 帧.序号 ?? 0, 墙钟 } }));
       return;
-    case "规划结果":
-      换((s) => ({ ...s, 规划: { 数据: 帧.数据 as 规划结果, 帧号: 帧.序号 ?? 0, 墙钟 } }));
+    case "planning.result":
+      换((s) => ({
+        ...s,
+        planning: { 数据: 帧.数据 as PlanningResult, 帧号: 帧.序号 ?? 0, 墙钟 },
+      }));
       return;
     case "部署":
       换((s) => ({ ...s, 部署: { 数据: 帧.数据 as 部署状态, 帧号: 帧.序号 ?? 0, 墙钟 } }));
@@ -450,16 +453,16 @@ function 收帧(帧: 帧): void {
     case "系统":
       换((s) => ({ ...s, 系统: { 数据: 帧.数据 as 系统状态, 帧号: 帧.序号 ?? 0, 墙钟 } }));
       return;
-    case "仿真状态": {
-      const 下一 = 帧.数据 as 仿真状态;
+    case "simulation.state": {
+      const 下一 = 帧.数据 as SimulationState;
       换((s) => {
         const 上一 = s.仿真.数据;
-        const 复位发生 = typeof 上一?.复位次数 === "number"
-          && typeof 下一.复位次数 === "number"
-          && 下一.复位次数 > 上一.复位次数;
-        const 时间回退 = typeof 上一?.仿真时间 === "number"
-          && typeof 下一.仿真时间 === "number"
-          && 下一.仿真时间 + 1e-9 < 上一.仿真时间;
+        const 复位发生 = typeof 上一?.reset_count === "number"
+          && typeof 下一.reset_count === "number"
+          && 下一.reset_count > 上一.reset_count;
+        const 时间回退 = typeof 上一?.simulation_time === "number"
+          && typeof 下一.simulation_time === "number"
+          && 下一.simulation_time + 1e-9 < 上一.simulation_time;
         const 开启新曲线 = 复位发生 || 时间回退;
         return {
           ...s,
@@ -471,23 +474,26 @@ function 收帧(帧: 帧): void {
       });
       return;
     }
-    case "实验状态":
-      换((s) => ({ ...s, 实验: { 数据: 帧.数据 as 实验状态, 帧号: 帧.序号 ?? 0, 墙钟 } }));
+    case "experiment.state":
+      换((s) => ({
+        ...s,
+        experiment: { 数据: 帧.数据 as ExperimentState, 帧号: 帧.序号 ?? 0, 墙钟 },
+      }));
       return;
     case "控制状态":
       换((s) => ({ ...s, 控制: { 数据: 帧.数据 as 控制状态, 帧号: 帧.序号 ?? 0, 墙钟 } }));
       return;
-    case "项目状态":
-      换((s) => ({ ...s, 项目: { 数据: 帧.数据 as 项目状态, 帧号: 帧.序号 ?? 0, 墙钟 } }));
+    case "project.state":
+      换((s) => ({ ...s, 项目: { 数据: 帧.数据 as ProjectState, 帧号: 帧.序号 ?? 0, 墙钟 } }));
       return;
-    case "模型状态":
-      换((s) => ({ ...s, 模型: { 数据: 帧.数据 as 模型状态, 帧号: 帧.序号 ?? 0, 墙钟 } }));
+    case "model.state":
+      换((s) => ({ ...s, 模型: { 数据: 帧.数据 as ModelState, 帧号: 帧.序号 ?? 0, 墙钟 } }));
       return;
-    case "参数表":
+    case "parameter.table":
       换((s) => ({
         ...s,
         参数: {
-          数据: 帧.数据 as { 参数?: Record<string, 参数项> },
+          数据: 帧.数据 as { parameters?: Record<string, ParameterItem> },
           帧号: 帧.序号 ?? 0,
           墙钟,
         },
@@ -535,51 +541,61 @@ function 淘汰(点: 采样点[], 现在: number): 采样点[] {
 // 命令（都走"校验 + 回执"，见 连接.ts）
 // ---------------------------------------------------------------------------
 export const 命令 = {
-  加载实验(实验: string) {
-    return 后端.发命令("命令.实验", { 动作: "加载", 实验 });
+  loadExperiment(experiment: string) {
+    return 后端.发命令("command.experiment", { action: "load", experiment });
   },
-  控制仿真(动作: "运行" | "暂停" | "复位") {
-    return 后端.发命令("命令.仿真", { 动作 });
+  controlSimulation(action: "run" | "pause" | "reset") {
+    return 后端.发命令("command.simulation", { action });
   },
-  设置仿真速度(倍率: number) {
-    return 后端.发命令("命令.仿真", { 动作: "设置速度", 倍率 });
+  setSimulationSpeed(speedMultiplier: number) {
+    return 后端.发命令("command.simulation", {
+      action: "speed", speed_multiplier: speedMultiplier,
+    });
   },
-  开物理(开: boolean) {
-    return 后端.发命令("命令.重力", { 重力开: 开 });
+  setGravity(enabled: boolean) {
+    return 后端.发命令("command.gravity", { gravity_enabled: enabled });
   },
   设置控制目标(目标: number[]) {
     return 后端.发命令("命令.控制目标", { 目标 });
   },
-  记录航点() {
-    return 后端.发命令("命令.规划", { 动作: "记录航点" });
+  recordWaypoint() {
+    return 后端.发命令("command.planning", { action: "record_waypoint" });
   },
-  清空航点() {
-    return 后端.发命令("命令.规划", { 动作: "清空航点" });
+  clearWaypoints() {
+    return 后端.发命令("command.planning", { action: "clear_waypoints" });
   },
-  执行轨迹() {
-    return 后端.发命令("命令.规划", { 动作: "执行" });
+  executeTrajectory() {
+    return 后端.发命令("command.planning", { action: "execute" });
   },
-  停止轨迹() {
-    return 后端.发命令("命令.规划", { 动作: "停止执行" });
+  stopTrajectory() {
+    return 后端.发命令("command.planning", { action: "stop_execution" });
   },
-  笛卡尔规划(点们: { xyz: number[] }[], 限位?: { 速度上限?: number[]; 加速度上限?: number[] }) {
-    return 后端.发命令("命令.规划", {
-      动作: "规划",
-      笛卡尔航点: 点们,
-      ...(限位?.速度上限 ? { 速度上限: 限位.速度上限 } : {}),
-      ...(限位?.加速度上限 ? { 加速度上限: 限位.加速度上限 } : {}),
+  planCartesian(points: { xyz: number[] }[], limits?: {
+    velocity_limits?: number[]; acceleration_limits?: number[];
+  }) {
+    return 后端.发命令("command.planning", {
+      action: "plan",
+      cartesian_waypoints: points,
+      ...(limits?.velocity_limits ? { velocity_limits: limits.velocity_limits } : {}),
+      ...(limits?.acceleration_limits
+        ? { acceleration_limits: limits.acceleration_limits } : {}),
     });
   },
-  跑规划(
-    航点?: { 关节: number[] }[],
-    限位?: { 速度上限?: number[]; 加速度上限?: number[]; 加加速度上限?: number[] },
+  planTrajectory(
+    waypoints?: { q: number[] }[],
+    limits?: {
+      velocity_limits?: number[];
+      acceleration_limits?: number[];
+      jerk_limits?: number[];
+    },
   ) {
-    return 后端.发命令("命令.规划", {
-      动作: "规划",
-      ...(航点?.length ? { 航点 } : {}),
-      ...(限位?.速度上限 ? { 速度上限: 限位.速度上限 } : {}),
-      ...(限位?.加速度上限 ? { 加速度上限: 限位.加速度上限 } : {}),
-      ...(限位?.加加速度上限 ? { 加加速度上限: 限位.加加速度上限 } : {}),
+    return 后端.发命令("command.planning", {
+      action: "plan",
+      ...(waypoints?.length ? { waypoints } : {}),
+      ...(limits?.velocity_limits ? { velocity_limits: limits.velocity_limits } : {}),
+      ...(limits?.acceleration_limits
+        ? { acceleration_limits: limits.acceleration_limits } : {}),
+      ...(limits?.jerk_limits ? { jerk_limits: limits.jerk_limits } : {}),
     });
   },
   设备动作(动作: string, 参数?: Record<string, number>) {
@@ -595,18 +611,18 @@ export const 命令 = {
   高亮关节(关节: number, 秒 = 8) {
     return 后端.发命令("命令.高亮", { 关节, 秒 });
   },
-  换模型(路径: string, 显示名 = "") {
-    return 后端.发命令("命令.换模型", { 路径, 显示名 });
+  switchModel(path: string, displayName = "") {
+    return 后端.发命令("command.model", { path, display_name: displayName });
   },
   /** 改参数：键必须是参数表里的全名（形如「插件名·参数名」） */
-  改参数(改动: Record<string, number>) {
-    return 后端.发命令("命令.改参数", { 改动 });
+  updateParameters(updates: Record<string, number>) {
+    return 后端.发命令("command.parameters", { updates });
   },
-  应用算法(算法: string[], 落盘 = false, 重置姿态 = true) {
-    return 后端.发命令("命令.应用算法", {
-      算法: 算法.map((名) => ({ 插件: 名 })),
-      落盘,
-      重置姿态,
+  applyAlgorithms(algorithms: string[], persist = false, resetPose = true) {
+    return 后端.发命令("command.algorithms", {
+      algorithms: algorithms.map((name) => ({ plugin: name })),
+      persist,
+      reset_pose: resetPose,
     });
   },
   开始辨识(时长秒 = 10) {

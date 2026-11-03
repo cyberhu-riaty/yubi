@@ -17,7 +17,7 @@ two_point_task_space.py —— 任务空间控制插件（把教程 10 号脚本
     `messages.Priority` 在本外壳的**跨插件**派发里不参与排序 —— 官方
     `PluginRegistry.dispatch` 会按它降序排，但我们没用官方那条路。
 
-    ⚠️ 所以下面 `@每步(priority=优先级.USER - 1)` 里的 priority **不起作用**：
+    ⚠️ 所以下面 `@step_handler(priority=Priority.USER - 1)` 的 priority **不起作用**：
       它只是把档位信息记在处理器上，本外壳不读它。保留写法是为了贴合官方语义、
       也方便日后真按它排序（那时这个声明就自然生效了）。
       想让某个算法赢 → 在界面【Algorithms】面板把它调到列表最后，或改项目文件的算法列表。
@@ -28,22 +28,22 @@ from __future__ import annotations
 
 import numpy as np
 
-import plugin_system as 插件
+import plugin_system as studio
 from plugin_system import (
-    ControlPlugin as 控制插件,
-    Priority as 优先级,
-    step_handler as 每步,
+    ControlPlugin,
+    Priority,
+    step_handler,
 )
 
 末端站点 = "attachment_site"       # UR5e 法兰往外 0.1 m 的工具中心点（TCP）
 
 
-class 末端两点运动插件(控制插件):
-    名称 = "末端两点运动（任务空间 PD）"
-    版本 = "1.0"
-    英文名 = "Two-point task-space motion"   # 面板上显示用（官方 UI 字体没有中文字形，面板只能画 ASCII）
-    说明 = "让末端在世界坐标里的两个点之间来回走：雅可比转置 + 重力补偿 + 平滑轨迹。"
-    作者 = "数字样机"
+class TwoPointTaskSpaceController(ControlPlugin):
+    name = "末端两点运动（任务空间 PD）"
+    version = "1.0"
+    english_name = "Two-point task-space motion"
+    description = "让末端在世界坐标里的两个点之间来回走：雅可比转置 + 重力补偿 + 平滑轨迹。"
+    author = "数字样机"
 
     # ---- 调参入口 ----
     KP = 2500.0                       # 末端位置刚度（N/m）：越大跟得越紧
@@ -70,7 +70,7 @@ class 末端两点运动插件(控制插件):
     # 兼容性预检：外壳换模型时会先问一句"这个模型你能跑吗"
     #   （契约见 软件/plugin_system.py 的 `ControlPlugin`）
     # ------------------------------------------------------------------
-    def 模型兼容性(self, 模型) -> str:
+    def check_model_compatibility(self, 模型) -> str:
         """要求 6 自由度 + 有 `attachment_site` 这个末端站点。
 
         ★ 为什么是 6：下面的 `_逆运动学()` 解的是 **6 维任务**（3 位置 + 3 姿态），
@@ -99,15 +99,15 @@ class 末端两点运动插件(控制插件):
     # ------------------------------------------------------------------
     # 可选：模型加载后调一次（拿到 model/data 引用，用于做逆运动学）
     # ------------------------------------------------------------------
-    def 收到模型(self, event) -> None:
+    def receive_model(self, event) -> None:
         self.模型, self.数据 = event.model, event.data
 
     # ------------------------------------------------------------------
     # ★ 每转一圈仿真调用一次
     # ------------------------------------------------------------------
-    @每步(priority=优先级.USER - 1)          # ★ 这个 priority 在本外壳里不起作用（见文件头说明）
+    @step_handler(priority=Priority.USER - 1) # priority 在本外壳里不起作用（见文件头说明）
                                               #   谁说了算由装配顺序决定：排最后的赢
-    def 每步控制(self, event: 插件.messages.StepEvent) -> bool:
+    def step(self, event: studio.messages.StepEvent) -> bool:
         模型, 数据 = event.model, event.data
 
         # ★ 空场景（模型/空场景.xml）里没有任何关节与站点。
@@ -128,7 +128,7 @@ class 末端两点运动插件(控制插件):
             self.起始时刻 = float(数据.time)
             self.摆位残差 = 位置残差
             if 位置残差 > 1e-3:
-                print(f"⚠ 【{self.名称}】起点解不出来（残差 {位置残差*1000:.1f} mm）："
+                print(f"⚠ 【{self.name}】起点解不出来（残差 {位置残差*1000:.1f} mm）："
                       f"机器人会被摆到最接近的位形，实际起点与设定不同。")
 
         # ---- 算这一刻的期望点（轨迹插值）----
@@ -207,10 +207,13 @@ class 末端两点运动插件(控制插件):
         return q, 位置残差, 姿态残差
 
     # ------------------------------------------------------------------
-    def 插件状态(self) -> dict:
+    def status(self) -> dict:
         if not self.已摆位:
             return {"状态": "等待第一步"}
         行 = {"步数": self.步数, "最大跟踪误差": f"{self.最大跟踪误差*1000:.2f} mm"}
         if self.摆位残差 is not None and self.摆位残差 > 1e-3:
             行["⚠起点残差"] = f"{self.摆位残差*1000:.1f} mm"
         return 行
+
+
+plugin_class = TwoPointTaskSpaceController

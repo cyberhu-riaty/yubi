@@ -10,12 +10,12 @@ from trajectory_runtime import matching_reference_velocity
 
 
 class JointPDGravityFeedforwardController(ControlPlugin):
-    名称 = "关节 PD＋重力前馈"
-    英文名 = "Joint PD + gravity feedforward"
-    版本 = "1.0"
-    作者 = "数字样机"
-    说明 = "使用位置/速度误差，并叠加由 MuJoCo 模型计算的纯重力力矩。"
-    接管控制 = True
+    name = "关节 PD＋重力前馈"
+    english_name = "Joint PD + gravity feedforward"
+    version = "1.0"
+    author = "数字样机"
+    description = "使用位置/速度误差，并叠加由 MuJoCo 模型计算的纯重力力矩。"
+    takes_control = True
 
     KP = 86.0
     KD = 70.0
@@ -30,7 +30,7 @@ class JointPDGravityFeedforwardController(ControlPlugin):
         self._模型标识 = None
         self._重力数据 = None
 
-    def 模型兼容性(self, 模型) -> str:
+    def check_model_compatibility(self, 模型) -> str:
         nq, nv, nu = int(模型.nq), int(模型.nv), int(模型.nu)
         if nq == 0 or nu == 0:
             return "模型没有关节或执行器"
@@ -39,7 +39,7 @@ class JointPDGravityFeedforwardController(ControlPlugin):
         return ""
 
     @step_handler
-    def 收到面板目标(self, 消息: PanelTargetMessage) -> bool:
+    def on_panel_target(self, 消息: PanelTargetMessage) -> bool:
         try:
             self.界面目标 = np.asarray(消息.ctrl_target, dtype=float).copy()
         except Exception:                                             # noqa: BLE001
@@ -62,7 +62,7 @@ class JointPDGravityFeedforwardController(ControlPlugin):
         return np.asarray(scratch.qfrc_bias, dtype=float).copy()
 
     @step_handler
-    def 每步控制(self, event: studio.messages.StepEvent) -> bool:
+    def step(self, event: studio.messages.StepEvent) -> bool:
         model, data = event.model, event.data
         if data.qpos.size == 0 or data.ctrl.size == 0:
             self.目标 = None
@@ -94,13 +94,13 @@ class JointPDGravityFeedforwardController(ControlPlugin):
             result[limited] = np.clip(result[limited], ranges[limited, 0], ranges[limited, 1])
         return result
 
-    def 可调参数(self) -> dict:
+    def adjustable_parameters(self) -> dict:
         return {
-            "KP": {"值": self.KP, "范围": (1.0, 5000.0), "步长": 1.0},
-            "KD": {"值": self.KD, "范围": (0.0, 500.0), "步长": 0.5},
+            "KP": {"value": self.KP, "range": (1.0, 5000.0), "step": 1.0},
+            "KD": {"value": self.KD, "range": (0.0, 500.0), "step": 0.5},
         }
 
-    def 指标(self) -> dict:
+    def metrics(self) -> dict:
         if not np.isfinite(self.当前误差):
             return {}
         return {
@@ -110,4 +110,4 @@ class JointPDGravityFeedforwardController(ControlPlugin):
         }
 
 
-插件类 = JointPDGravityFeedforwardController
+plugin_class = JointPDGravityFeedforwardController

@@ -3,7 +3,8 @@ plugin_assembler.py —— 按项目把算法文件变成插件实例
 
 它解决什么问题
 ----------------------------------------------------------------------------
-`项目.py` 负责"读声明"，本文件负责"把声明变成活的对象"。中间隔着三件必须小心的事：
+`project_registry.py` 负责"读声明"，本文件负责"把声明变成活的对象"。
+中间隔着三件必须小心的事：
 
 ① 模块名冲突（踩过就知道有多难受）
    `主程序.py` 把 `plugins/` 插进 `sys.path`，用的是平铺 `import`。
@@ -14,7 +15,8 @@ plugin_assembler.py —— 按项目把算法文件变成插件实例
      清掉这个唯一名上一次留下的模块对象。等价于给每个算法文件一个独占命名空间。
 
 ② 类名不写死
-   项目文件里 `类` 字段可以省（推荐省）。省了就在这里按"MRO 是 控制插件 子类"推断：
+   项目文件里 `类` 字段可以省（推荐省）。省了就在这里按
+   "MRO 是 ControlPlugin 子类"推断：
    只有一个候选就用它；有多个才要求显式写 `类` —— 报错信息直接告诉你该写什么。
 
 ③ 一个算法坏了不能拖垮整台软件
@@ -22,8 +24,8 @@ plugin_assembler.py —— 按项目把算法文件变成插件实例
 
 用法
 ----------------------------------------------------------------------------
-    import 装配器
-    实例表, 报告 = 装配器.按项目装配(项目数据)      # 项目数据 可为 None（= 空算法集）
+    import plugin_assembler
+    实例表, 报告 = plugin_assembler.assemble_project(项目数据)
     for 行 in 报告: print(行)                      # 给人看的装配结果
 """
 from __future__ import annotations
@@ -33,7 +35,7 @@ import importlib.util
 import os
 import sys
 
-# 让本模块无论在哪个目录被导入，都能 import 到同目录的 插件系统 / 项目
+# 让本模块无论在哪个目录被导入，都能 import 到同目录的插件与项目模块
 # （和 面板/*.py 里的写法一致：外壳、面板、工具脚本三条入口都能用）
 _软件目录 = os.path.dirname(os.path.abspath(__file__))
 if _软件目录 not in sys.path:
@@ -115,30 +117,30 @@ def 导入算法文件(文件路径: str):
 
 
 def _是首选插件类(对象) -> bool:
-    """继承 `控制插件` 的类（首选，新算法建议这么写）。"""
-    return (isinstance(对象, type) and issubclass(对象, 插件.控制插件)
-            and 对象 is not 插件.控制插件)
+    """继承 `ControlPlugin` 的类（首选，新算法建议这么写）。"""
+    return (isinstance(对象, type) and issubclass(对象, 插件.ControlPlugin)
+            and 对象 is not 插件.ControlPlugin)
 
 
 def _是鸭子插件类(对象) -> bool:
-    """没有继承 `控制插件`、但具备插件契约的类（兼容已有算法）。
+    """没有继承 `ControlPlugin`、但具备插件契约的类（兼容已有算法）。
 
     ★ 为什么需要这一条：本项目的插件**并不都继承基类**，实测 5 个算法里只有 3 个继承
       （`关节PD控制` / `正弦摆动` / `末端两点运动`），另外 2 个
       （`数据录制` / `参数辨识`）是随官方插件约定写的"鸭子类型"类。
       如果这里只认继承，那两个算法就会被装配器判为"不是插件"而静默丢掉。
-      这是一种**已有事实**，不是设计目标 —— 新写的算法仍然建议继承 `控制插件`
-      （基类给了 可调参数/设置参数/收到模型 的默认实现，少写代码）。
+      这是一种**已有事实**，不是设计目标 —— 新写的算法仍然建议继承 `ControlPlugin`
+      （基类给了 adjustable_parameters/set_parameter/receive_model 的默认实现）。
 
-    判定条件（两条都要）：类属性有 `名称`，且至少有一个消息处理方法
-    （`@每步` / `@messages.handler` 打过的，装饰器会留下属性 `_studio_handler_info`）。
+    判定条件（两条都要）：类属性有 `name`，且至少有一个消息处理方法
+    （`@step_handler` / `@messages.handler` 会留下属性 `_studio_handler_info`）。
 
     ★ 属性名取自官方常量 `messages._HANDLER_INFO_ATTR`，不写死字符串 ——
       官方哪天改了属性名，这里跟着变，不会静默失效（和 `骨架/官方接口清单.py` 一个思路）。
     """
-    if not isinstance(对象, type) or 对象 is 插件.控制插件:
+    if not isinstance(对象, type) or 对象 is 插件.ControlPlugin:
         return False
-    if not getattr(对象, "名称", None):
+    if not getattr(对象, "name", None):
         return False
     标记 = getattr(插件.messages, "_HANDLER_INFO_ATTR", "_studio_handler_info")
     for 属性名 in dir(对象):
@@ -159,26 +161,26 @@ def 找插件类(模块, 想要: str = "") -> tuple[type | None, str]:
 
     规则（顺序就是优先级）：
         ① 项目文件里写了 `类` → 就用它（写错则报错，不猜）
-        ② 模块里有 `插件类 = XxxPlugin` → 用它（显式约定）
+        ② 模块里有 `plugin_class = XxxPlugin` → 用它（显式约定）
         ③ 模块里只有一个插件类 → 用它（最常见，所以项目文件可以省 `类`）
         ④ 有多个 → 报错并列出候选，让人在项目文件的 `类` 字段里选一个
 
-    "是插件类"的判定见 `_是插件类`：继承 `控制插件` 的优先，
-    没继承但满足契约（有 `名称` + 有消息处理方法）的也算 —— 因为已有算法就是这么写的。
+    "是插件类"的判定见 `_是插件类`：继承 `ControlPlugin` 的优先，
+    没继承但满足契约（有 `name` + 有消息处理方法）的也算。
     """
     if 想要:
         候选 = getattr(模块, 想要, None)
         if 候选 is None:
             return None, f"模块里没有「{想要}」这个名字"
         if not _是插件类(候选):
-            return None, f"「{想要}」不像一个控制插件（缺 `名称` 或没有任何消息处理方法）"
+            return None, f"「{想要}」不像一个控制插件（缺 `name` 或没有任何消息处理方法）"
         return 候选, ""
 
-    显式 = getattr(模块, "插件类", None)
+    显式 = getattr(模块, "plugin_class", None)
     if 显式 is not None:
         if _是插件类(显式):
             return 显式, ""
-        return None, "模块里的 `插件类` 不像一个控制插件"
+        return None, "模块里的 `plugin_class` 不像一个控制插件"
 
     # 继承基类的优先；一个都没有才退到鸭子类型
     候选们 = [v for v in vars(模块).values() if _是首选插件类(v)] \
@@ -191,7 +193,7 @@ def 找插件类(模块, 想要: str = "") -> tuple[type | None, str]:
     if len(去重) == 1:
         return 去重[0], ""
     if not 去重:
-        return None, "模块里没有控制插件（要么继承 `控制插件`，要么有 `名称` + 一个消息处理方法）"
+        return None, "模块里没有控制插件（要么继承 `ControlPlugin`，要么有 `name` + 一个消息处理方法）"
     return None, ("模块里有多个控制插件：" + "、".join(c.__name__ for c in 去重)
                   + " —— 请在项目文件的 算法 条目里加 \"类\": \"其中一个的名字\"")
 
@@ -199,11 +201,11 @@ def 找插件类(模块, 想要: str = "") -> tuple[type | None, str]:
 def 读元信息(类) -> dict:
     """从插件类上取元信息（面板/清单/录制元信息都要用，所以统一在这里取一次）。"""
     return {
-        "名称": str(getattr(类, "名称", None) or 类.__name__),
-        "版本": str(getattr(类, "版本", "-")),
-        "英文名": str(getattr(类, "英文名", "") or ""),
-        "说明": str(getattr(类, "说明", "") or ""),
-        "作者": str(getattr(类, "作者", "") or ""),
+        "名称": str(getattr(类, "name", None) or 类.__name__),
+        "版本": str(getattr(类, "version", "-")),
+        "英文名": str(getattr(类, "english_name", "") or ""),
+        "说明": str(getattr(类, "description", "") or ""),
+        "作者": str(getattr(类, "author", "") or ""),
     }
 
 
@@ -220,11 +222,11 @@ def 检查兼容性(实例列表: list, 模型) -> tuple[list, list[dict]]:
     能跑的: list = []
     跳过: list[dict] = []
     for 插件 in 实例列表:
-        问 = getattr(插件, "模型兼容性", None)
+        问 = getattr(插件, "check_model_compatibility", None)
         if 问 is None:
             能跑的.append(插件)
             continue
-        名称 = str(getattr(插件, "名称", type(插件).__name__))
+        名称 = str(getattr(插件, "name", type(插件).__name__))
         try:
             原因 = str(问(模型) or "")
         except Exception as 异常:                                          # noqa: BLE001
@@ -281,7 +283,7 @@ def 按项目装配(项目数据: dict | None, 项目名: str = "",
     `模型` 传进来时（外壳换模型/启动时都会传）会多做一次**兼容性预检**：
     跟当前模型不匹配的算法**不启用**，报告里出现一行 `–` 并说明原因。
     于是"界面上挂着的算法"和"真正在跑的算法"永远一致
-    —— 见 `插件系统.控制插件.模型兼容性` 的说明（踩过坑才加的）。
+    —— 见 `plugin_system.ControlPlugin.check_model_compatibility` 的说明。
 
     `算法覆盖` 是**用户当场选的一组算法**（【Algorithms】面板按 Apply 之后走这条）。
       传了它就用它，**忽略项目文件里的 `算法` 字段** —— 但项目名、参数、外观等其余字段
@@ -346,7 +348,7 @@ def 按项目装配(项目数据: dict | None, 项目名: str = "",
 
 # 必需钩子：算法不实现也不报错（有默认行为），但**不该什么都没有**。
 # 检查的是"能不能干活"这件最基本的事，不是风格问题。
-_必需钩子 = ("每步控制",)
+_必需钩子 = ("step",)
 
 
 def _抢方向盘体检(实例列表: list) -> list[str]:
@@ -367,10 +369,10 @@ def _抢方向盘体检(实例列表: list) -> list[str]:
     所以这里把"静默被掩盖"变成**看得见的提示**：列出抢方向盘的算法、指出谁赢。
     只提示、不阻止 —— 有时候"叠两个"是用户故意的（比如想比较谁赢）。
     """
-    抢的 = [p for p in 实例列表 if getattr(p, "接管控制", True)]
+    抢的 = [p for p in 实例列表 if getattr(p, "takes_control", True)]
     if len(抢的) <= 1:
         return []
-    名字 = [str(getattr(p, "名称", type(p).__name__)) for p in 抢的]
+    名字 = [str(getattr(p, "name", type(p).__name__)) for p in 抢的]
     赢家 = 名字[-1]
     输家 = "、".join(名字[:-1])
     return [
@@ -395,7 +397,7 @@ def _钩子体检(实例列表: list) -> list[str]:
         有处理 = any(callable(getattr(实例, 名, None)) and hasattr(getattr(实例, 名), 标记)
                      for 名 in dir(type(实例)) if not 名.startswith("__"))
         if not 有处理:
-            哑的.append(str(getattr(实例, "名称", type(实例).__name__)))
+            哑的.append(str(getattr(实例, "name", type(实例).__name__)))
     return [f"ℹ 这些算法没有任何消息处理方法（挂上也不会干活）：{'、'.join(哑的)}"] if 哑的 else []
 
 

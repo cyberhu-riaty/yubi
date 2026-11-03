@@ -39,7 +39,6 @@ sys.path.insert(0, 本目录)
 import console_support
 
 console_support.prepare_output()
-
 import command_bridge
 import contract
 import experiment_cli
@@ -136,7 +135,7 @@ def 检查() -> int:
         print(f"  ✗ 契约不可用：{异常}")
     # ⑤ 上行命令名（本入口会直接入队的那几个）
     try:
-        for 名 in ("命令.重力", "命令.仿真", "命令.控制目标", "命令.实验"):
+        for 名 in ("command.gravity", "command.simulation", "命令.控制目标", "command.experiment"):
             if contract.get_topic(名) is None:
                 坏 += 1
                 print(f"  ✗ 契约里没有上行命令「{名}」（工作台控制通道不完整）")
@@ -316,11 +315,12 @@ def main(argv: list[str] | None = None) -> int:
         # 走和 Web 命令同一条路：`command_bridge.enqueue_command` → 仿真循环每圈排空。
         # 这样"命令行开的重力"和"界面上点的重力"走的是同一条通道，不会两套逻辑。
         try:
-            # ★ 主题名要用**契约里的名字**（`命令.重力`），不是消息类名（`重力状态`）。
+            # ★ 主题名要用**契约里的名字**（`command.gravity`），不是消息类名。
             #   写错的话 `命令入队` 会回一句"不是登记过的上行命令"，然后静默不入队 ——
             #   表现就是"命令行说要开重力，仿真却一直停在 t=0.00s"（本次实测踩到）。
             好, 说明 = command_bridge.enqueue_command(
-                runtime_engine.command_queue(), "命令.重力", {"重力开": True}, 打印=False)
+                runtime_engine.command_queue(), "command.gravity",
+                {"gravity_enabled": True}, 打印=False)
             if not 好:
                 print(f"  ⚠ 开重力没能入队：{说明}", flush=True)
             print("  ✓ 已请求开重力（装配之后生效）", flush=True)

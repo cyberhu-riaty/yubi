@@ -50,9 +50,9 @@ def _关节标签(model) -> list[str]:
 class 控制目标应用器:
     """校验 GUI 目标，再复用现有 ``面板目标消息`` 交给当前控制算法。"""
 
-    名称 = "控制目标输入"
-    版本 = "1.0"
-    接管控制 = False
+    name = "控制目标输入"
+    version = "1.0"
+    takes_control = False
 
     def __init__(self, 转发: Callable[[object], None]) -> None:
         self._转发 = 转发
@@ -62,7 +62,7 @@ class 控制目标应用器:
         self._来源 = "当前位置"
         self._说明 = "尚未加载可控制模型"
 
-    def 收到模型(self, event) -> None:
+    def receive_model(self, event) -> None:
         新模型 = getattr(event, "model", None)
         新数据 = getattr(event, "data", None)
         真换模型 = self._模型 is not 新模型
