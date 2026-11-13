@@ -37,7 +37,7 @@ from 官方层 import messages          # 全部走适配层，见 软件/官方
 # 仿真侧 → 界面：插件目录
 # ---------------------------------------------------------------------------
 @dataclasses.dataclass(frozen=True)
-class 插件目录(messages.Snapshot):
+class PluginCatalog(messages.Snapshot):
     数量: int = 0
     # 每项：{插件, 分组, 版本, 说明, 作者, 文件, 被项目使用, 当前启用, 当前顺序}
     插件: tuple = ()
@@ -70,44 +70,44 @@ def _读类属性(路径: str) -> dict[str, str]:
         for 子 in 节点.body:
             if not isinstance(子, ast.Assign):
                 continue
-            for 目标 in 子.targets:
-                if not isinstance(目标, ast.Name) or 目标.id not in 元信息字段:
+            for target in 子.targets:
+                if not isinstance(target, ast.Name) or target.id not in 元信息字段:
                     continue
                 if isinstance(子.value, ast.Constant) and isinstance(子.value.value, str):
                     # 第一个带字面量值的类优先（一个文件里通常只有一个插件类）
-                    出.setdefault(元信息字段[目标.id], 子.value.value)
+                    出.setdefault(元信息字段[target.id], 子.value.value)
     return 出
 
 
 def _被项目使用(包根: str) -> dict[str, list[str]]:
     """反查：每个插件被哪些项目用到。数据来自 `项目/*.json` 的 `算法` 列。"""
     import json
-    结果: dict[str, list[str]] = {}
-    目录 = os.path.join(包根, "项目")
+    result: dict[str, list[str]] = {}
+    directory = os.path.join(包根, "项目")
     try:
-        文件名们 = [n for n in os.listdir(目录) if n.endswith(".json") and n != "索引.json"]
+        文件名们 = [n for n in os.listdir(directory) if n.endswith(".json") and n != "索引.json"]
     except OSError:
-        return 结果
-    for 名 in sorted(文件名们):
+        return result
+    for name in sorted(文件名们):
         try:
-            d = json.load(open(os.path.join(目录, 名), encoding="utf-8"))
+            d = json.load(open(os.path.join(directory, name), encoding="utf-8"))
         except Exception:                                             # noqa: BLE001
             continue
-        项目名 = str(d.get("项目") or os.path.splitext(名)[0])
+        project_name = str(d.get("项目") or os.path.splitext(name)[0])
         for 项 in (d.get("算法") or []):
             插件 = str((项 or {}).get("插件") or "") if isinstance(项, dict) else ""
             if 插件:
-                结果.setdefault(插件, []).append(项目名)
-    return 结果
+                result.setdefault(插件, []).append(project_name)
+    return result
 
 
-def 取插件目录(包根: str, 当前算法: list[str] | None = None) -> dict:
+def get_plugin_catalog(包根: str, 当前算法: list[str] | None = None) -> dict:
     """给发布器用：扫 `算法库/` 出清单。
 
     参数
       当前算法 : 当前项目真正启用的插件名（有序）。用来标"已启用"。
     """
-    import project_registry as _项目
+    import project_registry as _project
 
     # 顺序不能只做成 set：多个算法依次写 data.ctrl 时，后执行者可能覆盖前者。
     # 插件目录把真实执行序号一并交给 GUI，避免用户只点一次保存就改变控制顺序。
@@ -115,25 +115,25 @@ def 取插件目录(包根: str, 当前算法: list[str] | None = None) -> dict:
     使用表 = _被项目使用(包根)
     出 = []
     try:
-        发现 = _项目.discover_algorithms()
-    except Exception as 异常:                                         # noqa: BLE001
-        return {"数量": 0, "插件": [], "说明": f"算法库扫描失败：{异常}"}
+        发现 = _project.discover_algorithms()
+    except Exception as exc:                                         # noqa: BLE001
+        return {"数量": 0, "插件": [], "说明": f"算法库扫描失败：{exc}"}
 
     for 项 in 发现:
-        名 = str(项.get("插件", ""))
+        name = str(项.get("插件", ""))
         文件 = str(项.get("文件", ""))
         元 = _读类属性(文件) if 文件 else {}
-        显示名 = 元.get("名称", 名)
-        当前顺序 = 启用顺序.get(名, 启用顺序.get(显示名, -1))
+        显示名 = 元.get("名称", name)
+        当前顺序 = 启用顺序.get(name, 启用顺序.get(显示名, -1))
         出.append({
-            "插件": 名,
+            "插件": name,
             "分组": str(项.get("分组", "")),
             "版本": 元.get("版本", ""),
             "说明": 元.get("说明", ""),
             "作者": 元.get("作者", ""),
             "名称": 显示名,
             "文件": str(项.get("相对包根", "")),
-            "被项目使用": 使用表.get(名, []),
+            "被项目使用": 使用表.get(name, []),
             # ★ 判定"已启用"要同时认两种标识：
             #   · 模块名（`关节pd控制`）—— 项目文件与命令里用的就是它
             #   · 类属性 `名称`（`关节 PD 位置控制`）—— 插件实例上只有这个

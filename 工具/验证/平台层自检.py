@@ -3,7 +3,7 @@
 平台层自检.py —— 守住"入口不碰平台细节"这条边界
 
 背景：
-    `软件/主程序窗口.py` 曾经直接 `import 宿主窗口`（那里面全是 PyObjC / AppKit /
+    旧桌面入口曾经直接 `import 宿主窗口`（那里面全是 PyObjC / AppKit /
     NSOpenGLView / WKWebView）。能跑，但"能跑"不等于"可移植"：
     入口一旦沾上平台，将来做 Windows 版就得从入口一路改进去，也没人知道边界在哪。
 
@@ -30,7 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(包根 / "软件"))
 
 # 入口文件：允许写"业务"，不允许写"平台"
-入口文件 = [包根 / "软件" / "主程序窗口.py"]
+入口文件 = [包根 / "软件" / "desktop_app.py"]
 禁词 = ("宿主窗口", "AppKit", "WebKit", "PyObjC", "import objc", "NSWindow", "NSOpenGLView")
 
 

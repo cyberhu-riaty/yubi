@@ -140,7 +140,7 @@ class ExperimentTrajectoryPlayer(ControlPlugin):
         registry = studio.get_registry()
         if registry is None:
             raise RuntimeError("找不到当前插件注册表，无法发布轨迹目标")
-        registry.处理消息(PanelTargetMessage(ctrl_target=np.asarray(sample.qpos, dtype=float)))
+        registry.process_message(PanelTargetMessage(ctrl_target=np.asarray(sample.qpos, dtype=float)))
         return False
 
     def status(self) -> dict:

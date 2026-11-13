@@ -17,11 +17,11 @@ def apply_experiment(args) -> Experiment | None:
     name = str(getattr(args, "experiment", "") or "").strip()
     if not name:
         return None
-    if getattr(args, "模型", None) or getattr(args, "项目", None):
+    if getattr(args, "model", None) or getattr(args, "project", None):
         raise ValueError("--experiment 已经包含模型和项目，不能同时再给 --模型/--项目")
     experiment = experiment_registry.create(name)
-    args.模型 = str(experiment.model_path)
-    args.项目 = experiment.project
+    args.model = str(experiment.model_path)
+    args.project = experiment.project
     os.environ["驭臂_模型"] = str(experiment.model_path)
     os.environ["YUBI_CURRENT_EXPERIMENT"] = experiment.key
     return experiment

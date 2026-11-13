@@ -1,5 +1,5 @@
 """
-系统桥.py —— 运行期系统监视（P4 · SystemMonitor）
+Publish runtime system health and performance measurements.
 
 它解决什么问题：
     界面能显示"物理在跑"，但说不清**跑得怎么样**：
@@ -37,7 +37,7 @@ from 官方层 import messages          # 全部走适配层，见 软件/官方
 # 仿真侧 → 界面：运行期系统指标
 # ---------------------------------------------------------------------------
 @dataclasses.dataclass(frozen=True)
-class 系统状态(messages.Snapshot):
+class SystemState(messages.Snapshot):
     """运行期系统指标（监控视图的数据源）。
 
     ★ 字段都是"每秒算一次"的瞬时/累计量，**不是**高频变化的东西 ——
@@ -50,46 +50,46 @@ class 系统状态(messages.Snapshot):
     仿真步长: float = 0.0          # 模型的 timestep（秒）
     内存MB: float = 0.0            # 本进程常驻内存
     插件数: int = 0                # 当前装了几个插件
-    出错: str = ""                 # 采样失败时的说明（空 = 正常）
+    errors: str = ""                 # 采样失败时的说明（空 = 正常）
 
 
-def _内存MB() -> float:
+def _memory_mb() -> float:
     """本进程常驻内存（MB）。用标准库，不引依赖（这软件要能离线重建环境）。"""
     try:
         import resource
         # macOS / Linux 的 ru_maxrss 单位不同：macOS 是字节，Linux 是 KB
         import sys
-        值 = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        return 值 / (1024 * 1024) if sys.platform == "darwin" else 值 / 1024
+        value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return value / (1024 * 1024) if sys.platform == "darwin" else value / 1024
     except Exception:                                                 # noqa: BLE001
         return 0.0
 
 
-class 发布器:
+class Publisher:
     """周期性把系统指标发给界面（默认 1 Hz）。
 
     ★ 为什么 1 Hz：这些量的意义在"趋势"，不在"每一帧"。发到 10 Hz 只会
       让监控视图的数字跳得看不清，还白占带宽。
     """
 
-    def __init__(self, 发送函数: Callable[[Any], None], 频率: float = 1.0):
-        self._发送 = 发送函数
-        self._间隔 = 1.0 / max(频率, 1e-6)
-        self._下次 = 0.0
-        self._上次时刻 = time.perf_counter()
-        self._上次仿真时间 = 0.0
-        self._上次步数 = 0
-        self._起始时刻 = time.perf_counter()
-        self.已发布 = 0
-        self.最近: 系统状态 | None = None
+    def __init__(self, send: Callable[[Any], None], frequency: float = 1.0):
+        self._send = send
+        self._interval = 1.0 / max(frequency, 1e-6)
+        self._next_publish = 0.0
+        self._last_time = time.perf_counter()
+        self._last_simulation_time = 0.0
+        self._last_step_count = 0
+        self._start_time = time.perf_counter()
+        self.published_count = 0
+        self.latest: SystemState | None = None
         # ★ 第一次调用只用来**定基准**，不发消息。
         #   否则 RTF = （首次调用时的仿真增量）/（初始化到现在的极短间隔），
         #   实测会算出 RTF=578 这种离谱数字 —— 界面第一个样本就是错的，
         #   而"监控面板一开始显示一个荒谬值"最容易让人以为整个监控是假的。
-        self._已就绪 = False
+        self._baseline_ready = False
 
-    def 也许发布(self, 仿真时间: float, 步数: int, 仿真步长: float,
-                 插件数: int, 墙钟: float) -> bool:
+    def maybe_publish(self, simulation_time: float, steps: int, timestep: float,
+                 plugin_count: int, wall_clock: float) -> bool:
         """到点就采一次并发出。返回是否真的发了。
 
         参数
@@ -99,46 +99,46 @@ class 发布器:
           插件数   : 当前注册表里有几个插件
           墙钟     : `time.perf_counter()`（调用方传，避免这里再取一次导致抖动）
         """
-        if 墙钟 < self._下次:
+        if wall_clock < self._next_publish:
             return False
-        self._下次 = 墙钟 + self._间隔
+        self._next_publish = wall_clock + self._interval
 
-        现在 = time.perf_counter()
-        if not self._已就绪:
+        now = time.perf_counter()
+        if not self._baseline_ready:
             # 只用这一次把基准对齐，不发
-            self._已就绪 = True
-            self._上次时刻 = 现在
-            self._上次仿真时间 = 仿真时间
-            self._上次步数 = 步数
+            self._baseline_ready = True
+            self._last_time = now
+            self._last_simulation_time = simulation_time
+            self._last_step_count = steps
             return False
-        墙钟增量 = max(1e-9, 现在 - self._上次时刻)
-        仿真增量 = 仿真时间 - self._上次仿真时间
-        步增量 = max(0, 步数 - self._上次步数)
+        wall_delta = max(1e-9, now - self._last_time)
+        simulation_delta = simulation_time - self._last_simulation_time
+        step_delta = max(0, steps - self._last_step_count)
 
-        RTF = 仿真增量 / 墙钟增量
-        步频 = 步增量 / 墙钟增量
+        RTF = simulation_delta / wall_delta
+        step_rate = step_delta / wall_delta
 
-        self._上次时刻 = 现在
-        self._上次仿真时间 = 仿真时间
-        self._上次步数 = 步数
+        self._last_time = now
+        self._last_simulation_time = simulation_time
+        self._last_step_count = steps
 
-        状态 = 系统状态(
-            仿真时间=float(仿真时间),
-            墙钟=float(现在 - self._起始时刻),
+        state = SystemState(
+            仿真时间=float(simulation_time),
+            墙钟=float(now - self._start_time),
             RTF=float(RTF),
-            步频=float(步频),
-            仿真步长=float(仿真步长),
-            内存MB=float(_内存MB()),
-            插件数=int(插件数),
-            出错="",
+            步频=float(step_rate),
+            仿真步长=float(timestep),
+            内存MB=float(_memory_mb()),
+            插件数=int(plugin_count),
+            errors="",
         )
-        self.最近 = 状态
+        self.latest = state
         try:
-            self._发送(状态)
-            self.已发布 += 1
+            self._send(state)
+            self.published_count += 1
             return True
-        except Exception as 异常:                                         # noqa: BLE001
+        except Exception as exc:                                         # noqa: BLE001
             # 通道坏了绝不能拖垮仿真
-            if self.已发布 == 0:
-                print(f"⚠ 系统指标发布失败（不影响控制）：{type(异常).__name__}: {异常}")
+            if self.published_count == 0:
+                print(f"⚠ 系统指标发布失败（不影响控制）：{type(exc).__name__}: {exc}")
             return False

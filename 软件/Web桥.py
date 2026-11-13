@@ -28,8 +28,8 @@ Web桥.py —— 把仿真侧的消息开第二个出口：WebSocket + JSON（�
                         （覆盖，不加锁阻塞）
 
 用法：
-    .venv/bin/python 软件/主程序窗口.py              # 主入口（窗口内加载同一套界面）
-    .venv/bin/python 软件/主程序Web.py               # 浏览器入口
+    .venv/bin/python run_yubi.py                      # 主入口（窗口内加载同一套界面）
+    .venv/bin/python run_yubi_web.py                  # 浏览器入口
     浏览器打开 http://127.0.0.1:8712/                # 外部浏览器也能看同一套界面
 
     换端口：--web口 8899

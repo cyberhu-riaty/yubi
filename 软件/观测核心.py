@@ -106,7 +106,7 @@ class 告警:
     曲线t: tuple = ()
     最后见: float = 0.0          # 墙钟：最后一次仍被判为病态的时间
 
-    def 键(self) -> str:
+    def key(self) -> str:
         return f"{self.类型}|{self.信号}"
 
 
@@ -290,7 +290,7 @@ def 判饱和(ts: list[float], vs: list[float], 阈: 阈值) -> dict | None:
 # ---------------------------------------------------------------------------
 # 观测核心
 # ---------------------------------------------------------------------------
-class 观测核心:
+class ObservationCore:
     """喂数据 → 出告警。
 
     用法（外壳里）：
@@ -312,22 +312,22 @@ class 观测核心:
         self.已发出 = 0
 
     # ---- 喂 ----
-    def 记录(self, 仿真时间: float, 数值: dict[str, Any]) -> None:
-        for 名, 值 in (数值 or {}).items():
+    def record(self, 仿真时间: float, 数值: dict[str, Any]) -> None:
+        for name, value in (数值 or {}).items():
             try:
-                self._缓冲.setdefault(str(名), 环形缓冲(self._保留秒)).记(
-                    仿真时间, float(值))
+                self._缓冲.setdefault(str(name), 环形缓冲(self._保留秒)).记(
+                    仿真时间, float(value))
             except (TypeError, ValueError):
                 continue            # 非数值指标（字符串状态之类）不参与判定
         self._上次仿真时间 = float(仿真时间)
 
     # ---- 判 ----
-    def 判定(self, 仿真时间: float, 墙钟: float) -> bool:
+    def evaluate(self, 仿真时间: float, 墙钟: float) -> bool:
         if 墙钟 < self._下次:
             return False
         self._下次 = 墙钟 + self._判定间隔
         self.已判定次数 += 1
-        现在 = 墙钟
+        now = 墙钟
 
         for 信号, 缓冲 in self._缓冲.items():
             阈 = 取阈值(信号)
@@ -347,8 +347,8 @@ class 观测核心:
                     continue            # 单个判定器出错不许影响其它判定，更不许影响仿真
                 if 果 is None:
                     continue
-                键 = f"{类型}|{信号}"
-                旧 = self._活动.get(键)
+                key = f"{类型}|{信号}"
+                旧 = self._活动.get(key)
                 # ★ 抽样窗口只取**最近 6 秒**，并且最多 60 个点。
                 #   第一版取"整段 + 12 个点"：一条 3.7 Hz 的振荡跨 24 秒，
                 #   12 个点画出来只有两个起伏 —— 卡片上写"3.7 Hz"、配图却像 0.1 Hz，
@@ -366,15 +366,15 @@ class 观测核心:
                     建议=建议,
                     曲线=tuple(round(vs[i], 4) for i in 取),
                     曲线t=tuple(round(ts[i] - ts[0], 3) for i in 取),
-                    最后见=现在,
+                    最后见=now,
                 )
                 if 旧 is None:
                     self.已检出 += 1
                     print(f"⚠ 检出【{类型}】{信号}：{新.证据}", flush=True)
-                self._活动[键] = 新
+                self._活动[key] = 新
 
         # 过期清理：一段时间没再被判为病态 → 认为已恢复
-        死了 = [k for k, a in self._活动.items() if 现在 - a.最后见 > 告警留存秒]
+        死了 = [k for k, a in self._活动.items() if now - a.最后见 > 告警留存秒]
         for k in 死了:
             self._活动.pop(k, None)
 
@@ -401,7 +401,7 @@ class 观测核心:
     def 活动告警(self) -> list[告警]:
         return sorted(self._活动.values(), key=lambda a: (a.严重度 != "严重", a.类型))
 
-    def 清空(self, 重置计数: bool = True) -> None:
+    def clear(self, 重置计数: bool = True) -> None:
         """开始新实验/复位/换模型时清除旧时序与旧告警，并立即通知界面。"""
         self._活动.clear()
         self._缓冲.clear()

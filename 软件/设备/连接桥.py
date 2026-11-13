@@ -71,7 +71,7 @@ class 连接状态(messages.Snapshot):
     说明: str = ""
 
 
-class 连接桥:
+class DeviceBridge:
     名称 = "设备连接"
     版本 = "0.1"
 
@@ -83,7 +83,7 @@ class 连接桥:
         self.层: 安全层 | None = None
         self.后: 模拟后端 | None = None
         self.打开次数 = 0
-        self.最近: 连接状态 | None = None
+        self.latest: 连接状态 | None = None
 
     # ---- 懒建后端：界面不点"打开"就不占资源 ----
     def _建(self) -> 安全层:
@@ -104,7 +104,7 @@ class 连接桥:
             elif 动作 == "进运行":
                 self._建().进运行()
             elif 动作 == "停止":
-                self._建().停止("界面请求")
+                self._建().stop_event("界面请求")
             elif 动作 == "急停":
                 self._建().急停("界面请求")
             elif 动作 == "设劣化":
@@ -113,8 +113,8 @@ class 连接桥:
                 self._演练断线()
             elif 动作 == "导出审计":
                 self._导出审计()
-        except Exception as 异常:                                         # noqa: BLE001
-            print(f"⚠ 设备命令「{动作}」失败：{type(异常).__name__}: {异常}", flush=True)
+        except Exception as exc:                                         # noqa: BLE001
+            print(f"⚠ 设备命令「{动作}」失败：{type(exc).__name__}: {exc}", flush=True)
         self._发布()
         return False
 
@@ -131,15 +131,15 @@ class 连接桥:
         后 = self.后
         if 后 is None:
             return
-        for 名 in ("延迟毫秒", "抖动毫秒", "丢包率", "编码器分辨率"):
-            值 = float(getattr(命令, 名, -1.0))
-            if 值 < 0:
+        for name in ("延迟毫秒", "抖动毫秒", "丢包率", "编码器分辨率"):
+            value = float(getattr(命令, name, -1.0))
+            if value < 0:
                 continue
-            if 名 == "编码器分辨率":
+            if name == "编码器分辨率":
                 # 能力表是不可变的，改量化要重建一份（如实反映"换了编码器"）
-                后.能力 = dataclasses.replace(后.能力, 编码器分辨率=值)
+                后.能力 = dataclasses.replace(后.能力, 编码器分辨率=value)
             else:
-                setattr(后, 名, 值)
+                setattr(后, name, value)
         层.审计.记("模式切换",
                     f"劣化参数：延迟 {后.延迟毫秒:.0f}ms、抖动 {后.抖动毫秒:.0f}ms、"
                     f"丢包 {后.丢包率*100:.0f}%、量化 {后.能力.编码器分辨率:g}")
@@ -157,15 +157,15 @@ class 连接桥:
 
     def _导出审计(self) -> None:
         层 = self._建()
-        目录 = os.path.join(self._包根, "输出", "06_部署审计")
-        os.makedirs(目录, exist_ok=True)
-        路径 = os.path.join(目录, f"审计_{time.strftime('%Y%m%d_%H%M%S')}.csv")
+        directory = os.path.join(self._包根, "输出", "06_部署审计")
+        os.makedirs(directory, exist_ok=True)
+        路径 = os.path.join(directory, f"审计_{time.strftime('%Y%m%d_%H%M%S')}.csv")
         条数 = 层.审计.导出csv(路径)
         层.审计.记("安全动作", f"导出审计 {条数} 条 → {os.path.basename(路径)}")
         print(f"【设备】审计已导出 {条数} 条 → {路径}", flush=True)
 
     # ---- 泵：由仿真循环周期调用 ----
-    def 也许泵(self, 墙钟: float, 间隔秒: float = 0.02) -> None:
+    def maybe_pump(self, 墙钟: float, 间隔秒: float = 0.02) -> None:
         """驱动一次链路：读状态（喂看门狗）+ 按 50 Hz 发布。
 
         ★ 为什么必须有人泵：`读状态()` 是**拉式**接口 ——
@@ -183,7 +183,7 @@ class 连接桥:
             self._发布()
 
     # ---- 发布 ----
-    def 也许发布(self, 墙钟: float) -> None:
+    def maybe_publish(self, 墙钟: float) -> None:
         self._发布()
 
     def _发布(self) -> None:
@@ -192,14 +192,14 @@ class 连接桥:
         if 层 is None or 后 is None:
             状态 = 连接状态(后端="（未打开）", 说明="点「打开」才会创建模拟后端")
         else:
-            健 = 层.健康()
+            健 = 层.health()
             最近位置: tuple = ()
             if 层._最近状态 is not None and 层._最近状态.位置:      # noqa: SLF001
                 最近位置 = tuple(float(x) for x in 层._最近状态.位置)  # noqa: SLF001
             审计 = tuple({
                 "时刻": round(条.时刻, 3), "类别": 条.类别,
                 "内容": 条.内容, "错误码": 条.错误码.value,
-            } for 条 in 层.审计.最近(30))
+            } for 条 in 层.审计.latest(30))
             状态 = 连接状态(
                 后端=后.名称,
                 已连接=bool(健.已连接),
@@ -219,7 +219,7 @@ class 连接桥:
                 审计=审计,
                 说明=健.说明,
             )
-        self.最近 = 状态
+        self.latest = 状态
         try:
             self._发送(状态)
         except Exception:                                             # noqa: BLE001

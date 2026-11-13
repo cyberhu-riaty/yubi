@@ -115,12 +115,12 @@ def 扫算法文件的名字解析(路径: str) -> list[str]:
     except SyntaxError as 异常:
         return [f"语法错误：{异常}"]
 
-    模块, 原因 = 装配器.导入算法文件(路径)
+    模块, 原因 = 装配器.import_algorithm_file(路径)
     if 模块 is None:
         return []                              # 导入失败在上面已经报过了，不重复
     本文件名 = os.path.abspath(路径)
 
-    类, 原因 = 装配器.找插件类(模块)
+    类, 原因 = 装配器.find_plugin_class(模块)
     if 类 is None:
         return []                              # 定位不到插件类，上面也报过了
     本文件名 = os.path.abspath(路径)
@@ -221,7 +221,7 @@ def 扫主程序未定义名(路径: str) -> list[str]:
             模块级.update(收集赋值目标(节点))
 
     # ★ 闭包：嵌套函数能读到**外层函数**的局部变量。
-    #   第一版只收集"本函数自己的 Store + 模块级"，于是 `主程序窗口.py` 里
+    #   第一版只收集"本函数自己的 Store + 模块级"，于是旧桌面入口里
     #   嵌套的 `收到状态()` 用到外层的 `视口槽` 就被误报成"未定义"。
     #   这里先把"每个函数的祖先链"建出来，检查时把祖先的局部名也算进来。
     祖先: dict[int, list] = {}
@@ -347,11 +347,11 @@ def main() -> int:
     类名表: dict[str, list[str]] = {}
     导入失败: list[str] = []
     for d in 算法们:
-        模块, 原因 = 装配器.导入算法文件(d["文件"])
+        模块, 原因 = 装配器.import_algorithm_file(d["文件"])
         if 模块 is None:
             导入失败.append(f"{d['插件']}（{原因}）")
             continue
-        类, 原因 = 装配器.找插件类(模块)
+        类, 原因 = 装配器.find_plugin_class(模块)
         if 类 is None:
             导入失败.append(f"{d['插件']}（{原因}）")
             continue
@@ -380,7 +380,7 @@ def main() -> int:
     #   导致双击图标闪退；而开窗冒烟测试因为绕过 main() 而全绿。
     # ★ 入口可能有多个版本（自研窗口 / 官方 ImGui；发布版可能只带其中一个）。
     #   这里**按存在的那个查**，不写死文件名 —— 否则裁掉一个入口，整套校验就红。
-    入口候选 = ["主程序窗口.py", "主程序Web.py", "主程序.py"]
+    入口候选 = ["desktop_app.py", "web_app.py"]
     主程序 = next((os.path.join(软件目录, n) for n in 入口候选
                    if os.path.exists(os.path.join(软件目录, n))), "")
     入口名 = os.path.basename(主程序) if 主程序 else "（无入口）"
@@ -458,14 +458,14 @@ def main() -> int:
         # 算法字段：解析出来的条目必须和"项目里写的"一样多（少一个就说明有引用不到的）
         原始 = 数据.get("算法", "*")
         条目 = 项目.解析算法(数据)
-        想要数 = len(算法们) if isinstance(原始, str) and 原始.strip() in ("*", "全部", "all") \
+        想要数 = len(算法们) if isinstance(原始, str) and 原始.strip() in ("*", "全部", "all")\
             else (len(原始) if isinstance(原始, list) else 0)
         结.检查(f"项目「{名}」声明的算法都能解析", len(条目) == 想要数,
                 f"声明 {想要数} 个、解析出 {len(条目)} 个（详见上面的警告）")
         被引用的算法.update(str(a.get("插件")) for a in 条目)
 
         # 装配一遍（不带模型 → 不做兼容性预检，只看"装得出来吗"）
-        实例, 报告 = 装配器.按项目装配(数据, 名)
+        实例, 报告 = 装配器.assemble_project(数据, 名)
         失败行 = [行 for 行 in 报告 if str(行).startswith("✗")]
         结.检查(f"项目「{名}」能装配出算法", not 失败行, "；".join(失败行))
         if not 实例:

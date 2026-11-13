@@ -88,7 +88,7 @@ def collect_parameters(registry) -> dict[str, dict]:
       面板上要能看出来现在挂的是哪一个。
     """
     table: dict[str, dict] = {}
-    for plugin in getattr(registry, "_目标", []):
+    for plugin in getattr(registry, "_targets", []):
         name = _plugin_name(plugin)
         if not name:
             continue
@@ -187,7 +187,7 @@ class ParameterApplier:
         """
         self._plugin_by_name = {
             _plugin_name(p): p
-            for p in getattr(registry, "_目标", [])
+            for p in getattr(registry, "_targets", [])
             if _plugin_name(p)
         }
         return self

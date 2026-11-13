@@ -104,7 +104,7 @@ class GravityApplier:
         self._remembered_qpos = None          # 没有 home 关键帧时的兜底姿态
         # ★ 重入保护（这里是踩过的真坑）：
         #   冻结时要"补发一条 PAUSED 快照"给官方 StepControl，而补发走的是
-        #   `注册表.处理消息()` —— 那会**再次派发到本插件自己**，于是又改写、又补发……
+        #   `registry.process_message()` —— 那会再次派发到本插件自己，于是又改写、又补发……
         #   实测：`RecursionError: maximum recursion depth exceeded`，
         #   结果**冻结从来没生效过**（报错只在第一次打印，很容易被忽略）。
         #   所以补发之前先立这个旗，看到旗就原样放行、不再改写。
@@ -336,8 +336,8 @@ class GravityApplier:
     def _redispatch(self, snapshot) -> None:
         """把改写后的快照送进内部消息通道，让官方 StepControl 收到。
 
-        通道 = `安全注册表.处理消息`（外壳唯一的派发入口）。插件拿不到注册表引用，
-        所以用 `插件系统.取注册表()` 这个公开访问器（见 插件系统.py 的契约例外 ①）。
+        通道 = `SafeRegistry.process_message`（外壳唯一的派发入口）。插件通过
+        `plugin_system.get_registry()` 取得当前注册表。
 
         ★ `_正在补发` 必须在 finally 里复位：万一官方 StepControl 那边抛异常，
           旗子留在 True 上就再也改不动暂停状态了（冻结会静默失效）。

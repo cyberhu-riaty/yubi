@@ -5,8 +5,8 @@
 
     | 入口 | 窗口 | 界面 | 3D |
     |---|---|---|---|
-    | **`主程序窗口.py`** | **我们自己的 NSWindow** | **窗口内 WKWebView 里的 React** | **✅ 原生 OpenGL 视口** |
-    | `主程序Web.py`     | 无（外部浏览器） | 浏览器里的 React | ❌ 无原生 3D |
+    | **`run_yubi.py`** | **我们自己的 NSWindow** | **窗口内 WKWebView 里的 React** | **✅ 原生 OpenGL 视口** |
+    | `run_yubi_web.py` | 无（外部浏览器） | 浏览器里的 React | ❌ 无原生 3D |
 
 为什么可行：早期架构验证已经证明"原生视图 + WKWebView 同级并列"可行；
 验证过程保留在 Git 历史和 CHANGELOG 中。

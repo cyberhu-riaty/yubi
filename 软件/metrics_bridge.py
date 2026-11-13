@@ -1,5 +1,5 @@
 """
-指标桥.py —— 把"插件里想看的数"送到界面上去画曲线（第 4 步 D1）
+Collect controller metrics and publish them to the workbench.
 
 它解决什么问题：
     官方 19 个面板能看内置量（关节角、接触力…），但**看不到你的控制律算出来的中间量**
@@ -31,11 +31,11 @@ from 官方层 import messages          # 全部走适配层，见 软件/官方
 
 # 发布频率上限：物理是 500 Hz，但曲线不需要那么密（30 Hz 足够顺滑），
 # 而且能避免把通道塞满、避免面板画图成为瓶颈。想改就改这个数。
-发布频率 = 30.0
+PUBLISH_RATE = 30.0
 
 
 @dataclasses.dataclass(frozen=True)
-class 指标消息(messages.Snapshot):
+class MetricsSnapshot(messages.Snapshot):
     """一帧指标快照。Snapshot = 只保留最新一条（旧的不排队，天然适合实时曲线）。
 
     ★ 必须加 @dataclasses.dataclass，否则 pybind 侧取不到字段（实测踩过）。
@@ -46,56 +46,56 @@ class 指标消息(messages.Snapshot):
     数值: dict             # {指标名: 数字}
 
 
-def 采集(注册表) -> dict[str, float]:
+def collect_metrics(registry) -> dict[str, float]:
     """向每个插件要一次指标。插件没写 `metrics()`、或写错了，都只跳过它，不影响别人。"""
-    结果: dict[str, float] = {}
-    for 插件 in getattr(注册表, "_目标", []):
+    result: dict[str, float] = {}
+    for plugin in getattr(registry, "_targets", []):
         # 跳过内置的步进插件（它没有指标）
-        getter = getattr(插件, "metrics", None)
+        getter = getattr(plugin, "metrics", None)
         if getter is None:
             continue
-        名字前缀 = str(getattr(插件, "name", type(插件).__name__))
+        name_prefix = str(getattr(plugin, "name", type(plugin).__name__))
         try:
-            一条 = getter() or {}
-        except Exception as 异常:                                  # noqa: BLE001
+            values = getter() or {}
+        except Exception as exc:                                  # noqa: BLE001
             # 指标采集失败不该影响控制回路
-            print(f"⚠ 插件【{名字前缀}】的 metrics() 出错（已跳过）：{type(异常).__name__}: {异常}")
+            print(f"⚠ 插件【{name_prefix}】的 metrics() 出错（已跳过）：{type(exc).__name__}: {exc}")
             continue
-        for 键, 值 in 一条.items():
+        for key, value in values.items():
             try:
-                结果[f"{名字前缀}·{键}"] = float(值)
+                result[f"{name_prefix}·{key}"] = float(value)
             except (TypeError, ValueError):
                 continue          # 非数字的指标（比如字符串状态）不上曲线
-    return 结果
+    return result
 
 
-class 发布器:
+class Publisher:
     """限频发布指标。放在仿真循环里每圈调一次 `也许发布()` 即可。"""
 
-    def __init__(self, 发送函数: Callable[[Any], None], 频率: float = 发布频率):
-        self._发送 = 发送函数
-        self._间隔 = 1.0 / max(频率, 1e-6)
-        self._下次 = 0.0
-        self.已发布 = 0
-        self.最近: dict[str, float] = {}
+    def __init__(self, send: Callable[[Any], None], frequency: float = PUBLISH_RATE):
+        self._send = send
+        self._interval = 1.0 / max(frequency, 1e-6)
+        self._next_publish = 0.0
+        self.published_count = 0
+        self.latest: dict[str, float] = {}
 
-    def 也许发布(self, 注册表, 仿真时间: float, 单调时钟: float) -> bool:
+    def maybe_publish(self, registry, simulation_time: float, monotonic_time: float) -> bool:
         """到了时间就采集并发一帧。返回是否真的发了。
 
         限频用 ``perf_counter`` 这类单调时钟；但发给前端的横轴必须是
         Unix 墙钟 ``time.time()``。两者混用会让“最近更新”变成十几亿秒前。
         """
-        if 单调时钟 < self._下次:
+        if monotonic_time < self._next_publish:
             return False
-        self._下次 = 单调时钟 + self._间隔
-        数值 = 采集(注册表)
-        self.最近 = 数值
+        self._next_publish = monotonic_time + self._interval
+        metrics = collect_metrics(registry)
+        self.latest = metrics
         try:
-            self._发送(指标消息(时间=仿真时间, 墙钟=time.time(), 数值=数值))
-            self.已发布 += 1
+            self._send(MetricsSnapshot(时间=simulation_time, 墙钟=time.time(), 数值=metrics))
+            self.published_count += 1
             return True
-        except Exception as 异常:                                       # noqa: BLE001
+        except Exception as exc:                                       # noqa: BLE001
             # 通道出问题（比如窗口刚关）不该拖垮仿真
-            if self.已发布 == 0:
-                print(f"⚠ 指标发布失败（不影响控制）：{type(异常).__name__}: {异常}")
+            if self.published_count == 0:
+                print(f"⚠ 指标发布失败（不影响控制）：{type(exc).__name__}: {exc}")
             return False

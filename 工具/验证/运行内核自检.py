@@ -23,9 +23,9 @@ import console_support as 控制台  # noqa: E402
 
 import runtime_engine as 启动  # noqa: E402
 import plugin_system as 插件系统  # noqa: E402
-import command_bridge as 命令桥  # noqa: E402
+import command_bridge  # noqa: E402
 import simulation_control  # noqa: E402
-import 控制桥  # noqa: E402
+import control_bridge  # noqa: E402
 
 
 def 检查队列() -> None:
@@ -47,11 +47,11 @@ def 检查队列() -> None:
     assert len(结果) == 800, f"并发入队后应收到 800 条，实际 {len(结果)}"
     assert len(set(结果)) == 800, "队列中出现重复或丢失"
 
-    好, 说明 = 命令桥.命令入队(
-        待测, "command.gravity", {"gravity_enabled": False}, 打印=False)
+    好, 说明 = command_bridge.enqueue_command(
+        待测, "command.gravity", {"gravity_enabled": False}, print_result=False)
     assert 好, 说明
-    好, 说明 = 命令桥.命令入队(
-        待测, "command.simulation", {"action": "pause"}, 打印=False)
+    好, 说明 = command_bridge.enqueue_command(
+        待测, "command.simulation", {"action": "pause"}, print_result=False)
     assert 好, 说明
     assert len(启动.drain_local_queue()) == 2, "Web 命令没有进入线程安全队列"
 
@@ -99,17 +99,17 @@ def 检查仿真控制语义() -> None:
 
 def 检查控制目标() -> None:
     已转发: list = []
-    应用器 = 控制桥.控制目标应用器(lambda 目标: 已转发.append(目标.copy()))
+    应用器 = control_bridge.ControlTargetApplier(lambda 目标: 已转发.append(目标.copy()))
     模型 = types.SimpleNamespace(nq=2)
     数据 = types.SimpleNamespace(qpos=__import__("numpy").array([0.1, -0.2]))
     应用器.receive_model(types.SimpleNamespace(model=模型, data=数据))
-    应用器.收目标(控制桥.控制目标命令(目标=[0.3, -0.4]))
+    应用器.receive_target(control_bridge.ControlTargetCommand(target=[0.3, -0.4]))
     assert len(已转发) == 2, "模型初始化与手动目标都应转发"
-    assert 应用器.来源 == "手动输入"
-    assert 应用器.目标.tolist() == [0.3, -0.4]
+    assert 应用器.source == "手动输入"
+    assert 应用器.target.tolist() == [0.3, -0.4]
 
-    应用器.收目标(控制桥.控制目标命令(目标=[1.0]))
-    assert 应用器.目标.tolist() == [0.3, -0.4], "维度错误的目标不应覆盖已接受目标"
+    应用器.receive_target(control_bridge.ControlTargetCommand(target=[1.0]))
+    assert 应用器.target.tolist() == [0.3, -0.4], "维度错误的目标不应覆盖已接受目标"
 
 
 def 检查生命周期() -> None:

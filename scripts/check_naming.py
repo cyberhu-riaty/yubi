@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 from pathlib import Path
 
 
@@ -15,7 +16,7 @@ LEGACY_MODULES = {
     "插件系统", "界面桥", "项目",
     "装配器", "命令桥", "控制台", "启动", "官方层", "Web桥",
     "契约", "平台适配层", "主程序窗口", "主程序Web",
-    "参数辨识", "辨识桥", "录制桥",
+    "参数辨识", "辨识桥", "录制桥", "控制桥", "指标桥", "系统桥",
 }
 PUBLIC_MODULES = (
     "plugin_system.py",
@@ -30,6 +31,9 @@ PUBLIC_MODULES = (
     "official_api.py",
     "web_bridge.py",
     "simulation_control.py",
+    "control_bridge.py",
+    "metrics_bridge.py",
+    "system_bridge.py",
     "model_bridge.py",
     "contract.py",
     "platform_adapters/__init__.py",
@@ -46,8 +50,8 @@ PUBLIC_MODULES = (
 MIGRATED_FILES = (
     "run_yubi.py",
     "run_yubi_web.py",
-    "软件/主程序窗口.py",
-    "软件/主程序Web.py",
+    "软件/desktop_app.py",
+    "软件/web_app.py",
     "软件/controller_registry.py",
     "软件/experiment_registry.py",
     "软件/experiment_cli.py",
@@ -77,12 +81,41 @@ LEGACY_ALGORITHM_IDS = {
 }
 REMOVED_LEGACY_MODULES = {
     "实验桥", "规划桥", "轨迹规划", "逆解", "模型加载", "模型桥", "重力桥", "参数桥",
+    "插件系统", "装配器", "项目", "启动", "主程序窗口", "主程序Web",
+    "控制桥", "指标桥", "系统桥",
 }
 REMOVED_PLUGIN_METHODS = {
     "可调参数", "设置参数", "收到模型", "模型兼容性", "每步控制", "每步目标",
     "每步录制", "指标", "插件状态", "绑定模型路径", "模型已切换",
 }
 REMOVED_PLUGIN_ATTRIBUTES = {"名称", "英文名", "版本", "作者", "说明", "接管控制"}
+ASCII_IDENTIFIER_FILES = (
+    "软件/plugin_system.py",
+    "软件/plugin_assembler.py",
+    "软件/runtime_engine.py",
+    "软件/desktop_app.py",
+    "软件/web_app.py",
+)
+HAN = re.compile(r"[\u4e00-\u9fff]")
+
+
+def chinese_identifiers(path: Path) -> list[tuple[int, str]]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        values: list[str] = []
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            values.append(node.name)
+        elif isinstance(node, ast.Name):
+            values.append(node.id)
+        elif isinstance(node, ast.Attribute):
+            values.append(node.attr)
+        elif isinstance(node, ast.arg):
+            values.append(node.arg)
+        elif isinstance(node, ast.keyword) and node.arg:
+            values.append(node.arg)
+        found.extend((getattr(node, "lineno", 0), value) for value in values if HAN.search(value))
+    return found
 
 
 def imported_modules(path: Path) -> list[tuple[int, str]]:
@@ -122,6 +155,14 @@ def main() -> int:
             if module in LEGACY_MODULES:
                 errors.append(f"{relative}:{line} imports legacy module {module}")
 
+    for relative in ASCII_IDENTIFIER_FILES:
+        path = ROOT / relative
+        if not path.is_file():
+            errors.append(f"missing ASCII-identifier module: {relative}")
+            continue
+        for line, name in chinese_identifiers(path):
+            errors.append(f"{relative}:{line} contains Chinese identifier {name}")
+
     algorithm_directory = ROOT / "算法库" / "通用"
     for path in algorithm_directory.glob("*.py"):
         if not path.name.isascii():
@@ -130,7 +171,7 @@ def main() -> int:
     parameter_api_paths = (
         ROOT / "软件" / "plugin_system.py",
         ROOT / "软件" / "parameter_bridge.py",
-        ROOT / "软件" / "控制桥.py",
+        ROOT / "软件" / "control_bridge.py",
         ROOT / "软件" / "experiment_bridge.py",
         *algorithm_directory.glob("*.py"),
     )

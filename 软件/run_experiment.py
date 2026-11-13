@@ -37,7 +37,7 @@ def run(name: str, duration_override: float | None = None) -> str:
     runtime_engine.set_state_observer(recorder.observe)
     # 离线实验按“一个循环 = 一个物理步”尽快计算，不等待真实墙钟；GUI 入口仍使用
     # 官方 StepControl 的实时节拍，两者控制/插件/结果接口完全相同。
-    registry = plugin_system.SafeRegistry(plugins, 步进插件=plugin_system.FixedStep())
+    registry = plugin_system.SafeRegistry(plugins, step_plugin=plugin_system.FixedStep())
     config = plugin_system.viewer_protocol.ViewerConfig(
         title=experiment.name, width=1200, height=800, gfx="")
     try:
@@ -59,10 +59,10 @@ def run(name: str, duration_override: float | None = None) -> str:
                 "动作": "开始",
                 "频率": float(experiment.recording.get("frequency_hz", 100.0)),
                 "备注": f"experiment={experiment.key}",
-            }, 打印=False)
+            }, print_result=False)
         experiment_cli.enqueue_initial_commands(experiment, runtime_engine.command_queue())
         command_bridge.enqueue_command(
-            runtime_engine.command_queue(), "command.simulation", {"action": "run"}, 打印=False)
+            runtime_engine.command_queue(), "command.simulation", {"action": "run"}, print_result=False)
 
         duration = float(duration_override) if duration_override is not None else experiment.duration
         deadline = time.monotonic() + max(20.0, duration * 10.0)
@@ -73,10 +73,10 @@ def run(name: str, duration_override: float | None = None) -> str:
                 f"实验没有在期限内到达 {duration:g}s（当前 {recorder.latest_time:g}s）")
 
         command_bridge.enqueue_command(
-            runtime_engine.command_queue(), "command.simulation", {"action": "pause"}, 打印=False)
+            runtime_engine.command_queue(), "command.simulation", {"action": "pause"}, print_result=False)
         if bool(experiment.recording.get("enabled", True)):
             command_bridge.enqueue_command(
-                runtime_engine.command_queue(), "命令.录制", {"动作": "停止"}, 打印=False)
+                runtime_engine.command_queue(), "命令.录制", {"动作": "停止"}, print_result=False)
         time.sleep(0.3)  # 给仿真线程一小段时间处理暂停与录制收尾命令。
         output = recorder.export()
         print(f"✓ 实验完成：{experiment.key}\n  结果目录：{output}", flush=True)

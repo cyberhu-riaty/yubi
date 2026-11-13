@@ -556,7 +556,7 @@ export const 命令 = {
     return 后端.发命令("command.gravity", { gravity_enabled: enabled });
   },
   设置控制目标(目标: number[]) {
-    return 后端.发命令("命令.控制目标", { 目标 });
+    return 后端.发命令("命令.控制目标", { target: 目标 });
   },
   recordWaypoint() {
     return 后端.发命令("command.planning", { action: "record_waypoint" });

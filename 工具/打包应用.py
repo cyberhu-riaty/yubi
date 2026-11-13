@@ -115,15 +115,15 @@ for CAND in "$PKG_DIR/{主程序相对路径}" {回退候选}; do
   if [ -f "$CAND" ]; then APP_PY="$CAND"; break; fi
 done
 if [ -z "$APP_PY" ]; then
-  osascript -e 'display dialog "找到了包文件夹，但里面找不到主程序。\n\n期望位置：{主程序相对路径} / 软件/主程序窗口.py / 软件/主程序Web.py / 软件/主程序.py" buttons {{"好"}} default button 1 with icon stop' 2>/dev/null
+  osascript -e 'display dialog "找到了包文件夹，但里面找不到主程序。\n\n期望位置：{主程序相对路径} / run_yubi.py / run_yubi_web.py" buttons {{"好"}} default button 1 with icon stop' 2>/dev/null
   echo "✗ 找不到主程序（都试过了）" >> "$LOG"; exit 1
 fi
 
 # 运行期回退：当前入口**非 0 退出**时换下一个（0 = 用户正常关了窗口，不回退）
 回退() {
   case "$APP_PY" in
-    */主程序窗口.py)  次="$PKG_DIR/软件/主程序Web.py" ;;
-    */主程序Web.py)   次="$PKG_DIR/软件/主程序.py" ;;
+    */run_yubi.py)      次="$PKG_DIR/run_yubi_web.py" ;;
+    */run_yubi_web.py)  return 1 ;;
     *)                return 1 ;;
   esac
   [ -f "$次" ] || return 1
@@ -274,10 +274,9 @@ def 生成(包根: str, 软件名: str, 主程序相对路径: str, 标识: str 
     # ★ 用 replace 而不是 str.format：启动器里有大量 shell 的 ${变量} 和 {{ }}，
     #   用 format 会把它们当占位符（实测报 KeyError: '驭臂_包路径'）。
     #
-    # ★ 回退链里要去掉"已经是指定入口"的那一项：否则 `--主程序 软件/主程序窗口.py`
-    #   会生成 `"…/主程序窗口.py" "…/主程序窗口.py"` 这种重复项
+    # ★ 回退链里要去掉"已经是指定入口"的那一项，避免重复候选。
     #   （功能上无害，但读起来像 bug，而且真正的第二候选被挤到后面才试）。
-    候选 = ["软件/主程序窗口.py", "软件/主程序Web.py", "软件/主程序.py"]
+    候选 = ["run_yubi.py", "run_yubi_web.py"]
     去重 = [c for c in 候选 if os.path.normpath(c) != os.path.normpath(主程序相对路径)]
     回退项 = " ".join(f'"$PKG_DIR/{c}"' for c in 去重)
     脚本 = (启动器模板
@@ -412,7 +411,7 @@ def main(argv: list[str]) -> int:
                          "同一台机器上有两个前端时用它区分文件，显示名仍可一致")
     ap.add_argument("--附加参数", default="",
                     help="写进启动器的固定参数（双击传不了参数，所以固定参数要落在包里）")
-    ap.add_argument("--主程序", default="软件/主程序窗口.py",
+    ap.add_argument("--主程序", default="run_yubi.py",
                     help="主程序相对于包根的路径")
     ap.add_argument("--标识", default=None,
                     help="Bundle Identifier（默认：沿用已有的；没有则按名字自动派生一个唯一 id）")

@@ -77,7 +77,7 @@ class 主题:
 # ---------------------------------------------------------------------------
 _下行 = (
     主题(
-        名="指标", 类名="指标消息", 方向="下行", 种类="快照",
+        名="指标", 类名="MetricsSnapshot", 方向="下行", 种类="快照",
         摘要="插件 指标() 报上来的实时数值，曲线的数据源（30 Hz 限频）",
         字段=(
             字段("时间", "number", "仿真时间（秒）"),
@@ -224,7 +224,7 @@ _下行 = (
         ),
     ),
     主题(
-        名="插件目录", 类名="插件目录", 方向="下行", 种类="快照",
+        名="插件目录", 类名="PluginCatalog", 方向="下行", 种类="快照",
         摘要="本机算法库里的插件清单（含版本/说明/作者/被哪些项目用到）",
         字段=(
             字段("数量", "number", "共几个"),
@@ -247,7 +247,7 @@ _下行 = (
         ),
     ),
     主题(
-        名="系统", 类名="系统状态", 方向="下行", 种类="快照",
+        名="系统", 类名="SystemState", 方向="下行", 种类="快照",
         摘要="运行期系统指标（1 Hz）：实时率、步频、内存 —— 监控视图的数据源",
         字段=(
             字段("仿真时间", "number", "累计仿真时间（秒）"),
@@ -290,7 +290,7 @@ _下行 = (
         ),
     ),
     主题(
-        名="控制状态", 类名="控制状态", 方向="下行", 种类="快照",
+        名="控制状态", 类名="ControlState", 方向="下行", 种类="快照",
         摘要="关节目标输入区的数据源：当前位置、速度、控制量与已接受目标",
         字段=(
             字段("关节名", "string[]", "与 qpos 顺序对应的关节/坐标名称"),
@@ -417,9 +417,9 @@ _上行 = (
         ),
     ),
     主题(
-        名="命令.控制目标", 类名="控制目标命令", 方向="上行", 种类="命令",
+        名="命令.控制目标", 类名="ControlTargetCommand", 方向="上行", 种类="命令",
         摘要="设置一组关节位置目标；由当前控制算法决定如何跟踪，不直接写 data.ctrl",
-        字段=(字段("目标", "number[]", "按 qpos 顺序，转动关节单位 rad"),),
+        字段=(字段("target", "number[]", "按 qpos 顺序，转动关节单位 rad"),),
     ),
     主题(
         名="command.model", 类名="SwitchModelCommand", 方向="上行", 种类="命令",
@@ -605,7 +605,8 @@ def 查漂移() -> list[str]:
         sys.path.insert(0, 软件目录)
 
     源模块 = {
-        "指标消息": "指标桥", "ParameterTable": "parameter_bridge",
+        "MetricsSnapshot": "metrics_bridge", "PluginCatalog": "插件桥",
+        "ParameterTable": "parameter_bridge",
         "ParameterUpdate": "parameter_bridge",
         "ParameterTransactionResult": "parameter_bridge",
         "辨识状态": "辨识桥", "ModelState": "model_bridge",
@@ -614,7 +615,7 @@ def 查漂移() -> list[str]:
         "SimulationControlCommand": "simulation_control",
         "ExperimentState": "experiment_bridge", "ExperimentCommand": "experiment_bridge",
         "PlanningResult": "planning_bridge", "PlanningCommand": "planning_bridge",
-        "控制状态": "控制桥", "控制目标命令": "控制桥",
+        "ControlState": "control_bridge", "ControlTargetCommand": "control_bridge",
         "SwitchModelCommand": "model_bridge", "ApplyAlgorithmsCommand": "model_bridge",
         "ParameterTransactionCommand": "parameter_bridge",
         "辨识命令": "辨识桥", "录制命令": "录制桥",

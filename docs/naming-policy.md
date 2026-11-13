@@ -222,6 +222,28 @@ metadata path and lifecycle event fields all consume that API directly; no
 runtime fallback probes the former Chinese names.  User-facing plugin names,
 metric labels and persisted metadata keys remain Chinese data where appropriate.
 
+## Completed batch 21: plugin runtime and assembler internals
+
+`plugin_system.py` and `plugin_assembler.py` now use English identifiers for
+their complete implementations, including fixed-step drivers, safe dispatch,
+runtime plugin replacement, error isolation, dynamic imports, compatibility
+checks and project assembly.  The former end-of-file alias layers were removed,
+and callers use the English methods directly.  The naming check now rejects any
+Chinese Python identifier in these two core modules and prevents the deleted
+plugin, assembler, project and startup compatibility modules from returning.
+Chinese console messages and persisted JSON keys remain intentionally unchanged.
+
+## Completed batch 22: desktop and browser entry points
+
+`desktop_app.py` and `web_app.py` now contain the real desktop and browser-hosted
+startup implementations with English Python identifiers.  The former
+`主程序窗口.py` and `主程序Web.py` implementations and their thin English wrappers
+were collapsed into these two files, then the Chinese modules were deleted.
+Root launchers, packaging, environment setup, validation tools and user manual
+commands now use `run_yubi.py` and `run_yubi_web.py`.  Chinese CLI option aliases
+remain available for users, while argparse destination names and application
+internals are English.
+
 ## Recommended migration order
 
 1. Entry points and command-line options.

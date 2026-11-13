@@ -18,7 +18,7 @@ import console_support  # noqa: E402
 console_support.prepare_output()
 
 import experiment_registry  # noqa: E402
-import command_bridge as 命令桥  # noqa: E402
+import command_bridge  # noqa: E402
 import runtime_engine as 启动  # noqa: E402
 import plugin_system as 插件系统  # noqa: E402
 
@@ -29,7 +29,7 @@ def main() -> int:
     before = {path.resolve() for path in output_root.glob("ur5e_pd_tracking_*")}
 
     empty_scene = ROOT / "模型" / "空场景.xml"
-    registry = 插件系统.SafeRegistry([], 步进插件=插件系统.FixedStep())
+    registry = 插件系统.SafeRegistry([], step_plugin=插件系统.FixedStep())
     config = 插件系统.viewer_protocol.ViewerConfig(
         title="实验 GUI 闭环自检", width=800, height=600, gfx="")
     启动.stop(1.0)
@@ -52,9 +52,9 @@ def main() -> int:
         assert 视口快照数[0] == paused_count, "暂停时仍在重复发送相同3D状态"
 
         queue = 启动.command_queue()
-        ok, reason = 命令桥.命令入队(
+        ok, reason = command_bridge.enqueue_command(
             queue, "command.experiment",
-            {"action": "load", "experiment": experiment.key}, 打印=False)
+            {"action": "load", "experiment": experiment.key}, print_result=False)
         assert ok, reason
         deadline = time.monotonic() + 15.0
         while (os.environ.get("YUBI_CURRENT_EXPERIMENT") != experiment.key
@@ -62,8 +62,8 @@ def main() -> int:
             time.sleep(0.02)
         assert os.environ.get("YUBI_CURRENT_EXPERIMENT") == experiment.key, "实验加载命令未生效"
 
-        ok, reason = 命令桥.命令入队(
-            queue, "command.simulation", {"action": "run"}, 打印=False)
+        ok, reason = command_bridge.enqueue_command(
+            queue, "command.simulation", {"action": "run"}, print_result=False)
         assert ok, reason
         deadline = time.monotonic() + 25.0
         created: list[Path] = []

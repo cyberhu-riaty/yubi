@@ -3,7 +3,7 @@
 #
 # 为什么需要它：
 #   .venv 有 190 MB 左右，且路径写死，不能随仓库分发。
-#   换台机器后先跑这个脚本，再启动 软件/主程序窗口.py。
+#   换台机器后先跑这个脚本，再启动 run_yubi.py。
 #
 # 为什么不用 conda 的 robot 环境直接用：
 #   conda 渠道装的 mujoco 是"零件版"，**不含界面层和插件系统**
@@ -74,7 +74,7 @@ echo "== 4/4 安装界面依赖 =="
 if [ "$(uname -s)" = "Darwin" ]; then
   "$PKG/.venv/bin/pip" install \
       pyobjc-framework-Cocoa pyobjc-framework-WebKit pyobjc-framework-Quartz \
-      || echo "  ⚠ PyObjC 没装上：宿主窗口不可用（可改用 软件/主程序Web.py）"
+      || echo "  ⚠ PyObjC 没装上：宿主窗口不可用（可改用 run_yubi_web.py）"
 else
   echo "  （非 macOS：跳过 PyObjC，宿主窗口不可用）"
 fi
@@ -131,11 +131,11 @@ if sys.platform == "darwin":
         import objc, AppKit, WebKit  # noqa: F401
         print("  ✓ PyObjC（宿主窗口可用）")
     except Exception as e:
-        print("  ⚠ PyObjC 不可用（宿主窗口起不来，可改用 软件/主程序Web.py）：", e)
+        print("  ⚠ PyObjC 不可用（宿主窗口起不来，可改用 run_yubi_web.py）：", e)
 PY
 
 echo
 echo "完成。启动："
-echo "  \"$PKG/.venv/bin/python\" \"$PKG/软件/主程序窗口.py\""
-echo "  （浏览器入口：\"$PKG/.venv/bin/python\" \"$PKG/软件/主程序Web.py\"）"
-echo "  想要双击图标：.venv/bin/python 工具/打包应用.py --主程序 软件/主程序窗口.py"
+echo "  \"$PKG/.venv/bin/python\" \"$PKG/run_yubi.py\""
+echo "  （浏览器入口：\"$PKG/.venv/bin/python\" \"$PKG/run_yubi_web.py\"）"
+echo "  想要双击图标：.venv/bin/python 工具/打包应用.py --主程序 run_yubi.py"

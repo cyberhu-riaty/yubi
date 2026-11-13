@@ -24,6 +24,14 @@ def start(port: int = DEFAULT_PORT, host: str = DEFAULT_HOST) -> Server:
     return _legacy.启动(端口=port, 主机=host)
 
 
+def server_enabled(server: Server) -> bool:
+    return bool(server.启用)
+
+
+def server_error(server: Server) -> str:
+    return str(server.出错 or "")
+
+
 def __getattr__(name: str):
     return getattr(_legacy, name)
 
@@ -31,5 +39,5 @@ def __getattr__(name: str):
 __all__ = [
     "DEFAULT_PORT", "DEFAULT_HOST", "FRONTEND_DIRECTORY", "Server", "Faucet",
     "start", "publish", "health", "close", "get_faucet", "get_commands",
-    "record_dispatch", "install_faucet",
+    "record_dispatch", "install_faucet", "server_enabled", "server_error",
 ]

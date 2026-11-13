@@ -47,7 +47,7 @@ import 契约 as _契约                                                      # 
     "GravityState": "simulation_control",
     "SimulationControlCommand": "simulation_control",
     "ExperimentCommand": "experiment_bridge",
-    "控制目标命令": "控制桥",
+    "ControlTargetCommand": "control_bridge",
     "ParameterUpdate": "parameter_bridge",
     "SwitchModelCommand": "model_bridge",
     "ApplyAlgorithmsCommand": "model_bridge",

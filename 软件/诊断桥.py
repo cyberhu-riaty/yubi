@@ -53,7 +53,7 @@ class 诊断报告(messages.Snapshot):
     时间: str = ""
     # 每项：{名, 通过, 说明, 秒}
     项: tuple = ()
-    出错: str = ""
+    errors: str = ""
 
 
 # 要跑的套件。顺序有意：先跑"与运行环境最相关"的，用户最关心。
@@ -82,27 +82,27 @@ def _跑一项(脚本: str, 包根: str) -> tuple[bool, str, float]:
         # ★ 不猜参数：直接跑脚本的默认行为。
         #   我第一版按脚本名猜着加 `--简`，结果 `校验项目.py` 不认这个参数，
         #   于是"诊断把好脚本报成失败"——诊断自己报假错是最不能接受的那类错。
-        结果 = subprocess.run(
+        result = subprocess.run(
             [sys.executable, 脚本],
             cwd=包根, capture_output=True, text=True, timeout=单项超时秒,
         )
     except subprocess.TimeoutExpired:
         return False, f"超时（>{单项超时秒:.0f}s）", time.perf_counter() - 起
-    except Exception as 异常:                                         # noqa: BLE001
-        return False, f"跑不起来：{type(异常).__name__}: {异常}", time.perf_counter() - 起
+    except Exception as exc:                                         # noqa: BLE001
+        return False, f"跑不起来：{type(exc).__name__}: {exc}", time.perf_counter() - 起
 
     耗时 = time.perf_counter() - 起
-    通过 = 结果.returncode == 0
+    通过 = result.returncode == 0
 
     # 说明：优先取**含结论关键词**的行（那些脚本的结论都带"结果/通过/失败/项"），
     #   取不到才退回最后一行非空。★ 不能只取最后一行 —— 好几个脚本最后一行是
     #   `======` 分隔线，界面上就会显示一整排等号，等于没说。
-    行们 = [l.strip() for l in (结果.stdout or "").splitlines() if l.strip()]
+    行们 = [l.strip() for l in (result.stdout or "").splitlines() if l.strip()]
     关键词 = ("结果", "通过", "失败", "不含", "不在", "全部")
     候选 = [l for l in 行们 if any(k in l for k in 关键词)]
     说明 = (候选[-1] if 候选 else (行们[-1] if 行们 else ""))
     if not 说明:
-        错误行 = [l.strip() for l in (结果.stderr or "").splitlines() if l.strip()]
+        错误行 = [l.strip() for l in (result.stderr or "").splitlines() if l.strip()]
         说明 = 错误行[-1] if 错误行 else "（没有输出）"
     if len(说明) > 130:
         说明 = 说明[:130] + "…"
@@ -113,13 +113,13 @@ def 运行全部(包根: str) -> tuple[list[dict], float]:
     """把 套件表 里每一套真跑一遍。返回 (结果列表, 总耗时)。"""
     起 = time.perf_counter()
     出: list[dict] = []
-    for 名, 脚本 in 套件表:
+    for name, 脚本 in 套件表:
         通过, 说明, 耗时 = _跑一项(脚本, 包根)
-        出.append({"名": 名, "通过": 通过, "说明": 说明, "秒": round(耗时, 2)})
+        出.append({"名": name, "通过": 通过, "说明": 说明, "秒": round(耗时, 2)})
     return 出, time.perf_counter() - 起
 
 
-class 诊断器:
+class DiagnosticsRunner:
     """收到「诊断命令」就在**后台线程**里跑一遍，跑完发「诊断报告」。
 
     ★ 它不做节流、不做缓存：诊断是**用户主动点**的低频操作，
@@ -156,26 +156,26 @@ class 诊断器:
         # 先发一条"运行中"，界面据此把按钮变成"检查中…"
         try:
             self._发送(诊断报告(运行中=True,
-                             时间=time.strftime("%H:%M:%S"), 出错=""))
+                             时间=time.strftime("%H:%M:%S"), errors=""))
         except Exception:                                             # noqa: BLE001
             pass
         项, 耗时 = 运行全部(self._包根)
         通过 = sum(1 for x in 项 if x["通过"])
-        报告 = 诊断报告(
+        report = 诊断报告(
             运行中=False,
             通过=int(通过),
             总数=len(项),
             耗时秒=round(耗时, 2),
             时间=time.strftime("%H:%M:%S"),
             项=tuple(项),
-            出错="",
+            errors="",
         )
-        self._上次 = 报告
+        self._上次 = report
         self.运行次数 += 1
         try:
-            self._发送(报告)
-        except Exception as 异常:                                         # noqa: BLE001
-            print(f"⚠ 诊断报告发送失败：{type(异常).__name__}: {异常}", flush=True)
+            self._发送(report)
+        except Exception as exc:                                         # noqa: BLE001
+            print(f"⚠ 诊断报告发送失败：{type(exc).__name__}: {exc}", flush=True)
 
     def 重发上次(self) -> None:
         """界面刚连上时补一条（不然要等用户点一次才看得到历史）。"""

@@ -37,18 +37,18 @@ import sys
 
 # 让本模块无论在哪个目录被导入，都能 import 到同目录的插件与项目模块
 # （和 面板/*.py 里的写法一致：外壳、面板、工具脚本三条入口都能用）
-_软件目录 = os.path.dirname(os.path.abspath(__file__))
-if _软件目录 not in sys.path:
-    sys.path.insert(0, _软件目录)
+_SOFTWARE_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
+if _SOFTWARE_DIRECTORY not in sys.path:
+    sys.path.insert(0, _SOFTWARE_DIRECTORY)
 
-import plugin_system as 插件                                                # noqa: E402
-import project_registry as _项目                                            # noqa: E402
+import plugin_system as plugin                                                # noqa: E402
+import project_registry as _projects                                            # noqa: E402
 
 # 同一个文件被反复装配时，模块名保持一致（便于排查），但每次都会重建模块对象
-_模块名前缀 = "小软件算法"
+_MODULE_PREFIX = "小软件算法"
 
 
-def _唯一模块名(文件路径: str) -> str:
+def _unique_module_name(file_path: str) -> str:
     """给一个算法文件算一个**不会和别的文件撞车**的模块名。
 
     用相对**包根**的路径（去掉 .py、把分隔符换成点）拼出来，例如：
@@ -60,25 +60,25 @@ def _唯一模块名(文件路径: str) -> str:
       层数不一样，自己数必然错一次（这个坑踩过：多退一层导致模块名为空、
       `发现的算法()` 静默返回空表）。
     """
-    绝对路径 = os.path.abspath(文件路径)
-    相对 = os.path.relpath(绝对路径, _项目.PACKAGE_ROOT)
-    if 相对.startswith(".."):                        # 文件在包根之外 → 用绝对路径兜底
-        相对 = 绝对路径.lstrip(os.sep)
-    主体 = os.path.splitext(相对)[0].replace(os.sep, ".").replace("/", ".")
-    return f"{_模块名前缀}.{主体}"
+    absolute_path = os.path.abspath(file_path)
+    relative_path = os.path.relpath(absolute_path, _projects.PACKAGE_ROOT)
+    if relative_path.startswith(".."):                        # 文件在包根之外 → 用绝对路径兜底
+        relative_path = absolute_path.lstrip(os.sep)
+    stem = os.path.splitext(relative_path)[0].replace(os.sep, ".").replace("/", ".")
+    return f"{_MODULE_PREFIX}.{stem}"
 
 
-def _清掉旧模块(模块名: str) -> None:
+def _clear_cached_module(module_name: str) -> None:
     """卸载这个模块名（含它下面的子模块）—— 保证 import 拿到的是**磁盘上的新代码**。
 
     ★ 为什么必须做：算法是"改文件 → 重启软件"的开发方式，很容易撞上
       "改了代码但跑的还是旧的"。清掉 sys.modules 是唯一可靠的办法。
     """
-    for 键 in [k for k in sys.modules if k == 模块名 or k.startswith(模块名 + ".")]:
-        sys.modules.pop(键, None)
+    for key in [k for k in sys.modules if k == module_name or k.startswith(module_name + ".")]:
+        sys.modules.pop(key, None)
 
 
-def 导入算法文件(文件路径: str):
+def import_algorithm_file(file_path: str):
     """按路径导入一个算法文件，返回 (模块, "")；失败返回 (None, 原因)。
 
     ★ 导入之前会保证两个目录在 `sys.path` 上（算法文件要 import 它们）：
@@ -89,40 +89,40 @@ def 导入算法文件(文件路径: str):
       （迁移时实测撞上：`参数辨识插件` 的 `from 辨识桥 import …` 直接 ImportError）。
       把它写在这里，算法文件就只需要 `import plugin_system`，不必自己操心路径。
     """
-    文件路径 = os.path.abspath(文件路径)
-    if not os.path.isfile(文件路径):
-        return None, f"文件不存在：{文件路径}"
+    file_path = os.path.abspath(file_path)
+    if not os.path.isfile(file_path):
+        return None, f"文件不存在：{file_path}"
 
-    for 目录 in (_软件目录, _项目.ALGORITHM_DIRECTORY):
-        if os.path.isdir(目录) and 目录 not in sys.path:
-            sys.path.insert(0, 目录)
+    for directory in (_SOFTWARE_DIRECTORY, _projects.ALGORITHM_DIRECTORY):
+        if os.path.isdir(directory) and directory not in sys.path:
+            sys.path.insert(0, directory)
 
-    模块名 = _唯一模块名(文件路径)
-    _清掉旧模块(模块名)
+    module_name = _unique_module_name(file_path)
+    _clear_cached_module(module_name)
     try:
         # ① 优先用 importlib 的"按路径加载"：不依赖 sys.path，也就不会被同名文件抢
-        规格 = importlib.util.spec_from_file_location(模块名, 文件路径)
-        if 规格 is None or 规格.loader is None:
-            return None, f"无法为 {os.path.basename(文件路径)} 建立加载器"
-        模块 = importlib.util.module_from_spec(规格)
-        sys.modules[模块名] = 模块            # 先登记：算法里的 dataclass / 自引用才找得到自己
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        if spec is None or spec.loader is None:
+            return None, f"无法为 {os.path.basename(file_path)} 建立加载器"
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module            # 先登记：算法里的 dataclass / 自引用才找得到自己
         try:
-            规格.loader.exec_module(模块)
+            spec.loader.exec_module(module)
         except Exception:
-            sys.modules.pop(模块名, None)     # 加载失败不要留下半个模块
+            sys.modules.pop(module_name, None)     # 加载失败不要留下半个模块
             raise
-        return 模块, ""
-    except Exception as 异常:                                          # noqa: BLE001
-        return None, f"{type(异常).__name__}: {异常}"
+        return module, ""
+    except Exception as exc:                                          # noqa: BLE001
+        return None, f"{type(exc).__name__}: {exc}"
 
 
-def _是首选插件类(对象) -> bool:
+def _is_preferred_plugin_class(obj) -> bool:
     """继承 `ControlPlugin` 的类（首选，新算法建议这么写）。"""
-    return (isinstance(对象, type) and issubclass(对象, 插件.ControlPlugin)
-            and 对象 is not 插件.ControlPlugin)
+    return (isinstance(obj, type) and issubclass(obj, plugin.ControlPlugin)
+            and obj is not plugin.ControlPlugin)
 
 
-def _是鸭子插件类(对象) -> bool:
+def _is_duck_plugin_class(obj) -> bool:
     """没有继承 `ControlPlugin`、但具备插件契约的类（兼容已有算法）。
 
     ★ 为什么需要这一条：本项目的插件**并不都继承基类**，实测 5 个算法里只有 3 个继承
@@ -138,25 +138,25 @@ def _是鸭子插件类(对象) -> bool:
     ★ 属性名取自官方常量 `messages._HANDLER_INFO_ATTR`，不写死字符串 ——
       官方哪天改了属性名，这里跟着变，不会静默失效（和 `骨架/官方接口清单.py` 一个思路）。
     """
-    if not isinstance(对象, type) or 对象 is 插件.ControlPlugin:
+    if not isinstance(obj, type) or obj is plugin.ControlPlugin:
         return False
-    if not getattr(对象, "name", None):
+    if not getattr(obj, "name", None):
         return False
-    标记 = getattr(插件.messages, "_HANDLER_INFO_ATTR", "_studio_handler_info")
-    for 属性名 in dir(对象):
-        if 属性名.startswith("__"):
+    handler_marker = getattr(plugin.messages, "_HANDLER_INFO_ATTR", "_studio_handler_info")
+    for attribute_name in dir(obj):
+        if attribute_name.startswith("__"):
             continue
-        属性 = getattr(对象, 属性名, None)
-        if callable(属性) and hasattr(属性, 标记):
+        attribute = getattr(obj, attribute_name, None)
+        if callable(attribute) and hasattr(attribute, handler_marker):
             return True
     return False
 
 
-def _是插件类(对象) -> bool:
-    return _是首选插件类(对象) or _是鸭子插件类(对象)
+def _is_plugin_class(obj) -> bool:
+    return _is_preferred_plugin_class(obj) or _is_duck_plugin_class(obj)
 
 
-def 找插件类(模块, 想要: str = "") -> tuple[type | None, str]:
+def find_plugin_class(module, requested_name: str = "") -> tuple[type | None, str]:
     """在模块里找要实例化的插件类。返回 (类, 原因)；找不到时类为 None。
 
     规则（顺序就是优先级）：
@@ -168,48 +168,48 @@ def 找插件类(模块, 想要: str = "") -> tuple[type | None, str]:
     "是插件类"的判定见 `_是插件类`：继承 `ControlPlugin` 的优先，
     没继承但满足契约（有 `name` + 有消息处理方法）的也算。
     """
-    if 想要:
-        候选 = getattr(模块, 想要, None)
-        if 候选 is None:
-            return None, f"模块里没有「{想要}」这个名字"
-        if not _是插件类(候选):
-            return None, f"「{想要}」不像一个控制插件（缺 `name` 或没有任何消息处理方法）"
-        return 候选, ""
+    if requested_name:
+        candidate = getattr(module, requested_name, None)
+        if candidate is None:
+            return None, f"模块里没有「{requested_name}」这个名字"
+        if not _is_plugin_class(candidate):
+            return None, f"「{requested_name}」不像一个控制插件（缺 `name` 或没有任何消息处理方法）"
+        return candidate, ""
 
-    显式 = getattr(模块, "plugin_class", None)
-    if 显式 is not None:
-        if _是插件类(显式):
-            return 显式, ""
+    explicit_class = getattr(module, "plugin_class", None)
+    if explicit_class is not None:
+        if _is_plugin_class(explicit_class):
+            return explicit_class, ""
         return None, "模块里的 `plugin_class` 不像一个控制插件"
 
     # 继承基类的优先；一个都没有才退到鸭子类型
-    候选们 = [v for v in vars(模块).values() if _是首选插件类(v)] \
-        or [v for v in vars(模块).values() if _是鸭子插件类(v)]
+    candidates = [v for v in vars(module).values() if _is_preferred_plugin_class(v)]\
+        or [v for v in vars(module).values() if _is_duck_plugin_class(v)]
     # 按定义顺序去重（同一个类可能被 import 成两个名字）
-    去重: list[type] = []
-    for 类 in 候选们:
-        if 类 not in 去重:
-            去重.append(类)
-    if len(去重) == 1:
-        return 去重[0], ""
-    if not 去重:
+    unique_classes: list[type] = []
+    for cls in candidates:
+        if cls not in unique_classes:
+            unique_classes.append(cls)
+    if len(unique_classes) == 1:
+        return unique_classes[0], ""
+    if not unique_classes:
         return None, "模块里没有控制插件（要么继承 `ControlPlugin`，要么有 `name` + 一个消息处理方法）"
-    return None, ("模块里有多个控制插件：" + "、".join(c.__name__ for c in 去重)
+    return None, ("模块里有多个控制插件：" + "、".join(c.__name__ for c in unique_classes)
                   + " —— 请在项目文件的 算法 条目里加 \"类\": \"其中一个的名字\"")
 
 
-def 读元信息(类) -> dict:
+def read_metadata(cls) -> dict:
     """从插件类上取元信息（面板/清单/录制元信息都要用，所以统一在这里取一次）。"""
     return {
-        "名称": str(getattr(类, "name", None) or 类.__name__),
-        "版本": str(getattr(类, "version", "-")),
-        "英文名": str(getattr(类, "english_name", "") or ""),
-        "说明": str(getattr(类, "description", "") or ""),
-        "作者": str(getattr(类, "author", "") or ""),
+        "名称": str(getattr(cls, "name", None) or cls.__name__),
+        "版本": str(getattr(cls, "version", "-")),
+        "英文名": str(getattr(cls, "english_name", "") or ""),
+        "说明": str(getattr(cls, "description", "") or ""),
+        "作者": str(getattr(cls, "author", "") or ""),
     }
 
 
-def 检查兼容性(实例列表: list, 模型) -> tuple[list, list[dict]]:
+def check_compatibility(instances: list, model) -> tuple[list, list[dict]]:
     """对每个算法问一次"这个模型你能跑吗"。返回 (能跑的, 被跳过的说明表)。
 
     `模型` 为 None（`--检查` / `--列项目` 这种没有模型的场景）时全部放行 ——
@@ -217,64 +217,64 @@ def 检查兼容性(实例列表: list, 模型) -> tuple[list, list[dict]]:
 
     被跳过的每一项形如：`{"名称": "末端两点运动（任务空间 PD）", "原因": "需要 6 轴手臂"}`
     """
-    if 模型 is None:
-        return list(实例列表), []
-    能跑的: list = []
-    跳过: list[dict] = []
-    for 插件 in 实例列表:
-        问 = getattr(插件, "check_model_compatibility", None)
-        if 问 is None:
-            能跑的.append(插件)
+    if model is None:
+        return list(instances), []
+    compatible: list = []
+    skipped: list[dict] = []
+    for plugin in instances:
+        checker = getattr(plugin, "check_model_compatibility", None)
+        if checker is None:
+            compatible.append(plugin)
             continue
-        名称 = str(getattr(插件, "name", type(插件).__name__))
+        name = str(getattr(plugin, "name", type(plugin).__name__))
         try:
-            原因 = str(问(模型) or "")
-        except Exception as 异常:                                          # noqa: BLE001
+            reason = str(checker(model) or "")
+        except Exception as exc:                                          # noqa: BLE001
             # ★ 预检自己出错**不能**判成不兼容：那会把一个本来能跑的算法挡在外面。
             #   按"放行 + 提示"处理（宁可跑起来报错，也不要静默少一个算法）。
-            print(f"ℹ 算法【{名称}】的 模型兼容性() 出错（按兼容处理）："
-                  f"{type(异常).__name__}: {异常}")
-            能跑的.append(插件)
+            print(f"ℹ 算法【{name}】的 模型兼容性() 出错（按兼容处理）："
+                  f"{type(exc).__name__}: {exc}")
+            compatible.append(plugin)
             continue
-        (跳过 if 原因 else 能跑的).append({"名称": 名称, "原因": 原因} if 原因 else 插件)
-    return 能跑的, 跳过
+        (skipped if reason else compatible).append({"名称": name, "原因": reason} if reason else plugin)
+    return compatible, skipped
 
 
-def 创建插件(条目: dict | str) -> tuple[object | None, dict, str]:
+def create_plugin(entry: dict | str) -> tuple[object | None, dict, str]:
     """按注册名创建一个插件实例，供项目装配与 ``ControllerRegistry`` 共用。
 
     返回 ``(实例, 元信息, 错误说明)``。这里是唯一真正执行“路径 → 模块 → 类 →
     实例”的地方；注册表和项目装配不再各写一份动态导入逻辑。
     """
-    if isinstance(条目, str):
-        条目 = {"插件": 条目}
-    模块名 = _项目.normalize_algorithm_name((条目 or {}).get("插件") or "")
-    条目 = dict(条目 or {})
-    条目["插件"] = 模块名
-    文件 = (条目 or {}).get("文件") or _项目.algorithm_file(条目)
-    if not 模块名:
+    if isinstance(entry, str):
+        entry = {"插件": entry}
+    module_name = _projects.normalize_algorithm_name((entry or {}).get("插件") or "")
+    entry = dict(entry or {})
+    entry["插件"] = module_name
+    file_path = (entry or {}).get("文件") or _projects.algorithm_file(entry)
+    if not module_name:
         return None, {}, "没有给插件注册名"
-    if not 文件:
+    if not file_path:
         return None, {}, "算法库里找不到这个文件（已跳过）"
 
-    模块, 原因 = 导入算法文件(文件)
-    if 模块 is None:
-        return None, {}, f"导入失败 —— {原因}"
+    module, reason = import_algorithm_file(file_path)
+    if module is None:
+        return None, {}, f"导入失败 —— {reason}"
 
-    类, 原因 = 找插件类(模块, str((条目 or {}).get("类") or ""))
-    if 类 is None:
-        return None, {}, 原因
+    cls, reason = find_plugin_class(module, str((entry or {}).get("类") or ""))
+    if cls is None:
+        return None, {}, reason
 
-    元 = 读元信息(类)
-    元.update({"插件": 模块名, "文件": os.path.abspath(文件), "类": 类.__name__})
+    metadata = read_metadata(cls)
+    metadata.update({"插件": module_name, "文件": os.path.abspath(file_path), "类": cls.__name__})
     try:
-        return 类(), 元, ""
-    except Exception as 异常:                                      # noqa: BLE001
-        return None, 元, f"实例化失败 —— {type(异常).__name__}: {异常}"
+        return cls(), metadata, ""
+    except Exception as exc:                                      # noqa: BLE001
+        return None, metadata, f"实例化失败 —— {type(exc).__name__}: {exc}"
 
 
-def 按项目装配(项目数据: dict | None, 项目名: str = "",
-              模型=None, 算法覆盖: list | None = None) -> tuple[list, list[str]]:
+def assemble_project(project_data: dict | None, project_name: str = "",
+              model=None, algorithm_override: list | None = None) -> tuple[list, list[str]]:
     """★ 核心入口：项目数据 → (插件实例列表, 给人看的报告行列表)。
 
     `项目数据` 为 None / 空 → 返回空算法集（等于"只开窗口，不挂算法" = `--无插件`）。
@@ -290,68 +290,68 @@ def 按项目装配(项目数据: dict | None, 项目名: str = "",
       仍然照项目文件走。这是"临时试一下"与"存进项目"分开的关键：
       临时试不落盘，界面按 Save 才写回项目文件。
     """
-    实例列表: list = []
-    报告: list[str] = []
-    if 算法覆盖 is not None:
+    instances: list = []
+    report: list[str] = []
+    if algorithm_override is not None:
         # 用户指定的顺序就是执行顺序，**不能**在这里重排（最后一项说了算，见 项目.py）
-        条目们 = [{"插件": _项目.normalize_algorithm_name(str(x))}
-                 for x in 算法覆盖 if str(x).strip()]
-        认识 = {d["插件"]: d for d in _项目.discover_algorithms()}
-        for 条 in 条目们:
-            if 条["插件"] in 认识:
-                条["文件"] = 认识[条["插件"]]["文件"]
-        报告.append(f"（算法由界面指定：{len(条目们)} 个，顺序即执行顺序）")
+        entries = [{"插件": _projects.normalize_algorithm_name(str(x))}
+                 for x in algorithm_override if str(x).strip()]
+        discovered = {d["插件"]: d for d in _projects.discover_algorithms()}
+        for item in entries:
+            if item["插件"] in discovered:
+                item["文件"] = discovered[item["插件"]]["文件"]
+        report.append(f"（算法由界面指定：{len(entries)} 个，顺序即执行顺序）")
     else:
-        条目们 = _项目.parse_algorithms(项目数据)
-    已用类名: set[str] = set()
+        entries = _projects.parse_algorithms(project_data)
+    used_plugin_names: set[str] = set()
 
-    if not 条目们:
-        报告.append("（这个项目没有声明任何算法）" if 项目数据 else "（没有项目 → 不挂算法）")
-        return 实例列表, 报告
+    if not entries:
+        report.append("（这个项目没有声明任何算法）" if project_data else "（没有项目 → 不挂算法）")
+        return instances, report
 
-    for 条目 in 条目们:
-        模块名 = 条目.get("插件", "")
-        实例, 元, 原因 = 创建插件(条目)
-        if 实例 is None:
-            报告.append(f"✗ {模块名}：{原因}")
+    for entry in entries:
+        module_name = entry.get("插件", "")
+        instance, metadata, reason = create_plugin(entry)
+        if instance is None:
+            report.append(f"✗ {module_name}：{reason}")
             continue
-        if 元["名称"] in 已用类名:
+        if metadata["名称"] in used_plugin_names:
             # 参数面板/消息按"插件名"寻址，重名会让它们串台 —— 直接拒绝，别留隐患
-            报告.append(f"✗ {模块名}：插件名「{元['名称']}」和前面某个算法重名（已跳过）")
+            report.append(f"✗ {module_name}：插件名「{metadata['名称']}」和前面某个算法重名（已跳过）")
             continue
 
-        已用类名.add(元["名称"])
-        实例列表.append(实例)
-        报告.append(f"✓ {元['名称']} v{元['版本']}"
-                    + (f"  —— {元['作者']}" if 元["作者"] else "")
-                    + (f"  [{os.path.basename(元['文件'])}]" if 元["说明"] else ""))
+        used_plugin_names.add(metadata["名称"])
+        instances.append(instance)
+        report.append(f"✓ {metadata['名称']} v{metadata['版本']}"
+                    + (f"  —— {metadata['作者']}" if metadata["作者"] else "")
+                    + (f"  [{os.path.basename(metadata['文件'])}]" if metadata["说明"] else ""))
 
     # ---- 兼容性预检：跟当前模型对不上的算法**不启用**（见 检查兼容性 的说明）----
-    if 模型 is not None:
-        实例列表, 跳过 = 检查兼容性(实例列表, 模型)
-        for 项 in 跳过:
-            报告.append(f"– {项['名称']}：与当前模型不兼容，本次不启用 —— {项['原因']}")
-        if 跳过:
-            报告.append(f"（{len(跳过)} 个算法因模型不兼容被跳过；要改就编辑项目文件里的算法列表）")
+    if model is not None:
+        instances, skipped = check_compatibility(instances, model)
+        for skipped_item in skipped:
+            report.append(f"– {skipped_item['名称']}：与当前模型不兼容，本次不启用 —— {skipped_item['原因']}")
+        if skipped:
+            report.append(f"（{len(skipped)} 个算法因模型不兼容被跳过；要改就编辑项目文件里的算法列表）")
 
     # ---- 发送钩子契约自检：项目里引用的算法有没有实现必需的钩子 ----
-    if 实例列表:
-        报告.extend(_钩子体检(实例列表))
+    if instances:
+        report.extend(_check_handlers(instances))
 
     # ---- ★ 抢方向盘检查：多个算法都写 ctrl[:] 时，只有最后一个真正生效 ----
-    报告.extend(_抢方向盘体检(实例列表))
+    report.extend(_check_control_conflicts(instances))
 
-    if 项目名:
-        报告.append(f"（项目「{项目名}」共装配 {len(实例列表)} 个算法）")
-    return 实例列表, 报告
+    if project_name:
+        report.append(f"（项目「{project_name}」共装配 {len(instances)} 个算法）")
+    return instances, report
 
 
 # 必需钩子：算法不实现也不报错（有默认行为），但**不该什么都没有**。
 # 检查的是"能不能干活"这件最基本的事，不是风格问题。
-_必需钩子 = ("step",)
+_REQUIRED_HOOKS = ("step",)
 
 
-def _抢方向盘体检(实例列表: list) -> list[str]:
+def _check_control_conflicts(instances: list) -> list[str]:
     """报告"哪些算法在抢同一个方向盘"——因为只有**最后一个**真正生效。
 
     ★ 这是踩出来的真实困扰（用户报的："为什么 UR5e 的末端两点运动效果是这样"）：
@@ -369,71 +369,59 @@ def _抢方向盘体检(实例列表: list) -> list[str]:
     所以这里把"静默被掩盖"变成**看得见的提示**：列出抢方向盘的算法、指出谁赢。
     只提示、不阻止 —— 有时候"叠两个"是用户故意的（比如想比较谁赢）。
     """
-    抢的 = [p for p in 实例列表 if getattr(p, "takes_control", True)]
-    if len(抢的) <= 1:
+    controllers = [p for p in instances if getattr(p, "takes_control", True)]
+    if len(controllers) <= 1:
         return []
-    名字 = [str(getattr(p, "name", type(p).__name__)) for p in 抢的]
-    赢家 = 名字[-1]
-    输家 = "、".join(名字[:-1])
+    names = [str(getattr(p, "name", type(p).__name__)) for p in controllers]
+    winner = names[-1]
+    losers = "、".join(names[:-1])
     return [
-        f"⚠ 有 {len(抢的)} 个算法都在写 ctrl[:]（都在驱动同一台机器人）：{'、'.join(名字)}",
-        f"   → 只有**最后一个**【{赢家}】真正生效；{输家} 的输出被整体覆盖，"
+        f"⚠ 有 {len(controllers)} 个算法都在写 ctrl[:]（都在驱动同一台机器人）：{'、'.join(names)}",
+        f"   → 只有**最后一个**【{winner}】真正生效；{losers} 的输出被整体覆盖，"
         f"基本等于没挂（这是「后写的覆盖先写的」的直接后果）",
         "   → 想换谁生效：在【Algorithms】面板把它调到列表最后；"
         "只想跑一个就把另一个取消勾选。",
     ]
 
 
-def _钩子体检(实例列表: list) -> list[str]:
+def _check_handlers(instances: list) -> list[str]:
     """报告里加一行提示：哪些算法一个消息处理方法都没有（挂上去也不会干活）。
 
     为什么不做成"直接拒绝"：有些算法确实是**纯被动**的（比如某些只提供 `指标()`
     给别的插件看的辅助件）。所以这里只提示，不拦 —— 但提示必须出现，
     否则"挂了个什么都不干的算法"会让人查半天。
     """
-    标记 = getattr(插件.messages, "_HANDLER_INFO_ATTR", "_studio_handler_info")
-    哑的 = []
-    for 实例 in 实例列表:                      # ★ 别用 `插件` 当循环变量：会遮住模块名 `插件`
-        有处理 = any(callable(getattr(实例, 名, None)) and hasattr(getattr(实例, 名), 标记)
-                     for 名 in dir(type(实例)) if not 名.startswith("__"))
-        if not 有处理:
-            哑的.append(str(getattr(实例, "name", type(实例).__name__)))
-    return [f"ℹ 这些算法没有任何消息处理方法（挂上也不会干活）：{'、'.join(哑的)}"] if 哑的 else []
+    handler_marker = getattr(plugin.messages, "_HANDLER_INFO_ATTR", "_studio_handler_info")
+    inactive_plugins = []
+    for instance in instances:                      # ★ 别用 `插件` 当循环变量：会遮住模块名 `插件`
+        has_handler = any(callable(getattr(instance, name, None)) and hasattr(getattr(instance, name), handler_marker)
+                     for name in dir(type(instance)) if not name.startswith("__"))
+        if not has_handler:
+            inactive_plugins.append(str(getattr(instance, "name", type(instance).__name__)))
+    return [f"ℹ 这些算法没有任何消息处理方法（挂上也不会干活）：{'、'.join(inactive_plugins)}"] if inactive_plugins else []
 
 
 # ---------------------------------------------------------------------------
 # 给"没有项目"的模型一个兜底项目（第一次点一个还没建过项目的模型时用）
 # ---------------------------------------------------------------------------
-def 从模型建项目(模型路径: str, 算法: object = "*", 备注: str = "") -> dict:
+def project_from_model(model_path: str, algorithms: object = "*", note: str = "") -> dict:
     """按一个模型造一份新项目数据（**不落盘** —— 落盘由调用方决定）。
 
     默认 `算法 = "*"`：新模型的起步项目就把算法库里现有的算法都挂上，
     用户点开就能看到东西，之后再按需要往项目文件里删减。
     """
-    名 = _项目.display_model_name(模型路径)
-    数据 = {
+    name = _projects.display_model_name(model_path)
+    data = {
         "_说明": "由外壳按模型自动生成的项目（首次点开这个模型时创建）。"
                  "算法 字段写 \"*\" = 用算法库全部；想只留几个就把它们列出来。",
-        "项目": 名,
-        "模型": _项目.relative_to_package(模型路径),
-        "算法": 算法,
+        "项目": name,
+        "模型": _projects.relative_to_package(model_path),
+        "算法": algorithms,
         "参数": {},
     }
-    if 备注:
-        数据["备注"] = 备注
-    return 数据
-
-
-# ---------------------------------------------------------------------------
-# Stable English public API
-# ---------------------------------------------------------------------------
-import_algorithm_file = 导入算法文件
-find_plugin_class = 找插件类
-read_metadata = 读元信息
-check_compatibility = 检查兼容性
-create_plugin = 创建插件
-assemble_project = 按项目装配
-project_from_model = 从模型建项目
+    if note:
+        data["备注"] = note
+    return data
 
 
 __all__ = [

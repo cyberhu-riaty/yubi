@@ -52,14 +52,14 @@ class 部署命令(messages.Snapshot):
 @dataclasses.dataclass(frozen=True)
 class 部署状态(messages.Snapshot):
     状态: str = "空闲"           # 空闲 / 导出中 / ✓ 完成 / ✗ 失败
-    目录: str = ""
+    directory: str = ""
     文件数: int = 0
     字节: int = 0
     时间: str = ""
     # 每项：{文件, 说明, 字节}
     清单: tuple = ()
     说明: str = ""
-    出错: str = ""
+    errors: str = ""
 
 
 def _sha256(路径: str) -> str:
@@ -77,49 +77,49 @@ def _项目目录(包根: str) -> str:
     return os.path.join(包根, "输出", "部署")
 
 
-def 导出(包根: str, 项目名: str) -> dict:
+def 导出(包根: str, project_name: str) -> dict:
     """把项目导出成一个包。返回 {目录, 文件数, 字节, 清单[]}；失败抛异常。"""
-    import project_registry as _项目
+    import project_registry as _project
 
-    配置 = _项目.load_project(项目名) if 项目名 else None
-    if not 配置:
-        raise ValueError(f"读不到项目「{项目名}」")
+    config = _project.load_project(project_name) if project_name else None
+    if not config:
+        raise ValueError(f"读不到项目「{project_name}」")
 
     时间戳 = time.strftime("%Y%m%d_%H%M%S")
-    安全名 = "".join(c for c in (项目名 or "未命名") if c not in '/\\:*?"<>|').strip() or "未命名"
-    目标 = os.path.join(_项目目录(包根), f"{安全名}_{时间戳}")
-    os.makedirs(目标, exist_ok=True)
-    算法目录 = os.path.join(目标, "算法")
+    安全名 = "".join(c for c in (project_name or "未命名") if c not in '/\\:*?"<>|').strip() or "未命名"
+    target = os.path.join(_项目目录(包根), f"{安全名}_{时间戳}")
+    os.makedirs(target, exist_ok=True)
+    算法目录 = os.path.join(target, "算法")
     os.makedirs(算法目录, exist_ok=True)
 
     清单: list[dict] = []
 
     def 记(文件: str, 说明: str) -> int:
-        大小 = os.path.getsize(os.path.join(目标, 文件)) if os.path.exists(
-            os.path.join(目标, 文件)) else 0
+        大小 = os.path.getsize(os.path.join(target, 文件)) if os.path.exists(
+            os.path.join(target, 文件)) else 0
         清单.append({"文件": 文件, "说明": 说明, "字节": 大小})
         return 大小
 
     # ① 项目配置原样带走
-    with open(os.path.join(目标, "项目.json"), "w", encoding="utf-8") as f:
-        json.dump(配置, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(target, "项目.json"), "w", encoding="utf-8") as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
     记("项目.json", "模型路径 / 算法清单 / 参数")
 
     # ② 算法源码（真源码，不是名字）
-    发现 = {d["插件"]: d for d in _项目.discover_algorithms()}
+    发现 = {d["插件"]: d for d in _project.discover_algorithms()}
     用到 = []
-    for 项 in (配置.get("算法") or []):
-        名 = str((项 or {}).get("插件") or "") if isinstance(项, dict) else ""
-        if 名 and 名 in 发现:
-            源 = 发现[名]["文件"]
+    for 项 in (config.get("算法") or []):
+        name = str((项 or {}).get("插件") or "") if isinstance(项, dict) else ""
+        if name and name in 发现:
+            源 = 发现[name]["文件"]
             if os.path.exists(源):
-                shutil.copyfile(源, os.path.join(算法目录, f"{名}.py"))
-                记(f"算法/{名}.py", f"算法源码（{名}）")
-                用到.append(名)
+                shutil.copyfile(源, os.path.join(算法目录, f"{name}.py"))
+                记(f"算法/{name}.py", f"算法源码（{name}）")
+                用到.append(name)
 
     # ③ 模型清单（不复制本体，给校验和）
-    模型相对 = str(配置.get("模型") or "")
-    模型绝对 = _项目.absolute_path(模型相对) if 模型相对 else ""
+    模型相对 = str(config.get("模型") or "")
+    模型绝对 = _project.absolute_path(模型相对) if 模型相对 else ""
     行们 = ["| 文件 | 大小 | sha256 |", "|---|---|---|"]
     for 路径, 标签 in ((模型绝对, "入口模型"),):
         if 路径 and os.path.exists(路径):
@@ -134,17 +134,17 @@ def 导出(包根: str, 项目名: str) -> dict:
     行们.append("")
     行们.append("> **模型本体没有复制**：单套资产解包后可达 30 MB+，塞进包里不便传输。")
     行们.append("> 请把上表里那个模型文件一并带到真机侧，并用 sha256 核对。")
-    with open(os.path.join(目标, "模型清单.md"), "w", encoding="utf-8") as f:
+    with open(os.path.join(target, "模型清单.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(行们) + "\n")
     记("模型清单.md", "模型文件的路径 / 大小 / sha256")
 
     # ④ 从这里开始.md —— 第一屏就说清楚"缺什么"
-    参数 = 配置.get("参数") or {}
+    参数 = config.get("参数") or {}
     算法行 = "\n".join(f"- `{n}`" for n in 用到) or "- （这个项目没挂算法）"
     参数行 = ("\n".join(f"- `{插件}`：{len(值表 or {})} 个参数"
                         for 插件, 值表 in 参数.items())
               if isinstance(参数, dict) and 参数 else "- （没有存过参数）")
-    说明 = f"""# {项目名 or "未命名"} —— 部署包
+    说明 = f"""# {project_name or "未命名"} —— 部署包
 
 生成时间：{time.strftime("%Y-%m-%d %H:%M:%S")}
 生成工具：驭臂（小软件）
@@ -180,15 +180,15 @@ def 导出(包根: str, 项目名: str) -> dict:
 > 之所以把这段写在第一屏：一个只有文件的包，接手的人不知道**什么没有**，
 > 会先在真机上试半天才发现缺协议后端。
 """
-    with open(os.path.join(目标, "从这里开始.md"), "w", encoding="utf-8") as f:
+    with open(os.path.join(target, "从这里开始.md"), "w", encoding="utf-8") as f:
         f.write(说明)
     记("从这里开始.md", "这个包是什么 / 缺什么 / 下一步接什么")
 
     总字节 = sum(x["字节"] for x in 清单)
-    return {"目录": 目标, "文件数": len(清单), "字节": 总字节, "清单": 清单}
+    return {"目录": target, "文件数": len(清单), "字节": 总字节, "清单": 清单}
 
 
-class 部署器:
+class Deployer:
     """收到「部署命令」就导出一个包，然后发「部署状态」。
 
     ★ 导出是**同步**做的，但很快（只复制几个 .py + 算一次 sha256），
@@ -209,40 +209,40 @@ class 部署器:
         self.导出()
         return False
 
-    def 导出(self, 项目名: str = "") -> None:
+    def 导出(self, project_name: str = "") -> None:
         # 项目名不给就用当前项目（由外壳在构造时告诉我们的是空，所以这里兜底读设置）
-        if not 项目名:
+        if not project_name:
             try:
                 import model_bridge as _模型桥
-                项目名 = str(_模型桥.read_setting("上次项目", "") or "")
+                project_name = str(_模型桥.read_setting("上次项目", "") or "")
             except Exception:                                         # noqa: BLE001
-                项目名 = ""
+                project_name = ""
         try:
             self._发送(部署状态(状态="导出中", 时间=time.strftime("%H:%M:%S")))
         except Exception:                                             # noqa: BLE001
             pass
         try:
-            结果 = 导出(self._包根, 项目名)
+            result = 导出(self._包根, project_name)
             状态 = 部署状态(
                 状态="✓ 完成",
-                目录=结果["目录"],
-                文件数=结果["文件数"],
-                字节=结果["字节"],
+                directory=result["目录"],
+                文件数=result["文件数"],
+                字节=result["字节"],
                 时间=time.strftime("%H:%M:%S"),
-                清单=tuple(结果["清单"]),
-                说明=f"已导出到 {结果['目录']}",
-                出错="",
+                清单=tuple(result["清单"]),
+                说明=f"已导出到 {result['目录']}",
+                errors="",
             )
             self.导出次数 += 1
-        except Exception as 异常:                                         # noqa: BLE001
+        except Exception as exc:                                         # noqa: BLE001
             状态 = 部署状态(
                 状态="✗ 失败",
                 时间=time.strftime("%H:%M:%S"),
                 说明="",
-                出错=f"{type(异常).__name__}: {异常}",
+                errors=f"{type(exc).__name__}: {exc}",
             )
         self._上次 = 状态
         try:
             self._发送(状态)
-        except Exception as 异常:                                         # noqa: BLE001
-            print(f"⚠ 部署状态发送失败：{type(异常).__name__}: {异常}", flush=True)
+        except Exception as exc:                                         # noqa: BLE001
+            print(f"⚠ 部署状态发送失败：{type(exc).__name__}: {exc}", flush=True)
