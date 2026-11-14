@@ -29,9 +29,9 @@ export function 部署视图() {
   const 连接 = 用仓库((s) => s.连接);
   const [忙, 设忙] = useState(false);
   const 可发 = 连接 === "已连接";
-  const 算法们 = (项目?.算法 ?? []).map((a) => {
-    const 名 = String(a.名称 ?? a.插件 ?? "");
-    const 版 = a.版本 === undefined ? "" : ` v${String(a.版本)}`;
+  const 算法们 = (项目?.algorithms ?? []).map((a) => {
+    const 名 = String(a["名称"] ?? a["插件"] ?? "");
+    const 版 = a["版本"] === undefined ? "" : ` v${String(a["版本"])}`;
     return `${名}${版}`;
   });
 
@@ -82,7 +82,7 @@ export function 部署视图() {
             {导出中 ? t("部署.导出中") : t("部署.导出")}
           </按钮>
           <span className="text-[0.85em] text-dim">
-            {`${t("部署.项目")}: ${项目?.项目 || t("通用.无")}`}
+            {`${t("部署.项目")}: ${项目?.project || t("通用.无")}`}
           </span>
         </div>
 
@@ -95,9 +95,9 @@ export function 部署视图() {
         {成功 && 状态?.清单?.length ? (
           <div className="mt-2">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.82em] text-dim">
-              <span>{`${t("部署.项目")}: ${项目?.项目 || t("通用.无")}`}</span>
-              <span>{`${t("状态栏.模型")}: ${项目?.模型显示名 || t("通用.无")}`}</span>
-              <span>{`${t("定义.算法数")}: ${项目?.算法?.length ?? 0}`}</span>
+              <span>{`${t("部署.项目")}: ${项目?.project || t("通用.无")}`}</span>
+              <span>{`${t("状态栏.模型")}: ${项目?.model_display_name || t("通用.无")}`}</span>
+              <span>{`${t("定义.算法数")}: ${项目?.algorithms?.length ?? 0}`}</span>
               <span>{`${t("部署.总大小")}: ${((状态.字节 ?? 0) / 1024).toFixed(1)} KB`}</span>
             </div>
             <div className="mt-0.5 break-words text-[0.82em] text-dim">

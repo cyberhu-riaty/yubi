@@ -111,6 +111,11 @@ class Windows(平台能力):
             状态标签.setObjectName("threeDStatus")
             状态标签.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
             状态标签.setToolTip("MuJoCo 3D 视口状态")
+            轨迹图例 = QLabel(
+                '<span style="color:#16c7df">●</span> 目标 '
+                '<span style="color:#ff7514">●</span> 实际', 三维顶栏)
+            轨迹图例.setObjectName("trajectoryLegend")
+            轨迹图例.setToolTip("多航点实验运行时：青色为既定末端路径，橙色为实际走过的路径")
             适配按钮 = QPushButton("适配视角", 三维顶栏)
             适配按钮.setObjectName("threeDButton")
             适配按钮.setToolTip("让相机重新对准并完整显示当前模型（F / R / 双击视口）")
@@ -118,6 +123,7 @@ class Windows(平台能力):
             顶栏布局.addWidget(三维标题)
             顶栏布局.addWidget(模型标签)
             顶栏布局.addWidget(状态标签)
+            顶栏布局.addWidget(轨迹图例)
             顶栏布局.addWidget(适配按钮)
 
             视口边框 = QFrame(三维外壳)
@@ -142,6 +148,7 @@ class Windows(平台能力):
                 QLabel#threeDTitle { color: #1b1f24; font-weight: 600; }
                 QLabel#threeDModel { color: #5f6b7a; }
                 QLabel#threeDStatus { color: #7a8594; }
+                QLabel#trajectoryLegend { color: #168fa8; font-size: 11px; }
                 QPushButton#threeDButton {
                     color: #1b1f24;
                     background: #f6f7f9;
@@ -270,8 +277,8 @@ class Windows(平台能力):
         if not 路径:
             return "等待模型"
         try:
-            import 模型桥
-            return str(模型桥.显示名(路径) or os.path.basename(路径))
+            import model_bridge
+            return str(model_bridge.display_name(路径) or os.path.basename(路径))
         except Exception:
             return os.path.basename(路径)
 
@@ -289,9 +296,9 @@ class Windows(平台能力):
         左默认 = max(480, min(可用默认 - 480, int(可用默认 * 0.40)))
         默认 = [左默认, 可用默认 - 左默认]
         try:
-            import 模型桥
+            import model_bridge
             # 新布局的右列包含上下两块，使用新键，避免旧的 55:45 比例覆盖新版默认值。
-            值 = 模型桥.读取设置("Windows主分栏V2", None)
+            值 = model_bridge.read_setting("Windows主分栏V2", None)
             if (isinstance(值, list) and len(值) == 2
                     and all(isinstance(x, (int, float)) and x > 0 for x in 值)):
                 合计 = float(值[0]) + float(值[1])
@@ -309,8 +316,8 @@ class Windows(平台能力):
         上默认 = max(320, min(可用默认 - 170, int(可用默认 * 0.70)))
         默认 = [上默认, 可用默认 - 上默认]
         try:
-            import 模型桥
-            值 = 模型桥.读取设置("Windows右列分栏", None)
+            import model_bridge
+            值 = model_bridge.read_setting("Windows右列分栏", None)
             if (isinstance(值, list) and len(值) == 2
                     and all(isinstance(x, (int, float)) and x > 0 for x in 值)):
                 合计 = float(值[0]) + float(值[1])
@@ -326,10 +333,10 @@ class Windows(平台能力):
         if self._分隔 is None or not self._允许保存分栏:
             return
         try:
-            import 模型桥
-            模型桥.写入设置("Windows主分栏V2", [int(x) for x in self._分隔.sizes()])
+            import model_bridge
+            model_bridge.write_setting("Windows主分栏V2", [int(x) for x in self._分隔.sizes()])
             if self._右分隔 is not None:
-                模型桥.写入设置(
+                model_bridge.write_setting(
                     "Windows右列分栏", [int(x) for x in self._右分隔.sizes()])
         except Exception as 异常:
             print(f"⚠ 保存 Windows 分栏失败：{type(异常).__name__}: {异常}", flush=True)

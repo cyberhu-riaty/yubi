@@ -9,7 +9,7 @@
 
 插件使用方式（见 plugins/关节pd控制.py）：
       @每步
-      def 每步控制(self, event: messages.StepEvent) -> bool:
+      def step(self, event: messages.StepEvent) -> bool:
           目标 = 插件.滑块目标(界面.面板目标, 默认值)     # ← 界面滑杆优先
 """
 from __future__ import annotations

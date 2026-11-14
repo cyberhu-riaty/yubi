@@ -44,13 +44,13 @@ _到期 = 0.0
 def 设高亮(关节: int, 秒: float = 8.0) -> None:
     global _当前关节, _到期
     try:
-        值 = int(关节)
+        value = int(关节)
     except Exception:                                                 # noqa: BLE001
-        值 = -1
+        value = -1
     时长 = max(0.0, min(60.0, float(秒)))
     with _锁:
-        _当前关节 = 值
-        _到期 = time.time() + 时长 if 值 >= 0 and 时长 > 0 else 0.0
+        _当前关节 = value
+        _到期 = time.time() + 时长 if value >= 0 and 时长 > 0 else 0.0
 
 
 def 清高亮() -> None:
@@ -65,7 +65,7 @@ def 取高亮() -> int | None:
         return int(_当前关节)
 
 
-class 高亮应用器:
+class HighlightApplier:
     """内置插件：只收 `高亮命令`，不参与任何控制/物理。"""
 
     @messages.handler

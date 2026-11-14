@@ -29,7 +29,7 @@ class MacOS(平台能力):
                 f"缺 PyObjC 组件（{type(异常).__name__}: {异常}）。\n"
                 f"      装：.venv/bin/python -m pip install "
                 f"pyobjc-framework-Cocoa pyobjc-framework-WebKit pyobjc-framework-Quartz\n"
-                f"      临时替代：软件/主程序Web.py（用外部浏览器看同一个界面）")
+                f"      临时替代：run_yubi_web.py（用外部浏览器看同一个界面）")
         return True, ""
 
     def 起(self, *, 地址: str, 标题: str, 宽: float, 高: float,

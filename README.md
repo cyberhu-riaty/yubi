@@ -16,7 +16,7 @@
 
 和直接开 `mujoco.viewer` 或写 Python 脚本相比，它多了这些：
 
-- **一个完整的桌面工作台**：10 个页面按「流程 / 运行 / 信息」组织；Windows 右上原生 3D 常驻，右下集中显示状态、输入和 3D 诊断。
+- **一个完整的桌面工作台**：11 个页面按「流程 / 运行 / 信息」组织；Windows 右上原生 3D 常驻，右下集中显示状态、输入和 3D 诊断。
 - **真正的原生 3D**：3D 不是网页里画的运动学动画，而是 MuJoCo 在自研窗口右侧的原生 OpenGL 视口里渲染的；界面与物理各跑各的线程，不共享 `MjData`。
 - **可插拔控制算法**：往 `算法库/` 放一个 `.py`，在项目文件里写上名字就能用；新增算法不需要改主程序。
 - **项目配置驱动**：一个项目 = 模型 + 算法列表 + 参数。换模型时自动按项目重新装配算法。
@@ -28,7 +28,7 @@
 
 | 页面 | 能做什么 | 边界 |
 |---|---|---|
-| **定义** | 5 台机械臂的资产库，点选即加载；查看当前项目、自由度、执行器数、装配报告；按路径换模型 | 资产库只列本机已有模型，不支持远端下载 |
+| **定义** | 6 台机械臂的资产库，点选即加载；查看当前项目、自由度、执行器数、装配报告；按路径换模型 | 资产库只列本机已有模型，不支持远端下载 |
 | **规划** | 记录关节航点 / 导入 CSV / 输入笛卡尔点；按真实关节限位做时间参数化，回算校验；轨迹落盘、一键执行（需先挂跟踪控制器）、换约束后与上次对比 | 笛卡尔只支持位置，姿态约束未实现；jerk 只校验不整形 |
 | **验证** | 最近 120 秒实时曲线；各算法声明的参数表可直接编辑；改参数走「全成功或全回滚」的事务提交 | 曲线横轴是墙钟，不是仿真时间 |
 | **辨识** | 闭环激励采样 → 后台辨识惯性参数 → 用新参数验证轨迹拟合 | 拟合更好只说明更贴近这段数据，不等于找到物理真值 |
@@ -41,7 +41,7 @@
 
 此外：
 
-- **3D 视口**：macOS 与 Windows 都由 MuJoCo 真正渲染，并通过状态快照跟随仿真。模型库中的纯机械臂 XML 会在加载时自动与 `模型/公共场景.xml` 组合，因此换机器人不会丢掉地面；本身已有平面的场景模型则保留自己的环境。Windows 当前支持模型切换、左键旋转、Shift + 拖动平移、滚轮缩放、双击或 `F`/`R` 自动适配；末端坐标和关节高亮仍只在 macOS 宿主中提供。
+- **3D 视口**：macOS 与 Windows 都由 MuJoCo 真正渲染，并通过状态快照跟随仿真。模型库中的纯机械臂 XML 会在加载时自动与 `模型/公共场景.xml` 组合，因此换机器人不会丢掉地面；本身已有平面的场景模型则保留自己的环境。macOS 相机操作与 MuJoCo Studio 一致：左键拖动旋转、右键拖动平移、滚轮缩放、双击或 `F`/`R` 适配；Windows 当前支持模型切换、左键旋转、Shift + 拖动平移、滚轮缩放、双击或 `F`/`R` 自动适配，末端坐标和关节高亮仍只在 macOS 宿主中提供。
 - **工作台控制台**：输出 / 事件 / 问题 / 诊断四个页签，支持按等级、来源、插件、主题、时间筛选；Windows 默认收起，需要时再展开。
 - **工程面板**：窗口较窄时在 3D 下方出现原生日志镜像，展开时网页控制台自动让位，避免两份日志打架。
 
@@ -83,21 +83,21 @@ py -3.12 -m venv .venv
 ### 2. 启动
 
 ```bash
-# 主入口：自研窗口 = React 界面 + 原生 3D 视口
-.venv/bin/python 软件/主程序窗口.py
+# 推荐主入口（ASCII 路径）：自研窗口 = React 界面 + 原生 3D 视口
+.venv/bin/python run_yubi.py
 
 # 浏览器入口：同一个数据层，没有原生 3D
-.venv/bin/python 软件/主程序Web.py
+.venv/bin/python run_yubi_web.py
 ```
 
 Windows 启动方式：
 
 ```powershell
 # Qt 桌面窗口：React 工作台 + 嵌入式 MuJoCo 3D
-.\.venv\Scripts\python.exe 软件\主程序窗口.py
+.\.venv\Scripts\python.exe run_yubi.py
 
 # 排查用浏览器入口
-.\.venv\Scripts\python.exe 软件\主程序Web.py
+.\.venv\Scripts\python.exe run_yubi_web.py
 ```
 
 普通启动会先显示带地面、灯光和背景的**空场景**，不自动恢复上次的机器人；
@@ -105,20 +105,29 @@ Windows 启动方式：
 
 1. 在「定义 → 模型库」中选择机器人模型；
 2. 在「插件」页启用需要的算法（项目文件的 `算法` 默认是空列表）；
-3. 点工作台顶部的「运行」；「暂停」会停在当前状态，「复位」会恢复默认状态并保持暂停。也可以在启动时加 `--开重力`。
+3. 点工作台顶部的「运行」；「暂停」会停在当前状态，「复位」会恢复默认状态并保持暂停。也可以在启动时加 `--enable-gravity`。
 
 常用参数：
 
 ```bash
-.venv/bin/python 软件/主程序窗口.py --检查                 # 不开窗，只自检
-.venv/bin/python 软件/主程序窗口.py --模型 模型/universal_robots_ur5e/ur5e_torque.xml
-.venv/bin/python 软件/主程序窗口.py --项目 UR5e_基础PD
-.venv/bin/python 软件/主程序窗口.py --开重力
-.venv/bin/python 软件/主程序窗口.py --无3D                  # 不要 3D 视口（排查用）
-.venv/bin/python 软件/主程序窗口.py --web口 8899            # Web 服务换端口（默认 8712）
+.venv/bin/python run_yubi.py --check                        # 不开窗，只自检
+.venv/bin/python run_yubi.py --model 模型/universal_robots_ur5e/ur5e_torque.xml
+.venv/bin/python run_yubi.py --project UR5e_基础PD
+.venv/bin/python run_yubi.py --enable-gravity
+.venv/bin/python run_yubi.py --no-3d                        # 不要 3D 视口（排查用）
+.venv/bin/python run_yubi.py --web-port 8899                # Web 服务换端口（默认 8712）
 
-.venv/bin/python 软件/主程序Web.py --不开浏览器
-.venv/bin/python 软件/主程序Web.py --web口 8899
+.venv/bin/python run_yubi_web.py --no-browser
+.venv/bin/python run_yubi_web.py --web-port 8899
+```
+
+无界面实验和控制算法对比也提供 ASCII 入口：
+
+```bash
+.venv/bin/python run_experiment_cli.py --list
+.venv/bin/python run_experiment_cli.py ur5e_pd_plain
+.venv/bin/python compare_experiments_cli.py
+.venv/bin/python scripts/check_naming.py
 ```
 
 ### 3. 想要桌面图标（macOS，可选）
@@ -127,7 +136,7 @@ Windows 启动方式：
 .venv/bin/python 工具/打包应用.py \
   --名字 小软件 \
   --输出名 小软件 \
-  --主程序 软件/主程序窗口.py
+  --主程序 run_yubi.py
 ```
 
 生成的 `.app` 在包根目录，双击即可启动。它只是启动器 + 图标，不含 Python 环境；换机器后仍要先跑 `工具/重建环境.sh`。
@@ -136,13 +145,13 @@ Windows 启动方式：
 
 ```text
 yubi/
-├── 软件/                  运行时：宿主窗口、Web 桥、参数/规划/辨识/部署桥、设备层
+├── 软件/                  runtime/plugin/project/model 核心、宿主及各消息桥
 ├── 前端/                  React 19 + Vite 7 + Tailwind 4 源码（构建产物在 软件/web/）
 ├── 算法库/通用/           控制、录制、辨识插件与算法模板
-├── 模型/                  MuJoCo 模型与网格资产（5 台机械臂 + Robotiq 2F85）
+├── 模型/                  MuJoCo 模型与网格资产（6 台机械臂 + Robotiq 2F85 + Panda MPC 任务）
 ├── 项目/                  项目配置：一个项目 = 模型 + 算法列表 + 参数
 ├── 工具/                  环境重建、模型导入、URDF→MJCF、打包、前端资产生成
-│   └── 验证/              12 套可独立运行的检查脚本（诊断页跑其中 11 套）
+│   └── 验证/              18 个可独立运行的检查脚本（诊断页跑其中 11 个）
 ├── docs/                  使用手册与界面截图
 ├── CHANGELOG.md           版本变更记录
 ├── CONTRIBUTING.md        协作约定
@@ -164,38 +173,38 @@ yubi/
 
 ```bash
 # ① 复制模板
-cp 算法库/通用/我的控制律_模板.py 算法库/通用/我的算法.py
+cp 算法库/通用/controller_template.py 算法库/通用/my_controller.py
 
-# ② 改类名、名称、英文名、说明，在 每步控制() 里写控制律
+# ② 改类名和元信息，在 step() 里写控制律
 # ③ 在项目文件里登记，或在「插件」页启用
 ```
 
 一个最小插件长这样：
 
 ```python
-import 插件系统 as 插件
-from 插件系统 import 控制插件, 每步
+import plugin_system as studio
+from plugin_system import ControlPlugin, step_handler
 
 
-class 我的插件(控制插件):
-    名称 = "我的控制算法"
-    版本 = "0.1"
-    英文名 = "My controller"
-    说明 = "一句话说清它干什么"
+class MyController(ControlPlugin):
+    name = "我的控制算法"
+    version = "0.1"
+    english_name = "My controller"
+    description = "一句话说清它干什么"
 
-    @每步
-    def 每步控制(self, event: 插件.messages.StepEvent) -> bool:
-        数据 = event.data
-        数据.ctrl[:] = 数据.qfrc_bias      # 6 个关节的力矩，N·m
+    @step_handler
+    def step(self, event: studio.messages.StepEvent) -> bool:
+        data = event.data
+        data.ctrl[:] = data.qfrc_bias      # 6 个关节的力矩，N·m
         return False
 ```
 
 注意：
 
-- `@每步` 方法必须有类型标注 `event: 插件.messages.StepEvent`，否则官方插件系统会拒绝；
+- `@step_handler` 方法必须标注 `event: studio.messages.StepEvent`，否则官方插件系统会拒绝；
 - 文件名不能以数字开头；
 - 控制的是 `event.data.ctrl[:]`（关节力矩），不是位置；
-- `名称` / `说明` 用于中文界面，`英文名` 用于英文界面。
+- `name` / `description` 是显示信息，`english_name` 用于英文界面。
 
 登记到项目：
 
@@ -203,7 +212,7 @@ class 我的插件(控制插件):
 {
   "项目": "UR5e_基础PD",
   "模型": "模型/universal_robots_ur5e/ur5e_torque.xml",
-  "算法": [{ "插件": "关节pd控制" }, { "插件": "我的算法" }],
+  "算法": [{ "插件": "joint_pd_control" }, { "插件": "my_controller" }],
   "参数": { "关节 PD 位置控制": { "KP": 320.0 } }
 }
 ```
@@ -215,13 +224,15 @@ class 我的插件(控制插件):
 | 模型 | 自由度 | 推荐文件 | 许可证 |
 |---|---|---|---|
 | Universal Robots UR5e | 6 | `ur5e_torque.xml` | BSD-3-Clause |
+| Universal Robots UR10 | 6 | `ur10_torque.xml` | BSD-3-Clause |
 | Universal Robots UR10e | 6 | `ur10e_torque.xml` | BSD-3-Clause |
 | Franka Emika Panda | 7 | `panda_torque.xml` | Apache-2.0 |
 | KUKA LBR iiwa 14 | 7 | `iiwa14_torque.xml` | BSD-3-Clause |
 | UFACTORY xArm7 | 7 | `xarm7_torque.xml` | BSD-3-Clause |
 | Robotiq 2F85（夹爪） | 8（非独立控制） | `2f85.xml` | BSD-2-Clause |
+| Panda MPC（任务模型） | nu=7 / nq=16（末端力控 + 夹爪） | `panda_mjpc/task.xml` | Apache-2.0 |
 
-务必使用 `*_torque.xml`：这些变体把执行器改成力矩输入，`ctrl` 能直接被控制插件驱动。原始模型用于可视化或别的用途，不保证 `nu == nv == nq`。
+控制插件要驱动机械臂，务必使用 `*_torque.xml`：这些变体把执行器改成力矩输入，`ctrl` 能直接被控制插件驱动。原始模型用于可视化或别的用途，不保证 `nu == nv == nq`。
 
 模型来源与许可见各模型目录内的 `LICENSE`。需要导入更多模型：
 
@@ -237,8 +248,8 @@ class 我的插件(控制插件):
 ```bash
 .venv/bin/python 工具/验证/契约自检.py
 .venv/bin/python 工具/验证/校验项目.py
-.venv/bin/python 工具/验证/轨迹规划自检.py
-.venv/bin/python 工具/验证/参数事务自检.py
+.venv/bin/python 工具/验证/trajectory_planning_selfcheck.py
+.venv/bin/python 工具/验证/parameter_transaction_selfcheck.py
 .venv/bin/python 工具/验证/病态检出自检.py
 .venv/bin/python 工具/验证/设备契约自检.py
 ```
@@ -246,7 +257,7 @@ class 我的插件(控制插件):
 另有入口自检：
 
 ```bash
-.venv/bin/python 软件/主程序窗口.py --检查
+.venv/bin/python run_yubi.py --check
 ```
 
 这些脚本都是独立可执行的：有自己的退出码，不依赖界面。诊断页用子进程调用它们，跑的就是你在终端里敲的同一批脚本。
@@ -267,7 +278,7 @@ class 我的插件(控制插件):
 
 ## 文档
 
-- [使用手册](docs/使用手册.md) —— 10 个页面逐页说明、典型工作流、故障排查
+- [使用手册](docs/使用手册.md) —— 11 个页面逐页说明、典型工作流、故障排查
 - [前端约定](前端/约定.md) —— 前端目录边界、数据流、构建方式
 - [变更记录](CHANGELOG.md) —— 每个版本改了什么、影响了谁
 - [参与贡献](CONTRIBUTING.md) —— 分支、验证与 PR 要求
@@ -277,3 +288,13 @@ class 我的插件(控制插件):
 驭臂自身的源代码与文档采用 [MIT License](LICENSE)。
 
 `模型/` 中的模型与网格来自多个上游项目（MuJoCo Menagerie 等），分别遵循各自目录下的 `LICENSE`，再分发时请一并保留。前端依赖（React、Vite、Tailwind 等）遵循各自的许可证。MuJoCo 由 Google DeepMind 开发，采用 Apache-2.0 许可证。
+
+## 控制器与实验扩展
+
+GUI 已作为稳定载体使用。控制算法通过 `ControllerRegistry` 按名称创建，完整实验通过
+`ExperimentRegistry` 组合模型、控制器、轨迹说明、初始状态、停止条件与记录策略。
+内置示例：`ur5e_pd_tracking`、`ur5e_pid_tracking`。详细用法见
+[`实验/README.md`](实验/README.md)。
+
+GUI 顶部可直接选择实验；加载后复用原来的“开始/暂停/复位”。开始时自动记录，
+达到实验停止时间后自动暂停并导出 CSV、指标 JSON 和离线曲线。

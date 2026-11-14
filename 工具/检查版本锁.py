@@ -108,12 +108,12 @@ def main(argv: list[str]) -> int:
     print()
     if 不一致 or 缺失:
         print("⚠ 环境与实测版本不一致 —— 官方 API 可能已变，建议：")
-        print("   ① 先跑接口自检：  .venv/bin/python 软件/主程序窗口.py --检查")
+        print("   ① 先跑接口自检：  .venv/bin/python run_yubi.py --check")
         print("   ② 若自检有失败项，退回实测版本：")
         print("      .venv/bin/pip install -r requirements.lock")
         return 1
     print("✓ 必需包全部与实测版本一致")
-    print("  提示：版本一致不代表接口一定对，请再跑一次 `主程序窗口.py --检查`。")
+    print("  提示：版本一致不代表接口一定对，请再跑一次 `run_yubi.py --check`。")
     return 0
 
 

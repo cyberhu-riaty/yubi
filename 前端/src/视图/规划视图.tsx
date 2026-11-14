@@ -23,7 +23,7 @@ import { use取 } from "./文案";
 
 export function 规划视图() {
   const t = use取();
-  const 规划 = 用仓库((s) => s.规划.数据);
+  const 规划 = 用仓库((s) => s.planning.数据);
   const 模型 = 用仓库((s) => s.模型.数据);
   const 连接 = 用仓库((s) => s.连接);
   const [忙, 设忙] = useState(false);
@@ -46,11 +46,12 @@ export function 规划视图() {
     设忙(true);
     try {
       const 文本 = await 文件.text();
-      const 果 = 解析航点文本(文本, 规划?.自由度 || 模型?.自由度);
+      const 果 = 解析航点文本(文本, 规划?.dof || 模型?.dof);
       设导入(果);
       if (!果.问题) {
         const 起于 = 记命令发出();
-        命令收尾("命令.规划", await 命令.跑规划(果.航点.map((关节) => ({ 关节 }))), 起于);
+        命令收尾("command.planning",
+          await 命令.planTrajectory(果.航点.map((关节) => ({ q: 关节 }))), 起于);
       }
     } finally {
       设忙(false);
@@ -61,7 +62,7 @@ export function 规划视图() {
   /** 把输入框里的单一数值铺成"每个关节一个"的上限；空/非法 → undefined（用默认） */
   const 数们 = (文本: string) => {
     const 值 = Number(文本);
-    const 自由度 = 规划?.自由度 || 模型?.自由度 || 0;
+    const 自由度 = 规划?.dof || 模型?.dof || 0;
     return 文本.trim() && Number.isFinite(值) && 值 > 0 && 自由度 > 0
       ? Array.from({ length: 自由度 }, () => 值)
       : undefined;
@@ -95,10 +96,13 @@ export function 规划视图() {
     try {
       const 起于 = 记命令发出();
       命令收尾(
-        "命令.规划",
-        await 命令.笛卡尔规划(
+        "command.planning",
+        await 命令.planCartesian(
           点们.map((xyz) => ({ xyz })),
-          { 速度上限: 数们(速度上限), 加速度上限: 数们(加速度上限) },
+          {
+            velocity_limits: 数们(速度上限),
+            acceleration_limits: 数们(加速度上限),
+          },
         ),
         起于,
       );
@@ -112,39 +116,40 @@ export function 规划视图() {
     try {
       const 起于 = 记命令发出();
       const r =
-        动作 === "记录航点" ? await 命令.记录航点()
-        : 动作 === "清空航点" ? await 命令.清空航点()
-        : await 命令.跑规划(undefined, {
-            速度上限: 数们(速度上限),
-            加速度上限: 数们(加速度上限),
+        动作 === "记录航点" ? await 命令.recordWaypoint()
+        : 动作 === "清空航点" ? await 命令.clearWaypoints()
+        : await 命令.planTrajectory(undefined, {
+            velocity_limits: 数们(速度上限),
+            acceleration_limits: 数们(加速度上限),
           });
-      命令收尾("命令.规划", r, 起于, { 模块: "规划" });
+      命令收尾("command.planning", r, 起于, { 模块: "规划" });
     } finally {
       设忙(false);
     }
   };
 
-  const 成功 = 规划?.状态 === "✓ 完成";
-  const 执行中 = 规划?.执行状态 === "执行中";
-  const 规划中 = 规划?.状态 === "规划中";
-  const 航点数 = 规划?.航点数 ?? 0;
+  const 成功 = 规划?.status === "completed";
+  const 执行中 = 规划?.execution_status === "running";
+  const 规划中 = 规划?.status === "planning";
+  const 航点数 = 规划?.waypoint_count ?? 0;
 
   /** 执行/停止轨迹：走同一条命令通道，因此也有回执 */
   const 执行 = async (开始: boolean) => {
     设忙(true);
     try {
       const 起于 = 记命令发出();
-      命令收尾("命令.规划", 开始 ? await 命令.执行轨迹() : await 命令.停止轨迹(), 起于, {
+      命令收尾("command.planning",
+        开始 ? await 命令.executeTrajectory() : await 命令.stopTrajectory(), 起于, {
         模块: "规划",
       });
     } finally {
       设忙(false);
     }
   };
-  const 失败 = 规划?.状态 === "✗ 失败";
+  const 失败 = 规划?.status === "failed";
 
   const 高亮瓶颈 = async () => {
-    const 关节 = 规划?.瓶颈关节;
+    const 关节 = 规划?.bottleneck_joint;
     if (关节 === undefined || 关节 < 0) return;
     const 起于 = 记命令发出();
     命令收尾("命令.高亮", await 命令.高亮关节(关节, 8), 起于, { 模块: "规划", 关节 });
@@ -155,25 +160,25 @@ export function 规划视图() {
 
   const 行: 数值行[] = 规划
     ? [
-        { 键: t("规划.航点数"), 值: <span className="等宽">{规划.航点数 ?? "--"}</span> },
-        { 键: t("规划.自由度"), 值: <span className="等宽">{规划.自由度 ?? "--"}</span> },
-        { 键: t("规划.总时长"), 值: <span className="等宽">{规划.总时长 === undefined ? "--" : `${规划.总时长.toFixed(3)} s`}</span> },
-        { 键: t("规划.路径长度"), 值: <span className="等宽">{规划.路径长度 === undefined ? "--" : `${规划.路径长度.toFixed(3)} rad`}</span> },
-        { 键: t("规划.终端速度"), 值: <span className="等宽">{(规划.终端速度 ?? 0).toExponential(1)}</span> },
-        { 键: t("规划.最大速度"), 值: <span className="等宽">{(规划.最大关节速度 ?? 0).toFixed(3)}</span> },
-        { 键: t("规划.最大加速度"), 值: <span className="等宽">{(规划.最大关节加速度 ?? 0).toFixed(2)}</span> },
-        { 键: t("规划.最大加加速度"), 值: <span className="等宽">{(规划.最大关节加加速度 ?? 0).toFixed(2)}</span> },
+        { 键: t("规划.航点数"), 值: <span className="等宽">{规划.waypoint_count ?? "--"}</span> },
+        { 键: t("规划.自由度"), 值: <span className="等宽">{规划.dof ?? "--"}</span> },
+        { 键: t("规划.总时长"), 值: <span className="等宽">{规划.duration_s === undefined ? "--" : `${规划.duration_s.toFixed(3)} s`}</span> },
+        { 键: t("规划.路径长度"), 值: <span className="等宽">{规划.path_length === undefined ? "--" : `${规划.path_length.toFixed(3)} rad`}</span> },
+        { 键: t("规划.终端速度"), 值: <span className="等宽">{(规划.terminal_velocity ?? 0).toExponential(1)}</span> },
+        { 键: t("规划.最大速度"), 值: <span className="等宽">{(规划.max_joint_velocity ?? 0).toFixed(3)}</span> },
+        { 键: t("规划.最大加速度"), 值: <span className="等宽">{(规划.max_joint_acceleration ?? 0).toFixed(2)}</span> },
+        { 键: t("规划.最大加加速度"), 值: <span className="等宽">{(规划.max_joint_jerk ?? 0).toFixed(2)}</span> },
         {
           键: t("规划.瓶颈"),
           值: (
             <span className="等宽">
-              {规划.瓶颈类型 ? `${规划.瓶颈类型} @ J${规划.瓶颈关节} (s=${(规划.瓶颈位置 ?? 0).toFixed(2)})` : "--"}
+              {规划.bottleneck_type ? `${规划.bottleneck_type} @ J${规划.bottleneck_joint} (s=${(规划.bottleneck_position ?? 0).toFixed(2)})` : "--"}
             </span>
           ),
         },
         {
           键: t("规划.实际比下界"),
-          值: <span className="等宽">{(规划.实际比下界 ?? 0).toFixed(2)}<span className="ml-1 text-dim">×</span></span>,
+          值: <span className="等宽">{(规划.actual_to_lower_bound ?? 0).toFixed(2)}<span className="ml-1 text-dim">×</span></span>,
         },
       ]
     : [];
@@ -183,7 +188,7 @@ export function 规划视图() {
       <可折叠区块
         标题={t("步骤.规划")}
         徽标={
-          成功 ? <标签 语气="成功">{`${规划?.总时长?.toFixed(2) ?? "?"}s`}</标签>
+          成功 ? <标签 语气="成功">{`${规划?.duration_s?.toFixed(2) ?? "?"}s`}</标签>
           : 失败 ? <标签 语气="错误">{t("规划.失败")}</标签>
           : 规划中 ? <标签 语气="强调">{t("规划.规划中")}</标签>
           : 航点数 > 0 ? <标签>{t("规划.航点计数", { 数量: 航点数 })}</标签>
@@ -247,8 +252,8 @@ export function 规划视图() {
           <按钮 种类="次" 尺寸="小" disabled={忙} title={t("规划.文件说明")} on按下={() => 文件框.current?.click()}>
             {t("规划.导入")}
           </按钮>
-          {规划?.航点数 ? (
-            <span className="text-[0.85em] text-dim">{`${t("规划.已记录")}: ${规划.航点数}`}</span>
+          {规划?.waypoint_count ? (
+            <span className="text-[0.85em] text-dim">{`${t("规划.已记录")}: ${规划.waypoint_count}`}</span>
           ) : null}
         </div>
 
@@ -274,10 +279,10 @@ export function 规划视图() {
           </div>
         </details>
 
-        {规划?.逆解 ? (
+        {规划?.inverse_kinematics ? (
           <div className="mt-2 text-[0.82em]">
             <span className="text-dim">{t("规划.逆解")}：</span>
-            <span className="等宽">{规划.逆解}</span>
+            <span className="等宽">{规划.inverse_kinematics}</span>
           </div>
         ) : null}
 
@@ -292,16 +297,16 @@ export function 规划视图() {
           </div>
         ) : null}
 
-        {失败 && 规划?.原因 ? (
+        {失败 && 规划?.reason ? (
           <div className="mt-2 text-[0.85em]" style={{ color: "var(--warn)" }}>
-            {规划.原因}
+            {规划.reason}
           </div>
         ) : null}
 
-        {规划?.瓶颈关节 !== undefined && 规划.瓶颈关节 >= 0 ? (
+        {规划?.bottleneck_joint !== undefined && 规划.bottleneck_joint >= 0 ? (
           <div className="mt-1">
             <按钮 种类="幽灵" 尺寸="小" on按下={() => void 高亮瓶颈()}>
-              {t("规划.高亮瓶颈", { 关节: 规划.瓶颈关节 })}
+              {t("规划.高亮瓶颈", { 关节: 规划.bottleneck_joint })}
             </按钮>
           </div>
         ) : null}
@@ -313,53 +318,53 @@ export function 规划视图() {
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[0.82em]">
               <span className="text-dim">{t("规划.余量")}</span>
-              <标签 语气={余量语气(规划.速度余量)}>{`速度 ${((规划.速度余量 ?? 0) * 100).toFixed(0)}%`}</标签>
-              <标签 语气={余量语气(规划.加速度余量)}>{`加速度 ${((规划.加速度余量 ?? 0) * 100).toFixed(0)}%`}</标签>
-              <标签 语气={余量语气(规划.加加速度余量)}>{`加加速度 ${((规划.加加速度余量 ?? 0) * 100).toFixed(0)}%`}</标签>
+              <标签 语气={余量语气(规划.velocity_margin)}>{`速度 ${((规划.velocity_margin ?? 0) * 100).toFixed(0)}%`}</标签>
+              <标签 语气={余量语气(规划.acceleration_margin)}>{`加速度 ${((规划.acceleration_margin ?? 0) * 100).toFixed(0)}%`}</标签>
+              <标签 语气={余量语气(规划.jerk_margin)}>{`加加速度 ${((规划.jerk_margin ?? 0) * 100).toFixed(0)}%`}</标签>
             </div>
-            {规划.对比 ? (
+            {规划.comparison ? (
               <div className="mt-2">
                 <div className="flex items-baseline gap-1.5">
                   <span style={{ fontWeight: 600 }}>{t("规划.对比")}</span>
                   <span className="flex-1" />
-                  <标签 语气={(规划.对比["时长变化%"] ?? 0) > 0 ? "警示" : "强调"}>
-                    {`${(规划.对比["时长变化%"] ?? 0) >= 0 ? "+" : ""}${(规划.对比["时长变化%"] ?? 0).toFixed(0)}%`}
+                  <标签 语气={(规划.comparison.duration_change_percent ?? 0) > 0 ? "警示" : "强调"}>
+                    {`${(规划.comparison.duration_change_percent ?? 0) >= 0 ? "+" : ""}${(规划.comparison.duration_change_percent ?? 0).toFixed(0)}%`}
                   </标签>
                 </div>
                 <div className="text-[0.82em] text-dim">
-                  {`${(规划.对比.上次时长 ?? 0).toFixed(2)} s → ${(规划.对比.本次时长 ?? 0).toFixed(2)} s`}
+                  {`${(规划.comparison.previous_duration ?? 0).toFixed(2)} s → ${(规划.comparison.current_duration ?? 0).toFixed(2)} s`}
                 </div>
-                {规划.对比.上次sd?.length && 规划.对比.本次sd?.length ? (
-                  <对比图 上次={规划.对比.上次sd} 本次={规划.对比.本次sd} />
+                {规划.comparison.previous_speed_axis?.length && 规划.comparison.current_speed_axis?.length ? (
+                  <对比图 上次={规划.comparison.previous_speed_axis} 本次={规划.comparison.current_speed_axis} />
                 ) : null}
                 <div className="text-[0.78em] text-dim">{t("规划.对比.说明")}</div>
               </div>
             ) : null}
 
-            {规划.存盘路径 ? (
+            {规划.output_path ? (
               <div className="mt-1 text-[0.82em]">
                 <span className="text-dim">{t("规划.存盘")}：</span>
-                <span className="等宽 break-all">{规划.存盘路径}</span>
+                <span className="等宽 break-all">{规划.output_path}</span>
               </div>
             ) : null}
             {执行中 ? (
               <div className="mt-1 flex items-center gap-2 text-[0.82em]">
                 <span className="text-dim">{t("规划.执行进度")}</span>
-                <span className="等宽">{`${((规划.执行进度 ?? 0) * 100).toFixed(0)}%`}</span>
+                <span className="等宽">{`${((规划.execution_progress ?? 0) * 100).toFixed(0)}%`}</span>
               </div>
             ) : null}
-            {规划.限位来源 ? (
+            {规划.limit_source ? (
               <div className="mt-1 text-[0.82em]" style={{ color: "var(--warn)" }}>
-                {`${t("规划.限位来源")}: ${规划.限位来源}`}
+                {`${t("规划.限位来源")}: ${规划.limit_source}`}
               </div>
             ) : null}
           </>
         ) : null}
 
-        {规划?.包络?.length ? (
+        {规划?.envelope?.length ? (
           <div className="mt-2">
             <div className="text-[0.85em] text-dim">{t("规划.包络")}</div>
-            <包络图 包络={规划.包络} sd={规划.sd轴 ?? []} />
+            <包络图 包络={规划.envelope} sd={规划.speed_axis ?? []} />
           </div>
         ) : null}
       </可折叠区块>

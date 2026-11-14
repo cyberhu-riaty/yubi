@@ -15,7 +15,7 @@ Web桥.py —— 把仿真侧的消息开第二个出口：WebSocket + JSON（�
        所以仿真侧只做一件事：把消息塞进一个**按主题覆盖的字典**（latest-wins），
        不做序列化、不做网络 IO、不建队列。序列化与广播全在独立线程里。
     ② **不许拖垮软件**。端口被占、库缺失、客户端乱发 —— 任何失败都只打一行字，
-       界面与仿真继续跑。`启动.py` 里整个接入点包在 try 里。
+       界面与仿真继续跑。`runtime_engine.py` 里整个接入点包在 try 里。
     ③ **latest-wins 是官方语义**。`messages.Snapshot` 的 docstring 就写着
        "Intermediate values may be silently dropped" —— 正好是喂外部界面要的语义，
        不必自己造。所以这里也用"同主题新消息覆盖旧消息"，不做可靠投递。
@@ -28,8 +28,8 @@ Web桥.py —— 把仿真侧的消息开第二个出口：WebSocket + JSON（�
                         （覆盖，不加锁阻塞）
 
 用法：
-    .venv/bin/python 软件/主程序窗口.py              # 主入口（窗口内加载同一套界面）
-    .venv/bin/python 软件/主程序Web.py               # 浏览器入口
+    .venv/bin/python run_yubi.py                      # 主入口（窗口内加载同一套界面）
+    .venv/bin/python run_yubi_web.py                  # 浏览器入口
     浏览器打开 http://127.0.0.1:8712/                # 外部浏览器也能看同一套界面
 
     换端口：--web口 8899
@@ -722,7 +722,7 @@ def 安装水龙头(目标: Any) -> tuple[水龙头 | None, Any]:
 
     ★ 两种形态都要支持，否则无窗模式会静默失效：
       · 有窗：给的是官方端点对象，出口是它的 `send_to_viewer`（要**改写属性**）；
-      · 无窗：给的是 `启动.py` 里的局部函数 `发送`（闭包变量，**改不了它的属性**）。
+      · 无窗：给的是 `runtime_engine.py` 里的局部发送函数（闭包变量，不能改属性）。
         所以这里返回"装好之后的发送函数"，调用方必须用返回值，
         而不是假设"原对象已经被就地改写"。
 
@@ -893,7 +893,7 @@ _仪表盘_HTML = r"""<!DOCTYPE html>
       }
       记主题(帧.主题);
       if(帧.主题 === "指标") 收指标(帧);
-      if(帧.主题 === "模型状态" || 帧.主题 === "项目状态") 收状态(帧);
+      if(帧.主题 === "model.state" || 帧.主题 === "project.state") 收状态(帧);
       原始.textContent = JSON.stringify(帧.数据, null, 2).slice(0, 4000);
     };
   }

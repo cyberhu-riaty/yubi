@@ -44,7 +44,15 @@ from typing import Any
 #  11（2026-10-19）：补「告警」——病态检出（振荡/发散/跟踪超差/饱和）。
 #  12（2026-10-20）：补「设备连接」+「命令.设备」——模拟后端/安全状态/遥测/审计。
 #  13（2026-10-26）：补「仿真状态」+「命令.仿真」—— Run/Pause/Reset 分离。
-版本 = 13
+#  14（2026-10-29）：运行/重力彻底分离；补关节控制目标与实时控制状态。
+#  15（2026-10-29）：补「实验状态」+「命令.实验」—— GUI 可选择并完整运行注册实验。
+#  16（2026-10-30）：补仿真速度倍率；只调整墙钟节拍，不修改 MuJoCo timestep。
+#  17（2026-11-02）：实验消息主题、类名和字段迁移为英文；删除中文实验桥兼容层。
+#  18（2026-11-02）：规划消息主题、类名和字段迁移为英文；删除中文规划桥模块。
+#  19（2026-11-02）：模型/项目状态及模型/算法命令迁移为英文；删除中文模型桥模块。
+#  20（2026-11-02）：仿真运行/重力消息迁移为英文；删除中文重力桥模块。
+#  21（2026-11-02）：参数表、参数修改与参数事务迁移为英文；删除中文参数桥模块。
+版本 = 21
 
 
 @dataclasses.dataclass(frozen=True)
@@ -69,7 +77,7 @@ class 主题:
 # ---------------------------------------------------------------------------
 _下行 = (
     主题(
-        名="指标", 类名="指标消息", 方向="下行", 种类="快照",
+        名="指标", 类名="MetricsSnapshot", 方向="下行", 种类="快照",
         摘要="插件 指标() 报上来的实时数值，曲线的数据源（30 Hz 限频）",
         字段=(
             字段("时间", "number", "仿真时间（秒）"),
@@ -78,23 +86,23 @@ _下行 = (
         ),
     ),
     主题(
-        名="参数表", 类名="参数表消息", 方向="下行", 种类="快照",
+        名="parameter.table", 类名="ParameterTable", 方向="下行", 种类="快照",
         摘要="当前已装算法声明的可调参数（10 Hz 限频）",
         字段=(
-            字段("参数", "record<any>",
+            字段("parameters", "record<any>",
                  "{全名: 参数项}，全名 = 「插件名·参数名」。参数项的形状见下：\n"
-                 "  {插件, 插件英文, 插件版本, 参数, 值, 范围:[最小,最大], 步长, 单位}\n"
-                 "★ 这份形状是从 `参数桥.采集可调参数()` 的真实产物核对的，不是猜的：\n"
+                 "  {plugin, plugin_english, plugin_version, parameter, value, range, step, unit}\n"
+                 "★ 这份形状是从 `parameter_bridge.collect_parameters()` 的真实产物核对的：\n"
                  "  早期契约里写成 {值,最小,最大} —— 那是**按想象写的**，与实现不符，\n"
                  "  后果是前端把 `范围` 数组当成对象逐字符渲染，表格里出现一堆 0=N 1=· 的乱码。\n"
                  "  这正是「契约必须对着实现自证」的理由：`工具/验证/契约自检.py` 现在会\n"
-                 "  用真实插件的 `可调参数()` 产出核对本字段的形状。"),
+                 "  用真实插件的 `adjustable_parameters()` 产出核对本字段的形状。"),
         ),
     ),
     主题(
-        名="参数改动", 类名="参数消息", 方向="下行", 种类="快照",
+        名="parameter.updated", 类名="ParameterUpdate", 方向="下行", 种类="快照",
         摘要="参数被改动后的回执（界面照它更新控件）",
-        字段=(字段("改动", "record<any>", "{插件名: {参数名: 新值}}"),),
+        字段=(字段("updates", "record<any>", "{full parameter name: new value}"),),
     ),
     主题(
         名="辨识状态", 类名="辨识状态", 方向="下行", 种类="快照",
@@ -110,15 +118,15 @@ _下行 = (
         ),
     ),
     主题(
-        名="模型状态", 类名="模型状态", 方向="下行", 种类="快照",
+        名="model.state", 类名="ModelState", 方向="下行", 种类="快照",
         摘要="当前加载的模型（2 Hz 限频）",
         字段=(
-            字段("当前路径", "string", "相对包根或绝对路径"),
-            字段("当前显示名", "string", "给人看的型号名"),
-            字段("自由度", "number", "nq"),
-            字段("执行器数", "number", "nu"),
-            字段("状态", "string", "就绪 / ✓ … / ✗ …"),
-            字段("耗时", "number", "上次加载耗时（秒）"),
+            字段("current_path", "string", "相对包根或绝对路径"),
+            字段("current_display_name", "string", "给人看的型号名"),
+            字段("dof", "number", "nq"),
+            字段("actuator_count", "number", "nu"),
+            字段("status", "string", "就绪 / ✓ … / ✗ …"),
+            字段("duration_s", "number", "上次加载耗时（秒）"),
         ),
     ),
     主题(
@@ -154,51 +162,51 @@ _下行 = (
         ),
     ),
     主题(
-        名="参数事务", 类名="参数事务结果", 方向="下行", 种类="快照",
+        名="parameter.transaction", 类名="ParameterTransactionResult", 方向="下行", 种类="快照",
         摘要="批量改参数的结果：要么全提交，要么全回滚（不会有「改了一半」）",
         字段=(
-            字段("状态", "string", "空闲 / ✓ 已提交 / ✗ 已回滚"),
-            字段("成功数", "number", ""),
-            字段("失败数", "number", ""),
-            字段("时间", "string", ""),
-            字段("差异", "object[]", "每项：{全名, 旧值, 新值}"),
-            字段("失败", "string[]", "逐条失败原因"),
-            字段("说明", "string", "给人看的一句话"),
+            字段("state", "string", "idle / committed / rolled_back"),
+            字段("success_count", "number", ""),
+            字段("failure_count", "number", ""),
+            字段("timestamp", "string", ""),
+            字段("changes", "object[]", "每项：{full_name, old_value, new_value}"),
+            字段("failures", "string[]", "逐条失败原因"),
+            字段("description", "string", "给人看的一句话"),
         ),
     ),
     主题(
-        名="规划结果", 类名="规划结果", 方向="下行", 种类="快照",
+        名="planning.result", 类名="PlanningResult", 方向="下行", 种类="快照",
         摘要="关节航点轨迹规划的结果与校验（终端速度/余量/瓶颈/包络）",
         字段=(
-            字段("状态", "string", "空闲 / 规划中 / ✓ 完成 / ✗ 失败"),
-            字段("航点数", "number", "参与规划的航点数"),
-            字段("自由度", "number", "n"),
-            字段("总时长", "number", "秒"),
-            字段("路径长度", "number", "关节空间弧长 rad"),
-            字段("最大关节速度", "number", "rad/s"),
-            字段("最大关节加速度", "number", "rad/s²"),
-            字段("最大关节加加速度", "number", "rad/s³（只校验不整形）"),
-            字段("速度余量", "number", "1 - max(|qd|/vlim)，负数=超限"),
-            字段("加速度余量", "number", "同上"),
-            字段("加加速度余量", "number", "同上"),
-            字段("终端速度", "number", "必须≈0"),
-            字段("平滑偏差", "number", "rad"),
-            字段("瓶颈关节", "number", "-1 = 无"),
-            字段("瓶颈类型", "string", "速度 / 加速度 / 加加速度"),
-            字段("瓶颈位置", "number", "s ∈ [0,1]"),
-            字段("最优下界", "number", "∫ds/v_max，纯理论下界"),
-            字段("实际比下界", "number", "实际时长 / 下界"),
-            字段("限位来源", "string", "显式 / 估算（估算会写明）"),
-            字段("时间", "string", ""),
-            字段("原因", "string", "失败原因（空 = 正常）"),
-            字段("逆解", "string", "笛卡尔输入的逆解说明（末端名/点数/最大残差）；空 = 关节输入"),
-            字段("对比", "object", "换约束重规划后的对比（同一批航点才给）：时长/速度/两条 sd 曲线"),
-            字段("存盘路径", "string", "离线产物目录（输出/05_轨迹/…，空 = 没存）"),
-            字段("执行状态", "string", "空闲 / 执行中 / ✓ 完成 / ✗ 中断"),
-            字段("执行进度", "number", "0..1"),
-            字段("包络", "number[]", "v_s_max(s) 采样（≤200 点）"),
-            字段("s轴", "number[]", "对应的 s"),
-            字段("sd轴", "number[]", "实际 sd(s)"),
+            字段("status", "string", "idle / planning / completed / failed"),
+            字段("waypoint_count", "number", "参与规划的航点数"),
+            字段("dof", "number", "n"),
+            字段("duration_s", "number", "秒"),
+            字段("path_length", "number", "关节空间弧长 rad"),
+            字段("max_joint_velocity", "number", "rad/s"),
+            字段("max_joint_acceleration", "number", "rad/s²"),
+            字段("max_joint_jerk", "number", "rad/s³（只校验不整形）"),
+            字段("velocity_margin", "number", "1 - max(|qd|/vlim)，负数=超限"),
+            字段("acceleration_margin", "number", "同上"),
+            字段("jerk_margin", "number", "同上"),
+            字段("terminal_velocity", "number", "必须≈0"),
+            字段("smoothing_deviation", "number", "rad"),
+            字段("bottleneck_joint", "number", "-1 = 无"),
+            字段("bottleneck_type", "string", "速度 / 加速度 / 加加速度"),
+            字段("bottleneck_position", "number", "s ∈ [0,1]"),
+            字段("optimal_lower_bound", "number", "∫ds/v_max，纯理论下界"),
+            字段("actual_to_lower_bound", "number", "实际时长 / 下界"),
+            字段("limit_source", "string", "显式 / 估算（估算会写明）"),
+            字段("timestamp", "string", ""),
+            字段("reason", "string", "失败原因（空 = 正常）"),
+            字段("comparison", "object", "同一路径换约束重规划后的对比"),
+            字段("inverse_kinematics", "string", "笛卡尔输入的逆解说明；空 = 关节输入"),
+            字段("output_path", "string", "离线产物目录（输出/05_轨迹/…，空 = 没存）"),
+            字段("execution_status", "string", "idle / running / completed / interrupted"),
+            字段("execution_progress", "number", "0..1"),
+            字段("envelope", "number[]", "v_s_max(s) 采样（≤200 点）"),
+            字段("path_axis", "number[]", "对应的 s"),
+            字段("speed_axis", "number[]", "实际 sd(s)"),
         ),
     ),
     主题(
@@ -216,7 +224,7 @@ _下行 = (
         ),
     ),
     主题(
-        名="插件目录", 类名="插件目录", 方向="下行", 种类="快照",
+        名="插件目录", 类名="PluginCatalog", 方向="下行", 种类="快照",
         摘要="本机算法库里的插件清单（含版本/说明/作者/被哪些项目用到）",
         字段=(
             字段("数量", "number", "共几个"),
@@ -239,7 +247,7 @@ _下行 = (
         ),
     ),
     主题(
-        名="系统", 类名="系统状态", 方向="下行", 种类="快照",
+        名="系统", 类名="SystemState", 方向="下行", 种类="快照",
         摘要="运行期系统指标（1 Hz）：实时率、步频、内存 —— 监控视图的数据源",
         字段=(
             字段("仿真时间", "number", "累计仿真时间（秒）"),
@@ -253,39 +261,71 @@ _下行 = (
         ),
     ),
     主题(
-        名="仿真状态", 类名="仿真状态", 方向="下行", 种类="快照",
-        摘要="全局仿真运行状态：运行/暂停、data.time 与复位次数",
+        名="simulation.state", 类名="SimulationState", 方向="下行", 种类="快照",
+        摘要="全局仿真运行状态：运行/暂停、data.time、复位次数与目标速度",
         字段=(
-            字段("状态", "string", "运行 / 暂停"),
-            字段("仿真时间", "number", "MuJoCo data.time（秒）"),
-            字段("复位次数", "number", "本次会话执行 Reset 的累计次数"),
-            字段("说明", "string", "最近一次运行控制动作"),
+            字段("state", "string", "running / paused"),
+            字段("gravity_enabled", "boolean", "是否使用模型 XML 中的重力；与运行/暂停相互独立"),
+            字段("simulation_time", "number", "MuJoCo data.time（秒）"),
+            字段("reset_count", "number", "本次会话执行 Reset 的累计次数"),
+            字段("speed_multiplier", "number", "目标墙钟速度；实际达到值以系统.RTF为准"),
+            字段("description", "string", "最近一次运行控制动作"),
         ),
     ),
     主题(
-        名="资产库", 类名="资产库", 方向="下行", 种类="快照",
+        名="experiment.state", 类名="ExperimentState", 方向="下行", 种类="快照",
+        摘要="当前实验、可选实验、运行进度与自动导出结果",
+        字段=(
+            字段("current", "string", "当前实验注册名；空表示未选择"),
+            字段("name", "string", "当前实验显示名"),
+            字段("status", "string", "not_selected / loaded / running / paused / completed / failed"),
+            字段("available", "object[]", "每项：{key,name,model,project,controllers[],duration_s,description}"),
+            字段("model", "string", "实验声明的模型路径"),
+            字段("project", "string", "实验声明的项目"),
+            字段("controllers", "string[]", "实验声明的控制器注册名"),
+            字段("duration_s", "number", "本次实验的仿真时长"),
+            字段("elapsed_s", "number", "从本次点击开始累计的仿真时间"),
+            字段("result_directory", "string", "自动导出完成后的目录"),
+            字段("description", "string", "最近一次实验操作说明"),
+        ),
+    ),
+    主题(
+        名="控制状态", 类名="ControlState", 方向="下行", 种类="快照",
+        摘要="关节目标输入区的数据源：当前位置、速度、控制量与已接受目标",
+        字段=(
+            字段("关节名", "string[]", "与 qpos 顺序对应的关节/坐标名称"),
+            字段("当前位置", "number[]", "data.qpos"),
+            字段("当前速度", "number[]", "data.qvel"),
+            字段("当前控制", "number[]", "data.ctrl"),
+            字段("目标", "number[]", "当前已接受的关节目标"),
+            字段("目标来源", "string", "当前位置 / 手动输入"),
+            字段("说明", "string", "最近一次目标处理结果"),
+        ),
+    ),
+    主题(
+        名="model.library", 类名="AssetLibrary", 方向="下行", 种类="快照",
         摘要="可选模型清单（资产库视图）—— 与「模型状态」区分：那是当前装的哪台",
         字段=(
-            字段("数量", "number", "共几台"),
-            字段("模型", "object[]",
-                 "每项：{标识, 显示名, 类别, 自由度, 执行器数, 许可, 可控制, 路径}；"
+            字段("count", "number", "共几台"),
+            字段("models", "object[]",
+                 "每项：{id, display_name, category, dof, actuator_count, license, controllable, path}；"
                  "路径是可直接加载的那个文件"),
         ),
     ),
     主题(
-        名="项目状态", 类名="项目状态", 方向="下行", 种类="快照",
-        摘要="当前项目 + 挂了哪些算法 + 物理开关（方案 C 的核心状态）",
+        名="project.state", 类名="ProjectState", 方向="下行", 种类="快照",
+        摘要="当前项目 + 挂了哪些算法 + 重力设置（方案 C 的核心状态）",
         字段=(
-            字段("项目", "string", "项目名（空 = 没有对应项目）"),
-            字段("模型路径", "string", ""),
-            字段("模型显示名", "string", ""),
-            字段("算法", "object[]", "已装配算法：[{名称,版本,英文名,接管控制,参数…}]"),
-            字段("报告", "string[]", "上次装配的逐行说明"),
-            字段("算法库", "string[]", "算法库里可选的算法名"),
-            字段("已存盘", "boolean", "当前算法组是否已写回项目文件"),
-            字段("控盘", "string", "谁在写 ctrl[:]（抢方向盘提示）"),
-            字段("被覆盖", "string[]", "输出被覆盖的算法名"),
-            字段("重力开", "boolean", "兼容字段：物理是否推进（新界面以仿真状态为准）"),
+            字段("project", "string", "项目名（空 = 没有对应项目）"),
+            字段("model_path", "string", ""),
+            字段("model_display_name", "string", ""),
+            字段("algorithms", "object[]", "已装配算法元信息"),
+            字段("report", "string[]", "上次装配的逐行说明"),
+            字段("algorithm_library", "string[]", "算法库里可选的算法名"),
+            字段("saved", "boolean", "当前算法组是否已写回项目文件"),
+            字段("active_controller", "string", "谁在写 ctrl[:]（抢方向盘提示）"),
+            字段("overridden_controllers", "string[]", "输出被覆盖的算法名"),
+            字段("gravity_enabled", "boolean", "是否启用模型重力；不代表仿真是否运行"),
         ),
     ),
 )
@@ -300,29 +340,29 @@ _下行 = (
 # ---------------------------------------------------------------------------
 _上行 = (
     主题(
-        名="命令.参数事务", 类名="批量参数命令", 方向="上行", 种类="快照",
+        名="command.parameter_transaction", 类名="ParameterTransactionCommand", 方向="上行", 种类="快照",
         摘要="一次性应用一组参数（预检不过就一个都不改）",
         字段=(
-            字段("动作", "string", "应用（目前只认这个）"),
-            字段("参数", "object[]", "((全名, 值), …) 形式，全名形如「插件名·参数名」"),
+            字段("action", "string", "apply"),
+            字段("parameters", "object[]", "每项 {full_name, value}"),
         ),
     ),
     主题(
-        名="命令.规划", 类名="规划命令", 方向="上行", 种类="快照",
+        名="command.planning", 类名="PlanningCommand", 方向="上行", 种类="快照",
         摘要="对已记录的关节航点跑一次规划",
         字段=(
-            字段("动作", "string", "规划 / 记录航点 / 清空航点 / 载入航点"),
-            字段("笛卡尔航点", "object[]",
-                 "每项 {xyz: [x,y,z]}，单位米。给了就先做逆解；**只支持位置，姿态未实现**"),
-            字段("航点", "object[]",
+            字段("action", "string", "plan / record_waypoint / clear_waypoints / load_waypoints"),
+            字段("waypoints", "object[]",
                  "直接给航点（每项是一组关节角）。给了就用它，不给就用已记录的"),
-            字段("速度上限", "number[]", "rad/s（不给则从模型估算）"),
-            字段("加速度上限", "number[]", "rad/s²（不给则 4×速度）"),
-            字段("加加速度上限", "number[]", "rad/s³（不给则 20×加速度）"),
-            字段("网格数", "number", "s 上离散点数，默认 2000"),
-            字段("平滑轮数", "number", "0 = 不平滑"),
-            字段("平滑系数", "number", "≤0.49"),
-            字段("偏差容差", "number", "rad"),
+            字段("cartesian_waypoints", "object[]",
+                 "每项 {xyz: [x,y,z]}，单位米。给了就先做逆解；**只支持位置，姿态未实现**"),
+            字段("velocity_limits", "number[]", "rad/s（不给则从模型估算）"),
+            字段("acceleration_limits", "number[]", "rad/s²（不给则 4×速度）"),
+            字段("jerk_limits", "number[]", "rad/s³（不给则 20×加速度）"),
+            字段("grid_size", "number", "s 上离散点数，默认 2000"),
+            字段("smoothing_iterations", "number", "0 = 不平滑"),
+            字段("smoothing_factor", "number", "≤0.49"),
+            字段("deviation_tolerance", "number", "rad"),
         ),
     ),
     主题(
@@ -356,30 +396,46 @@ _上行 = (
         ),
     ),
     主题(
-        名="命令.重力", 类名="重力状态", 方向="上行", 种类="快照",
+        名="command.gravity", 类名="GravityState", 方向="上行", 种类="快照",
         摘要="物理总闸：True = 推进物理（重力生效），False = 冻结在默认位置",
-        字段=(字段("重力开", "boolean", ""),),
+        字段=(字段("gravity_enabled", "boolean", ""),),
     ),
     主题(
-        名="命令.仿真", 类名="仿真控制命令", 方向="上行", 种类="命令",
-        摘要="全局仿真控制：Run 保持状态继续、Pause 原地暂停、Reset 复位并暂停",
-        字段=(字段("动作", "string", "运行 / 暂停 / 复位"),),
-    ),
-    主题(
-        名="命令.换模型", 类名="换模型命令", 方向="上行", 种类="命令",
-        摘要="切换机械臂（会连带按项目重新装配算法）",
+        名="command.simulation", 类名="SimulationControlCommand", 方向="上行", 种类="命令",
+        摘要="全局仿真控制：运行、暂停、复位或设置墙钟速度倍率",
         字段=(
-            字段("路径", "string", "模型路径（相对包根或绝对）"),
-            字段("显示名", "string", "可留空"),
+            字段("action", "string", "run / pause / reset / speed"),
+            字段("speed_multiplier", "number", "0.25..4；只调整墙钟节拍，不修改 timestep"),
         ),
     ),
     主题(
-        名="命令.应用算法", 类名="应用算法命令", 方向="上行", 种类="命令",
+        名="command.experiment", 类名="ExperimentCommand", 方向="上行", 种类="命令",
+        摘要="按注册名加载实验；Run/Pause/Reset 继续复用全局仿真控制",
+        字段=(
+            字段("action", "string", "load"),
+            字段("experiment", "string", "ExperimentRegistry 中的注册名"),
+        ),
+    ),
+    主题(
+        名="命令.控制目标", 类名="ControlTargetCommand", 方向="上行", 种类="命令",
+        摘要="设置一组关节位置目标；由当前控制算法决定如何跟踪，不直接写 data.ctrl",
+        字段=(字段("target", "number[]", "按 qpos 顺序，转动关节单位 rad"),),
+    ),
+    主题(
+        名="command.model", 类名="SwitchModelCommand", 方向="上行", 种类="命令",
+        摘要="切换机械臂（会连带按项目重新装配算法）",
+        字段=(
+            字段("path", "string", "模型路径（相对包根或绝对）"),
+            字段("display_name", "string", "可留空"),
+        ),
+    ),
+    主题(
+        名="command.algorithms", 类名="ApplyAlgorithmsCommand", 方向="上行", 种类="命令",
         摘要="换一组控制算法（等价于点【Algorithms】面板的 Apply）",
         字段=(
-            字段("算法", "object[]", "[{插件: 名字}] 或 [{插件: 名字, …参数}]"),
-            字段("落盘", "boolean", "是否写回项目文件"),
-            字段("重置姿态", "boolean", ""),
+            字段("algorithms", "object[]", "[{plugin: 名字}]"),
+            字段("persist", "boolean", "是否写回项目文件"),
+            字段("reset_pose", "boolean", ""),
         ),
     ),
     主题(
@@ -391,10 +447,10 @@ _上行 = (
         ),
     ),
     主题(
-        名="命令.改参数", 类名="参数消息", 方向="上行", 种类="快照",
+        名="command.parameters", 类名="ParameterUpdate", 方向="上行", 种类="快照",
         摘要="改一个或多个算法参数（等价于在【Controller params】面板拖滑杆）",
         字段=(
-            字段("改动", "record<number>",
+            字段("updates", "record<number>",
                  "{全名: 新值}，全名必须是参数表里的键（形如「插件名·参数名」）。"
                  "★ 为什么它不是普通命令而是快照语义：官方那条通道本来就是 latest-wins，"
                  "拖滑杆会连发很多条，照旧沿用才不会出现「排队抖动」。"),
@@ -478,11 +534,18 @@ def _符合(值: Any, 类型: str) -> bool:
 
 # 每条命令字段的额外约束（不做的话，"动作" 写成任意字符串都能过）
 _枚举: dict[tuple[str, str], tuple[str, ...]] = {
-    ("命令.仿真", "动作"): ("运行", "暂停", "复位", "run", "pause", "reset"),
+    ("command.parameter_transaction", "action"): ("apply",),
+    ("command.simulation", "action"): ("run", "pause", "reset", "speed"),
+    ("command.experiment", "action"): ("load",),
+    ("command.planning", "action"): (
+        "plan", "record_waypoint", "clear_waypoints", "load_waypoints",
+        "execute", "stop_execution",
+    ),
     ("命令.辨识", "动作"): ("开始", "停止", "start", "stop"),
     ("命令.录制", "动作"): ("开始", "停止", "回放", "start", "stop", "replay"),
 }
 _范围: dict[tuple[str, str], tuple[float, float]] = {
+    ("command.simulation", "speed_multiplier"): (0.25, 4.0),
     ("命令.辨识", "时长"): (0.1, 3600.0),
     ("命令.录制", "频率"): (1.0, 10000.0),
 }
@@ -542,10 +605,19 @@ def 查漂移() -> list[str]:
         sys.path.insert(0, 软件目录)
 
     源模块 = {
-        "指标消息": "指标桥", "参数表消息": "参数桥", "参数消息": "参数桥",
-        "辨识状态": "辨识桥", "模型状态": "模型桥", "项目状态": "模型桥",
-        "重力状态": "重力桥", "仿真状态": "重力桥", "仿真控制命令": "重力桥",
-        "换模型命令": "模型桥", "应用算法命令": "模型桥",
+        "MetricsSnapshot": "metrics_bridge", "PluginCatalog": "插件桥",
+        "ParameterTable": "parameter_bridge",
+        "ParameterUpdate": "parameter_bridge",
+        "ParameterTransactionResult": "parameter_bridge",
+        "辨识状态": "辨识桥", "ModelState": "model_bridge",
+        "AssetLibrary": "model_bridge", "ProjectState": "model_bridge",
+        "GravityState": "simulation_control", "SimulationState": "simulation_control",
+        "SimulationControlCommand": "simulation_control",
+        "ExperimentState": "experiment_bridge", "ExperimentCommand": "experiment_bridge",
+        "PlanningResult": "planning_bridge", "PlanningCommand": "planning_bridge",
+        "ControlState": "control_bridge", "ControlTargetCommand": "control_bridge",
+        "SwitchModelCommand": "model_bridge", "ApplyAlgorithmsCommand": "model_bridge",
+        "ParameterTransactionCommand": "parameter_bridge",
         "辨识命令": "辨识桥", "录制命令": "录制桥",
     }
     问题: list[str] = []

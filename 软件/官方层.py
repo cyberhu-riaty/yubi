@@ -142,7 +142,7 @@ def _缺东西提示(名: str | None = None) -> str:
     '''拼一段"缺什么 + 为什么 + 怎么修"的人话。'''
     版本 = getattr(mujoco, "__version__", "未知") if mujoco else "未知"
     头 = ("缺少：" + 名) if 名 else ""
-    启动命令 = _环境命令("软件/主程序窗口.py")
+    启动命令 = _环境命令("run_yubi.py")
     return (
         f"\n✗ 当前 Python 环境里没有可用的 Studio 插件系统：{头}\n\n"
         f"  你现在用的是：{sys.executable}\n"

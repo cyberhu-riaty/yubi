@@ -436,7 +436,7 @@
     scrollbar-gutter: stable;
   }
 
-  /* “定义”页不整体滚动：五个区块标题固定，一次只展开一块。
+  /* “定义”页不整体滚动：区块标题固定，一次只展开一块。
      展开内容独占剩余高度，过长时只滚动该区块内部。 */
   .定义页固定 {
     display: flex;
@@ -835,3 +835,8 @@
 .参数输入:hover { background: var(--bg-frame-hover); }
 .参数输入:focus-visible { background: var(--bg-frame-on); outline: 2px solid var(--accent); outline-offset: 1px; }
 .参数输入:disabled { opacity: 0.5; }
+.参数输入[data-脏="true"] { border-color: var(--accent); background: var(--bg-frame-on); }
+.参数输入[data-错误="true"] { border-color: var(--danger); }
+.参数单元 { display: inline-flex; align-items: center; gap: 3px; }
+.参数错误 { color: var(--danger); font-weight: 700; cursor: help; font-size: 0.9em; }
+.参数保存 { color: var(--warn); font-size: 0.9em; }

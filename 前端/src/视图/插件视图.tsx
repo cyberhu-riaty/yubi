@@ -25,7 +25,7 @@ export function 插件视图() {
   const t = use取();
   const 目录 = 用仓库((s) => s.插件.数据);
   const 项目 = 用仓库((s) => s.项目.数据);
-  const 不兼容报告 = (项目?.报告 ?? []).filter((行) => 行.includes("不兼容"));
+  const 不兼容报告 = (项目?.report ?? []).filter((行) => 行.includes("不兼容"));
 
   const 项们 = 目录?.插件 ?? [];
 

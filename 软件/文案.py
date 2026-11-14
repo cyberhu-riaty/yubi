@@ -123,8 +123,8 @@ _包根 = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
     # ---- 控制器参数 ----
     "参数.标题": ("控制器参数", "Controller params"),
     "参数.无可调": ("没有可调参数。在你的插件里加这个方法：", "No tunable parameters. Add to your plugin:"),
-    "参数.说明": ("（方法名/键名不是 ASCII；完整示例打在终端）",
-              "(the method/key names are non-ASCII; full example printed in terminal)"),
+    "参数.说明": ("（接口名使用英文；参数显示名可以使用中文）",
+              "(English API names; parameter display names may be localized)"),
     "参数.统计": ("重绘 {帧} 帧｜已发改动 {改动}", "frames={帧}  changes sent={改动}"),
     "参数.重置": ("重置为项目里的值", "Reset"),
 
@@ -295,8 +295,8 @@ _包根 = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
                "this project does not use that name as part of its own name."),
     "关于.声明三": ("机器人模型来自 mujoco_menagerie 仓库（BSD 类许可证）。",
                "Robot models come from the mujoco_menagerie repository (BSD-style licence)."),
-    "参数.示例代码": ("    def <可调参数方法>(self): return {...}",
-                "    def <tunable-params method>(self): return {...}"),
+    "参数.示例代码": ("    def adjustable_parameters(self): return {...}",
+                "    def adjustable_parameters(self): return {...}"),
     "参数.统计行": ("重绘 {帧} 帧｜已发改动 {改动}", "frames={帧}  changes sent={改动}"),
     "录制.末行": ("最后命令={命令}   已发 {次数}", "last command={命令}   sent={次数}"),
     "曲线.峰值": ("= {值:+.3f}（峰值 {峰:.3f}）", "= {值:+.3f}  (peak {峰:.3f})"),

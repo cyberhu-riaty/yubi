@@ -54,7 +54,7 @@ class 发布器:
             return False
         self._下次 = 墙钟 + self._间隔
         状态 = None
-        for 插件 in getattr(注册表, "_目标", []):
+        for 插件 in getattr(注册表, "_targets", []):
             取 = getattr(插件, "状态消息", None)
             if 取 is None:
                 continue

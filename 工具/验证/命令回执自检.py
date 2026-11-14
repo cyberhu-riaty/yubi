@@ -34,21 +34,21 @@ async def 检查() -> None:
     for 请求号, 开 in (("same-topic-1", True), ("same-topic-2", False)):
         await 服务._收一帧(连接, json.dumps({
             "请求": 请求号,
-            "主题": "命令.重力",
-            "数据": {"重力开": 开},
+            "主题": "command.gravity",
+            "数据": {"gravity_enabled": 开},
         }, ensure_ascii=False))
 
     assert len(连接.已发送) == 2, "两条命令应分别产生回执"
     回执们 = [帧["数据"] for 帧 in 连接.已发送]
     assert [回执["请求"] for 回执 in 回执们] == ["same-topic-1", "same-topic-2"]
-    assert all(回执["主题"] == "命令.重力" for 回执 in 回执们)
+    assert all(回执["主题"] == "command.gravity" for 回执 in 回执们)
     assert all(回执["通过"] for 回执 in 回执们)
     assert len(服务.取命令()) == 2, "两条合法命令都应进入后端命令队列"
 
     await 服务._收一帧(连接, json.dumps({
         "请求": 123,
-        "主题": "命令.重力",
-        "数据": {"重力开": True},
+        "主题": "command.gravity",
+        "数据": {"gravity_enabled": True},
     }, ensure_ascii=False))
     错误回执 = 连接.已发送[-1]["数据"]
     assert not 错误回执["通过"]

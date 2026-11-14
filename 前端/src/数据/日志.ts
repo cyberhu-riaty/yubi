@@ -328,15 +328,15 @@ export function 起日志(): () => void {
 
       // 规划结果里的真实关节信息：失败 / 估算限位时产生一条结构化事件。
       // 这不是"解析日志猜关节"，而是直接读后端规划结果的 `瓶颈关节`。
-      if (e.帧.主题 === "规划结果") {
-        const 状态 = 串(数据.状态);
-        const 原因 = 串(数据.原因);
-        const 限位 = 串(数据.限位来源);
-        const 关节 = 数(数据.瓶颈关节);
-        const 失败 = 状态.includes("✗");
+      if (e.帧.主题 === "planning.result") {
+        const 状态 = 串(数据.status);
+        const 原因 = 串(数据.reason);
+        const 限位 = 串(数据.limit_source);
+        const 关节 = 数(数据.bottleneck_joint);
+        const 失败 = 状态 === "failed";
         const 估算 = 限位.includes("估算");
         if (失败 || 估算) {
-          const 签名 = [状态, 数据.时间, 原因, 关节, 限位].join("|");
+          const 签名 = [状态, 数据.timestamp, 原因, 关节, 限位].join("|");
           if (签名 !== 上次规划事件) {
             上次规划事件 = 签名;
             const 关节文本 = 关节 !== undefined && 关节 >= 0 ? `J${关节}` : 取("通用.无");
@@ -348,7 +348,7 @@ export function 起日志(): () => void {
               "规划",
               文本,
               { 模块: "规划", 关节: 关节 !== undefined && 关节 >= 0 ? 关节 : undefined },
-              "规划结果",
+              "planning.result",
               失败 ? 原因 || undefined : 限位 || undefined,
             );
           }
