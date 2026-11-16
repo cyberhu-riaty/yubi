@@ -55,7 +55,7 @@ export interface 连接事件 {
 }
 
 /** 一条曲线的采样点 */
-export interface 采样点 {
+export interface SamplePoint {
   t: number;
   v: number;
 }

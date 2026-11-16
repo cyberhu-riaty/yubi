@@ -11,18 +11,18 @@
  *   界面上这句话必须写出来，不能让用户以为它做了 S 曲线。
  */
 import { useState } from "react";
-import { 可折叠区块 } from "../组件/可折叠区块";
-import { 标签 } from "../组件/标签";
-import { 按钮 } from "../组件/按钮";
-import { 数值表, type 数值行 } from "../组件/数值表";
+import { CollapsibleSection } from "../组件/可折叠区块";
+import { Tag } from "../组件/标签";
+import { Button } from "../组件/按钮";
+import { ValueTable, type ValueRow } from "../组件/数值表";
 import { useRef } from "react";
 import { 命令, 用仓库 } from "../数据/仓库";
 import { 解析航点文本, type 解析结果 } from "../数据/航点文件";
 import { 命令收尾, 记命令发出 } from "../数据/日志";
-import { use取 } from "./文案";
+import { useTranslation } from "./文案";
 
 export function 规划视图() {
-  const t = use取();
+  const t = useTranslation();
   const 规划 = 用仓库((s) => s.planning.数据);
   const 模型 = 用仓库((s) => s.模型.数据);
   const 连接 = 用仓库((s) => s.连接);
@@ -156,49 +156,49 @@ export function 规划视图() {
   };
 
    /** 余量 → 标签语气：负数（超限）就是警示 */
-  const 余量语气 = (v?: number) => (v === undefined ? "中性" : v < 0 ? "警示" : v < 0.05 ? "强调" : "中性");
+  const 余量语气 = (v?: number) => (v === undefined ? "neutral" : v < 0 ? "notice" : v < 0.05 ? "emphasis" : "neutral");
 
-  const 行: 数值行[] = 规划
+  const 行: ValueRow[] = 规划
     ? [
-        { 键: t("规划.航点数"), 值: <span className="等宽">{规划.waypoint_count ?? "--"}</span> },
-        { 键: t("规划.自由度"), 值: <span className="等宽">{规划.dof ?? "--"}</span> },
-        { 键: t("规划.总时长"), 值: <span className="等宽">{规划.duration_s === undefined ? "--" : `${规划.duration_s.toFixed(3)} s`}</span> },
-        { 键: t("规划.路径长度"), 值: <span className="等宽">{规划.path_length === undefined ? "--" : `${规划.path_length.toFixed(3)} rad`}</span> },
-        { 键: t("规划.终端速度"), 值: <span className="等宽">{(规划.terminal_velocity ?? 0).toExponential(1)}</span> },
-        { 键: t("规划.最大速度"), 值: <span className="等宽">{(规划.max_joint_velocity ?? 0).toFixed(3)}</span> },
-        { 键: t("规划.最大加速度"), 值: <span className="等宽">{(规划.max_joint_acceleration ?? 0).toFixed(2)}</span> },
-        { 键: t("规划.最大加加速度"), 值: <span className="等宽">{(规划.max_joint_jerk ?? 0).toFixed(2)}</span> },
+        { key: t("规划.航点数"), value: <span className="等宽">{规划.waypoint_count ?? "--"}</span> },
+        { key: t("规划.自由度"), value: <span className="等宽">{规划.dof ?? "--"}</span> },
+        { key: t("规划.总时长"), value: <span className="等宽">{规划.duration_s === undefined ? "--" : `${规划.duration_s.toFixed(3)} s`}</span> },
+        { key: t("规划.路径长度"), value: <span className="等宽">{规划.path_length === undefined ? "--" : `${规划.path_length.toFixed(3)} rad`}</span> },
+        { key: t("规划.终端速度"), value: <span className="等宽">{(规划.terminal_velocity ?? 0).toExponential(1)}</span> },
+        { key: t("规划.最大速度"), value: <span className="等宽">{(规划.max_joint_velocity ?? 0).toFixed(3)}</span> },
+        { key: t("规划.最大加速度"), value: <span className="等宽">{(规划.max_joint_acceleration ?? 0).toFixed(2)}</span> },
+        { key: t("规划.最大加加速度"), value: <span className="等宽">{(规划.max_joint_jerk ?? 0).toFixed(2)}</span> },
         {
-          键: t("规划.瓶颈"),
-          值: (
+          key: t("规划.瓶颈"),
+          value: (
             <span className="等宽">
               {规划.bottleneck_type ? `${规划.bottleneck_type} @ J${规划.bottleneck_joint} (s=${(规划.bottleneck_position ?? 0).toFixed(2)})` : "--"}
             </span>
           ),
         },
         {
-          键: t("规划.实际比下界"),
-          值: <span className="等宽">{(规划.actual_to_lower_bound ?? 0).toFixed(2)}<span className="ml-1 text-dim">×</span></span>,
+          key: t("规划.实际比下界"),
+          value: <span className="等宽">{(规划.actual_to_lower_bound ?? 0).toFixed(2)}<span className="ml-1 text-dim">×</span></span>,
         },
       ]
     : [];
 
   return (
     <div className="space-y-2">
-      <可折叠区块
-        标题={t("步骤.规划")}
-        徽标={
-          成功 ? <标签 语气="成功">{`${规划?.duration_s?.toFixed(2) ?? "?"}s`}</标签>
-          : 失败 ? <标签 语气="错误">{t("规划.失败")}</标签>
-          : 规划中 ? <标签 语气="强调">{t("规划.规划中")}</标签>
-          : 航点数 > 0 ? <标签>{t("规划.航点计数", { 数量: 航点数 })}</标签>
-          : <标签>{t("规划.尚无航点")}</标签>
+      <CollapsibleSection
+        title={t("步骤.规划")}
+        badge={
+          成功 ? <Tag tone="success">{`${规划?.duration_s?.toFixed(2) ?? "?"}s`}</Tag>
+          : 失败 ? <Tag tone="error">{t("规划.失败")}</Tag>
+          : 规划中 ? <Tag tone="emphasis">{t("规划.规划中")}</Tag>
+          : 航点数 > 0 ? <Tag>{t("规划.航点计数", { 数量: 航点数 })}</Tag>
+          : <Tag>{t("规划.尚无航点")}</Tag>
         }
       >
         <div className="flex flex-wrap items-center gap-2">
-          <按钮 种类="次" 尺寸="小" disabled={忙 || !可发} title={t("规划.需要航点")} on按下={() => void 跑("记录航点")}>
+          <Button variant="secondary" size="small" disabled={忙 || !可发} title={t("规划.需要航点")} onPress={() => void 跑("记录航点")}>
             {t("规划.记录")}
-          </按钮>
+          </Button>
           <label className="flex items-center gap-1 text-[0.8em]">
             <span className="text-dim">{t("规划.速度上限")}</span>
             <input
@@ -219,27 +219,27 @@ export function 规划视图() {
               inputMode="decimal"
             />
           </label>
-          <按钮
-            种类="主"
-            尺寸="小"
+          <Button
+            variant="primary"
+            size="small"
             disabled={忙 || !可发 || 规划中 || 航点数 < 2}
             title={航点数 < 2 ? t("规划.需要航点") : undefined}
-            on按下={() => void 跑("规划")}
+            onPress={() => void 跑("规划")}
           >
             {规划中 ? t("规划.规划中") : t("规划.规划")}
-          </按钮>
-          <按钮 种类="次" 尺寸="小" disabled={忙 || !可发 || 航点数 === 0} on按下={() => void 跑("清空航点")}>
+          </Button>
+          <Button variant="secondary" size="small" disabled={忙 || !可发 || 航点数 === 0} onPress={() => void 跑("清空航点")}>
             {t("规划.清空")}
-          </按钮>
+          </Button>
           {成功 ? (
             执行中 ? (
-              <按钮 种类="次" 尺寸="小" disabled={忙 || !可发} on按下={() => void 执行(false)}>
+              <Button variant="secondary" size="small" disabled={忙 || !可发} onPress={() => void 执行(false)}>
                 {t("规划.停止")}
-              </按钮>
+              </Button>
             ) : (
-              <按钮 种类="次" 尺寸="小" disabled={忙 || !可发} on按下={() => void 执行(true)}>
+              <Button variant="secondary" size="small" disabled={忙 || !可发} onPress={() => void 执行(true)}>
                 {t("规划.执行")}
-              </按钮>
+              </Button>
             )
           ) : null}
           <input
@@ -249,9 +249,9 @@ export function 规划视图() {
             className="hidden"
             onChange={(e) => void 读文件(e.target.files?.[0])}
           />
-          <按钮 种类="次" 尺寸="小" disabled={忙} title={t("规划.文件说明")} on按下={() => 文件框.current?.click()}>
+          <Button variant="secondary" size="small" disabled={忙} title={t("规划.文件说明")} onPress={() => 文件框.current?.click()}>
             {t("规划.导入")}
-          </按钮>
+          </Button>
           {规划?.waypoint_count ? (
             <span className="text-[0.85em] text-dim">{`${t("规划.已记录")}: ${规划.waypoint_count}`}</span>
           ) : null}
@@ -273,9 +273,9 @@ export function 规划视图() {
             aria-label={t("规划.笛卡尔")}
           />
           <div className="mt-1">
-            <按钮 种类="次" 尺寸="小" disabled={忙} on按下={() => void 跑笛卡尔()}>
+            <Button variant="secondary" size="small" disabled={忙} onPress={() => void 跑笛卡尔()}>
               {t("规划.笛卡尔.算")}
-            </按钮>
+            </Button>
           </div>
         </details>
 
@@ -305,31 +305,31 @@ export function 规划视图() {
 
         {规划?.bottleneck_joint !== undefined && 规划.bottleneck_joint >= 0 ? (
           <div className="mt-1">
-            <按钮 种类="幽灵" 尺寸="小" on按下={() => void 高亮瓶颈()}>
+            <Button variant="ghost" size="small" onPress={() => void 高亮瓶颈()}>
               {t("规划.高亮瓶颈", { 关节: 规划.bottleneck_joint })}
-            </按钮>
+            </Button>
           </div>
         ) : null}
 
         {成功 ? (
           <>
             <div className="mt-2">
-              <数值表 行={行} />
+              <ValueTable rows={行} />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[0.82em]">
               <span className="text-dim">{t("规划.余量")}</span>
-              <标签 语气={余量语气(规划.velocity_margin)}>{`速度 ${((规划.velocity_margin ?? 0) * 100).toFixed(0)}%`}</标签>
-              <标签 语气={余量语气(规划.acceleration_margin)}>{`加速度 ${((规划.acceleration_margin ?? 0) * 100).toFixed(0)}%`}</标签>
-              <标签 语气={余量语气(规划.jerk_margin)}>{`加加速度 ${((规划.jerk_margin ?? 0) * 100).toFixed(0)}%`}</标签>
+              <Tag tone={余量语气(规划.velocity_margin)}>{`速度 ${((规划.velocity_margin ?? 0) * 100).toFixed(0)}%`}</Tag>
+              <Tag tone={余量语气(规划.acceleration_margin)}>{`加速度 ${((规划.acceleration_margin ?? 0) * 100).toFixed(0)}%`}</Tag>
+              <Tag tone={余量语气(规划.jerk_margin)}>{`加加速度 ${((规划.jerk_margin ?? 0) * 100).toFixed(0)}%`}</Tag>
             </div>
             {规划.comparison ? (
               <div className="mt-2">
                 <div className="flex items-baseline gap-1.5">
                   <span style={{ fontWeight: 600 }}>{t("规划.对比")}</span>
                   <span className="flex-1" />
-                  <标签 语气={(规划.comparison.duration_change_percent ?? 0) > 0 ? "警示" : "强调"}>
+                  <Tag tone={(规划.comparison.duration_change_percent ?? 0) > 0 ? "notice" : "emphasis"}>
                     {`${(规划.comparison.duration_change_percent ?? 0) >= 0 ? "+" : ""}${(规划.comparison.duration_change_percent ?? 0).toFixed(0)}%`}
-                  </标签>
+                  </Tag>
                 </div>
                 <div className="text-[0.82em] text-dim">
                   {`${(规划.comparison.previous_duration ?? 0).toFixed(2)} s → ${(规划.comparison.current_duration ?? 0).toFixed(2)} s`}
@@ -367,7 +367,7 @@ export function 规划视图() {
             <包络图 包络={规划.envelope} sd={规划.speed_axis ?? []} />
           </div>
         ) : null}
-      </可折叠区块>
+      </CollapsibleSection>
     </div>
   );
 }

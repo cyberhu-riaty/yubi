@@ -30,7 +30,7 @@ def main() -> int:
     ap.add_argument("--简", action="store_true")
     args = ap.parse_args()
 
-    from 设备.跟踪回路 import 阶跃响应
+    from devices.tracking_loop import step_response
 
     print("=" * 78)
     print("  延迟敏感性：位置阶跃 0 → 1，看超调与稳态误差怎么随延迟变化")
@@ -42,7 +42,7 @@ def main() -> int:
         print("    延迟(ms)   峰值     超调%     稳态误差    实测延迟   发散")
         行们 = []
         for d in (0, 5, 10, 20, 40, 60):
-            r = 阶跃响应(d, kp=kp, kd=kd, 时长秒=2.5)
+            r = step_response(d, kp=kp, kd=kd, 时长秒=2.5)
             if not r.get("可达"):
                 print(f"    {d:>7}   预热超时（延迟大于预热窗口）")
                 continue

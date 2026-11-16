@@ -12,9 +12,9 @@
 import type { 步骤id } from "./任务流";
 import { 取步骤 } from "./任务流";
 import { 上下文条 } from "./上下文条";
-import { use取 } from "../视图/文案";
-import { 按钮 } from "../组件/按钮";
-import { 标签 } from "../组件/标签";
+import { useTranslation } from "../视图/文案";
+import { Button } from "../组件/按钮";
+import { Tag } from "../组件/标签";
 import { 定义视图 } from "../视图/定义视图";
 import { 规划视图 } from "../视图/规划视图";
 import { 验证视图 } from "../视图/验证视图";
@@ -79,7 +79,7 @@ const 未完成: Record<string, "待接入" | "未实现" | "未接入"> = {
 };
 
 export function 侧栏({ 步骤, 开, on收起 }: 侧栏参数) {
-  const t = use取();
+  const t = useTranslation();
   const 当前步骤 = 取步骤(步骤);
 
   if (!开) {
@@ -112,11 +112,11 @@ export function 侧栏({ 步骤, 开, on收起 }: 侧栏参数) {
           ·
         </span>
         <span className="truncate">{t(当前步骤.名键)}</span>
-        {未完成[步骤] ? <标签 语气="警示">{t(`通用.${未完成[步骤]}` as const)}</标签> : null}
+        {未完成[步骤] ? <Tag tone="notice">{t(`通用.${未完成[步骤]}` as const)}</Tag> : null}
         <span className="flex-1" />
-        <按钮 尺寸="小" 种类="幽灵" on按下={on收起} title={t("侧栏.收起")}>
+        <Button size="small" variant="ghost" onPress={on收起} title={t("侧栏.收起")}>
           ‹
-        </按钮>
+        </Button>
       </header>
       <上下文条 />
       {/* ★ 卡片化之后这里必须有间距：段与段紧贴时，圆角边框会互相"咬"在一起，

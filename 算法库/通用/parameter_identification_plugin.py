@@ -34,19 +34,19 @@ from official_api import messages
 #     所以这一道自己带 —— 不能依赖调用方帮忙铺路。）
 import os as _os
 import sys as _sys
-_软件目录 = _os.path.normpath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+_runtime_directory = _os.path.normpath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                            "..", "..", "软件"))
-if _os.path.isdir(_软件目录) and _软件目录 not in _sys.path:
-    _sys.path.insert(0, _软件目录)
+if _os.path.isdir(_runtime_directory) and _runtime_directory not in _sys.path:
+    _sys.path.insert(0, _runtime_directory)
 
 from parameter_identification import (                                      # noqa: E402
-    ParameterDefinition as 参数定义,
-    collect_data as 采数据,
-    identify as 辨识,
+    ParameterDefinition as ParameterDefinition,
+    collect_data as collect_data,
+    identify as identify,
 )
 from identification_bridge import (                                         # noqa: E402
-    IdentificationCommand as 辨识命令,
-    IdentificationState as 辨识状态,
+    IdentificationCommand as IdentificationCommand,
+    IdentificationState as IdentificationState,
 )
 
 # ★ 模型目录不在这里数 `dirname` 的层数：本文件原来在 `算法库/通用/` 下，
@@ -54,24 +54,24 @@ from identification_bridge import (                                         # no
 #   （读不到参数表 → 所有模型都显示"不支持辨识"，很难查）。
 #   统一从 `project_registry.py` 取，路径只有一处定义。
 import project_registry                                                    # noqa: E402
-_模型目录 = project_registry.MODEL_DIRECTORY
-_参数表路径 = os.path.join(_模型目录, "辨识参数表.json")
+_model_directory = project_registry.MODEL_DIRECTORY
+_parameter_table_path = os.path.join(_model_directory, "辨识参数表.json")
 
 
-def 读取参数表() -> dict:
+def read_parameter_table() -> dict:
     """读 `模型/辨识参数表.json`（每个模型可辨识哪些连杆）。读不到就返回空表。"""
     try:
-        with open(_参数表路径, encoding="utf-8") as f:
-            数据 = json.load(f)
-        return 数据.get("模型", {}) if isinstance(数据, dict) else {}
+        with open(_parameter_table_path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("模型", {}) if isinstance(data, dict) else {}
     except FileNotFoundError:
         return {}
-    except Exception as 异常:                                        # noqa: BLE001
-        print(f"⚠ 辨识参数表读取失败：{type(异常).__name__}: {异常}")
+    except Exception as exc:                                        # noqa: BLE001
+        print(f'⚠ 辨识参数表读取失败：{type(exc).__name__}: {exc}')
         return {}
 
 
-def 查参数表(模型路径: str) -> tuple[list[tuple] | None, str]:
+def lookup_parameters(model_path: str) -> tuple[list[tuple] | None, str]:
     """按模型路径查可辨识参数。返回 (参数列表, 说明)；查不到返回 (None, 原因)。
 
     ★ 为什么要按模型查（而不是像以前那样写死）：
@@ -80,23 +80,23 @@ def 查参数表(模型路径: str) -> tuple[list[tuple] | None, str]:
       以前写死 UR5e 的名字，换成别的机械臂后点"辨识"只会得到一堆无效结果，
       用户看不出来为什么。现在按模型查表，表里没有的模型就**明说"不支持"**。
     """
-    if not 模型路径:
+    if not model_path:
         return None, "还不知道模型路径"
-    表 = 读取参数表()
-    if not 表:
+    table = read_parameter_table()
+    if not table:
         return None, "找不到 模型/辨识参数表.json"
-    规范 = os.path.normpath(模型路径).replace("\\", "/")
-    部件 = 规范.split("/")
-    键2 = "/".join(部件[-2:]) if len(部件) >= 2 else 规范
-    键1 = 部件[-1]
-    for 键, 条目 in 表.items():
-        if 键 == 键2 or os.path.basename(键) == 键1:
-            参数 = [(p["名称"], (p["连杆"], p["字段"]), float(p["初值"]),
+    normalized = os.path.normpath(model_path).replace("\\", "/")
+    parts = normalized.split("/")
+    relative_key = "/".join(parts[-2:]) if len(parts) >= 2 else normalized
+    filename = parts[-1]
+    for key, entry in table.items():
+        if key == relative_key or os.path.basename(key) == filename:
+            parameters = [(p["名称"], (p["连杆"], p["字段"]), float(p["初值"]),
                      (float(p["下界"]), float(p["上界"])))
-                    for p in 条目.get("参数", [])]
-            if 参数:
-                return 参数, str(条目.get("显示名", 键))
-    return None, f"模型库里没有「{键1}」的辨识参数配置"
+                    for p in entry.get("参数", [])]
+            if parameters:
+                return parameters, str(entry.get("显示名", key))
+    return None, f'模型库里没有「{filename}」的辨识参数配置'
 
 
 class ParameterIdentificationPlugin:
@@ -114,202 +114,202 @@ class ParameterIdentificationPlugin:
     description = "在界面上做闭环激励采样 → 后台辨识惯性参数 → 用新参数验证轨迹拟合。"
     author = "数字样机"
 
-    def __init__(self, 模型路径: str = ""):
-        self.模型路径 = 模型路径
-        self.状态 = "空闲"          # 空闲 / 采样中 / 辨识中 / 不支持
-        self.进度 = ""
-        self.结果行: list[tuple] = []      # [(名称, 标称, 估计值, 误差%)]
-        self.拟合 = {}                     # {"标称": …, "辨识后": …}
-        self.采样步数 = 0
-        self.耗时 = 0.0
-        self.日志: list[str] = []
-        self._线程 = None
-        self._数据 = None
-        self._标称值 = {}
-        self._模型 = None
-        self.可辨识: list[tuple] = []      # 当前模型的可辨识参数（由 _刷新参数表 填）
-        self.支持 = False
-        self.不支持原因 = ""
-        self._刷新参数表()
+    def __init__(self, model_path: str = ""):
+        self.model_path = model_path
+        self.state = "空闲"          # 空闲 / 采样中 / 辨识中 / 不支持
+        self.progress = ""
+        self.result_rows: list[tuple] = []      # [(名称, 标称, 估计值, 误差%)]
+        self.fit = {}                     # {"标称": …, "辨识后": …}
+        self.sample_count = 0
+        self.elapsed_time = 0.0
+        self.log: list[str] = []
+        self._thread = None
+        self._data = None
+        self._nominal_values = {}
+        self._model = None
+        self.identifiable_parameters: list[tuple] = []      # 当前模型的可辨识参数（由 _刷新参数表 填）
+        self.supported = False
+        self.unsupported_reason = ""
+        self._refresh_parameters()
 
     # ------------------------------------------------------------------
-    def _刷新参数表(self) -> None:
+    def _refresh_parameters(self) -> None:
         """按当前 模型路径 换一张可辨识参数表。"""
-        参数, 说明 = 查参数表(self.模型路径)
-        if 参数 is None:
-            self.支持 = False
-            self.可辨识 = []
-            self.不支持原因 = 说明
-            self.状态 = "不支持"
-            self.进度 = 说明
+        parameters, description = lookup_parameters(self.model_path)
+        if parameters is None:
+            self.supported = False
+            self.identifiable_parameters = []
+            self.unsupported_reason = description
+            self.state = "不支持"
+            self.progress = description
         else:
-            self.支持 = True
-            self.可辨识 = 参数
-            self.不支持原因 = ""
-            if self.状态 == "不支持":
-                self.状态 = "空闲"
-                self.进度 = ""
+            self.supported = True
+            self.identifiable_parameters = parameters
+            self.unsupported_reason = ""
+            if self.state == "不支持":
+                self.state = "空闲"
+                self.progress = ""
 
     def receive_model(self, event) -> None:
-        self._模型 = getattr(event, "model", None)
-        if not self.模型路径:
-            self.模型路径 = getattr(event, "路径", "") or self.模型路径
-            self._刷新参数表()
+        self._model = getattr(event, "model", None)
+        if not self.model_path:
+            self.model_path = getattr(event, "路径", "") or self.model_path
+            self._refresh_parameters()
 
-    def bind_model_path(self, 路径: str) -> "ParameterIdentificationPlugin":
-        self.模型路径 = 路径
-        self._刷新参数表()
+    def bind_model_path(self, path: str) -> "ParameterIdentificationPlugin":
+        self.model_path = path
+        self._refresh_parameters()
         return self
 
-    def model_changed(self, 路径: str, 模型, 数据) -> None:
+    def model_changed(self, path: str, model, data) -> None:
         """外壳在换模型后调用：清掉跟旧模型绑定的采样数据与结果。"""
-        self.模型路径 = 路径
-        self._数据 = None
-        self._标称值 = {}
-        self._模型 = 模型
-        self.结果行 = []
-        self.拟合 = {}
-        self.采样步数 = 0
-        self.耗时 = 0.0
-        self.状态 = "空闲"
-        self.进度 = ""
-        self._刷新参数表()
-        if self.支持:
-            self._记(f"模型已切换为 {os.path.basename(路径)}（可辨识 "
-                     f"{len(self.可辨识)} 个连杆质量）")
+        self.model_path = path
+        self._data = None
+        self._nominal_values = {}
+        self._model = model
+        self.result_rows = []
+        self.fit = {}
+        self.sample_count = 0
+        self.elapsed_time = 0.0
+        self.state = "空闲"
+        self.progress = ""
+        self._refresh_parameters()
+        if self.supported:
+            self._append_log(f'模型已切换为 {os.path.basename(path)}（可辨识 '
+                     f'{len(self.identifiable_parameters)} 个连杆质量）')
         else:
-            self._记(f"⚠ 模型已切换为 {os.path.basename(路径)}，但{self.不支持原因}")
+            self._append_log(f'⚠ 模型已切换为 {os.path.basename(path)}，但{self.unsupported_reason}')
 
     # ------------------------------------------------------------------
     @messages.handler
-    def 收命令(self, 命令: 辨识命令) -> bool:
-        动作 = getattr(命令, "动作", "空闲")
-        if 动作 == "采样":
-            self._开始采样(float(getattr(命令, "时长", 1.0)))
-        elif 动作 == "辨识":
-            self._开始辨识()
+    def receive_command(self, command: IdentificationCommand) -> bool:
+        action = getattr(command, "action", "空闲")
+        if action == "采样":
+            self._start_sampling(float(getattr(command, "duration", 1.0)))
+        elif action == "辨识":
+            self._start_identification()
         return False
 
     # ------------------------------------------------------------------
-    def _记(self, 行: str) -> None:
-        self.日志.append(行)
-        if len(self.日志) > 12:
-            self.日志 = self.日志[-12:]
-        print(f"  [辨识] {行}", flush=True)
+    def _append_log(self, line: str) -> None:
+        self.log.append(line)
+        if len(self.log) > 12:
+            self.log = self.log[-12:]
+        print(f'  [辨识] {line}', flush=True)
 
-    def _开始采样(self, 时长: float) -> None:
-        if self.状态 != "空闲":
+    def _start_sampling(self, duration: float) -> None:
+        if self.state != "空闲":
             return
-        if not self.模型路径:
-            self._记("✗ 不知道模型路径，无法采样")
+        if not self.model_path:
+            self._append_log("✗ 不知道模型路径，无法采样")
             return
-        if not self.支持:
+        if not self.supported:
             # ★ 表里没有这个模型 → 明说，不要假装跑一遍（见 查参数表 的说明）
-            self._记(f"✗ 当前模型不支持参数辨识：{self.不支持原因}")
-            self._记("  要支持它，请在 模型/辨识参数表.json 里为它加一条配置")
+            self._append_log(f'✗ 当前模型不支持参数辨识：{self.unsupported_reason}')
+            self._append_log("  要支持它，请在 模型/辨识参数表.json 里为它加一条配置")
             return
-        self.状态 = "采样中"
-        self.进度 = f"正在激励采样（{时长:.1f} 秒）…"
+        self.state = "采样中"
+        self.progress = f'正在激励采样（{duration:.1f} 秒）…'
         try:
             t0 = time.time()
-            self._数据 = 采数据(self.模型路径, 时长=时长)
-            self.采样步数 = self._数据.步数
+            self._data = collect_data(self.model_path, duration=duration)
+            self.sample_count = self._data.step_count
             # 记下当前模型的标称值（用于对比）
-            self._标称值 = {名: 初 for 名, _, 初, _ in self.可辨识}
-            self._记(f"✓ 采到 {self.采样步数} 步（{time.time()-t0:.1f}s）")
+            self._nominal_values = {name: initial for name, _, initial, _ in self.identifiable_parameters}
+            self._append_log(f'✓ 采到 {self.sample_count} 步（{time.time() - t0:.1f}s）')
             # 顺手算一个"标称模型的拟合残差"作为基线
-            self.拟合["标称"] = self._拟合残差(self._标称值)
-            self._记(f"  标称参数下的拟合残差 {self.拟合['标称']:.6f}")
-        except Exception as 异常:                                     # noqa: BLE001
-            self._记(f"✗ 采样失败：{type(异常).__name__}: {异常}")
+            self.fit["标称"] = self._fit_residual(self._nominal_values)
+            self._append_log(f"  标称参数下的拟合残差 {self.fit['标称']:.6f}")
+        except Exception as exc:                                     # noqa: BLE001
+            self._append_log(f'✗ 采样失败：{type(exc).__name__}: {exc}')
         finally:
-            self.状态 = "空闲"
-            self.进度 = ""
+            self.state = "空闲"
+            self.progress = ""
 
-    def _拟合残差(self, 值表: dict) -> float:
+    def _fit_residual(self, values: dict) -> float:
         """给定参数，用记录的 τ 做一步预测，返回残差范数（越小越贴合数据）。"""
-        数据 = self._数据
-        参数们 = [参数定义(名, 目标, 值表.get(名, 初), 界[0], 界[1])
-                  for 名, 目标, 初, 界 in self.可辨识]
+        data = self._data
+        parameters = [ParameterDefinition(name, target, values.get(name, initial), bounds[0], bounds[1])
+                  for name, target, initial, bounds in self.identifiable_parameters]
         try:
-            模型 = _按参数造模型(self.模型路径, 参数们)
+            model = _make_model(self.model_path, parameters)
         except Exception:                                            # noqa: BLE001
             return float("inf")
         import mujoco
-        d = mujoco.MjData(模型)
-        下标 = np.arange(1, len(数据.时间), 5)
-        平方 = 0.0
-        for k in 下标:
-            d.qpos[:] = 数据.qpos[k - 1]
-            d.qvel[:] = 数据.qvel[k - 1]
-            mujoco.mj_forward(模型, d)
-            d.ctrl[:] = 数据.ctrl[k]
-            mujoco.mj_step(模型, d)
-            平方 += float(np.sum((d.qpos - 数据.qpos[k]) ** 2))
-        return float(np.sqrt(平方 / max(len(下标), 1)))
+        d = mujoco.MjData(model)
+        indices = np.arange(1, len(data.time), 5)
+        squared_error = 0.0
+        for k in indices:
+            d.qpos[:] = data.qpos[k - 1]
+            d.qvel[:] = data.qvel[k - 1]
+            mujoco.mj_forward(model, d)
+            d.ctrl[:] = data.ctrl[k]
+            mujoco.mj_step(model, d)
+            squared_error += float(np.sum((d.qpos - data.qpos[k]) ** 2))
+        return float(np.sqrt(squared_error / max(len(indices), 1)))
 
-    def _开始辨识(self) -> None:
-        if self.状态 != "空闲":
+    def _start_identification(self) -> None:
+        if self.state != "空闲":
             return
-        if not self.支持:
-            self._记(f"✗ 当前模型不支持参数辨识：{self.不支持原因}")
+        if not self.supported:
+            self._append_log(f'✗ 当前模型不支持参数辨识：{self.unsupported_reason}')
             return
-        if self._数据 is None:
-            self._记("✗ 还没有采样数据，先点「激励采样」")
+        if self._data is None:
+            self._append_log("✗ 还没有采样数据，先点「激励采样」")
             return
-        self.状态 = "辨识中"
-        self.进度 = "辨识中（后台线程）…"
-        self._线程 = threading.Thread(target=self._辨识线程, daemon=True)
-        self._线程.start()
+        self.state = "辨识中"
+        self.progress = "辨识中（后台线程）…"
+        self._thread = threading.Thread(target=self._identify_in_thread, daemon=True)
+        self._thread.start()
 
-    def _辨识线程(self) -> None:
+    def _identify_in_thread(self) -> None:
         try:
-            参数们 = [参数定义(名, 目标, 初, 界[0], 界[1])
-                      for 名, 目标, 初, 界 in self.可辨识]
-            结果 = 辨识(self._数据, 参数们, 抽稀=5,
-                        打印=lambda 行: self._记(行.strip()))
-            self.耗时 = 结果.耗时
-            估计 = {名: float(v) for (名, _, _, _), v in
-                    zip(self.可辨识, 结果.估计值)}
-            self.结果行 = []
-            for 名, _, 初, _ in self.可辨识:
-                估 = 估计[名]
-                误 = abs(估 - 初) / max(abs(初), 1e-9) * 100
-                self.结果行.append((名, 初, 估, 误))
-            self.拟合["辨识后"] = self._拟合残差(估计)
-            改善 = (self.拟合.get("标称", 0) / max(self.拟合.get("辨识后", 1e-12), 1e-12))
-            self._记(f"✓ 辨识完成：耗时 {self.耗时:.1f}s")
-            self._记(f"  拟合残差 {self.拟合.get('标称', float('nan')):.6f} → "
-                     f"{self.拟合.get('辨识后', float('nan')):.6f}（改善 {改善:.1f}×）")
-        except Exception as 异常:                                     # noqa: BLE001
-            self._记(f"✗ 辨识失败：{type(异常).__name__}: {异常}")
+            parameters = [ParameterDefinition(name, target, initial, bounds[0], bounds[1])
+                      for name, target, initial, bounds in self.identifiable_parameters]
+            result = identify(self._data, parameters, stride=5,
+                        print_result=lambda line: self._append_log(line.strip()))
+            self.elapsed_time = result.elapsed_time
+            estimates = {name: float(v) for (name, _, _, _), v in
+                    zip(self.identifiable_parameters, result.estimates)}
+            self.result_rows = []
+            for name, _, initial, _ in self.identifiable_parameters:
+                estimate = estimates[name]
+                error = abs(estimate - initial) / max(abs(initial), 1e-9) * 100
+                self.result_rows.append((name, initial, estimate, error))
+            self.fit["辨识后"] = self._fit_residual(estimates)
+            improvement = (self.fit.get("标称", 0) / max(self.fit.get("辨识后", 1e-12), 1e-12))
+            self._append_log(f'✓ 辨识完成：耗时 {self.elapsed_time:.1f}s')
+            self._append_log(f"  拟合残差 {self.fit.get('标称', float('nan')):.6f} → "
+                     f"{self.fit.get('辨识后', float('nan')):.6f}（改善 {improvement:.1f}×）")
+        except Exception as exc:                                     # noqa: BLE001
+            self._append_log(f'✗ 辨识失败：{type(exc).__name__}: {exc}')
         finally:
-            self.状态 = "空闲"
-            self.进度 = ""
+            self.state = "空闲"
+            self.progress = ""
 
     # ------------------------------------------------------------------
     def metrics(self) -> dict:
-        return {"已采样步数": float(self.采样步数)}
+        return {"已采样步数": float(self.sample_count)}
 
     def status(self) -> dict:
-        return {"状态": self.状态, "采样": self.采样步数,
-                "拟合改善": (f"{self.拟合.get('标称',0)/max(self.拟合.get('辨识后',1),1e-12):.1f}×"
-                            if "辨识后" in self.拟合 else "—")}
+        return {"状态": self.state, "采样": self.sample_count,
+                "拟合改善": (f"{self.fit.get('标称', 0) / max(self.fit.get('辨识后', 1), 1e-12):.1f}×"
+                            if "辨识后" in self.fit else "—")}
 
-    def 状态消息(self) -> 辨识状态:
+    def state_message(self) -> IdentificationState:
         """打包给界面的状态。"""
-        return 辨识状态(状态=self.状态, 进度=self.进度, 采样步数=self.采样步数,
-                        结果=list(self.结果行), 拟合=dict(self.拟合),
-                        耗时=self.耗时, 日志=list(self.日志[-8:]))
+        return IdentificationState(state=self.state, progress=self.progress, sample_count=self.sample_count,
+                        results=list(self.result_rows), fit=dict(self.fit),
+                        elapsed_time=self.elapsed_time, log=list(self.log[-8:]))
 
 
-def _按参数造模型(模型路径: str, 参数们: list[参数定义]):
+def _make_model(model_path: str, parameters: list[ParameterDefinition]):
     """按参数造模型（复用 参数辨识 里的边界夹取与写入逻辑）。"""
     import mujoco
-    from parameter_identification import write_parameter as _写参数
-    spec = mujoco.MjSpec.from_file(模型路径)
-    for p in 参数们:
-        _写参数(spec, p.目标, float(np.clip(p.初值, p.下界, p.上界)))
+    from parameter_identification import write_parameter as _write_parameter
+    spec = mujoco.MjSpec.from_file(model_path)
+    for p in parameters:
+        _write_parameter(spec, p.target, float(np.clip(p.initial, p.lower, p.upper)))
     return spec.compile()
 
 

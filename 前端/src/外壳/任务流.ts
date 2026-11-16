@@ -10,7 +10,7 @@
  *   活动栏、侧栏、键盘快捷键（数字键跳步）都要用同一份顺序，
  *   写两份必然漂移（"加了一步忘了改另一处"是这类外壳最常见的 bug）。
  */
-import type { 文案键 } from "../视图/文案";
+import type { TranslationKey } from "../视图/文案";
 
 export type 步骤id =
   | "定义"
@@ -28,9 +28,9 @@ export type 步骤id =
 export interface 步骤 {
   id: 步骤id;
   /** 活动栏/侧栏的标题文案键 */
-  名键: 文案键;
+  名键: TranslationKey;
   /** 悬停说明的文案键 */
-  说明键: 文案键;
+  说明键: TranslationKey;
   /**
    * 归在哪一组：
    *   任务 = 按顺序做设计（定义→规划→验证→辨识→部署）

@@ -1,660 +1,72 @@
-"""
-契约.py —— 界面与仿真之间**唯一**的通信契约（L0）
+"""Legacy names for contract metadata; new application code imports contract.
 
-它解决什么问题：
-    在 P0 之前，"界面看到什么"这件事散落在 7 个桥接层里：`指标桥.py` 定义 `指标消息`、
-    `参数桥.py` 定义 `参数表消息`……每个桥自己知道字段，别人只能去读源码。
-    一旦界面换成 Web（另一门语言、另一套类型），这种"契约散落"就会立刻变成
-    **前后端字段对不上、而且要靠人肉核对**的经典事故。
-
-    本模块把契约**收敛成一份**：谁要发消息、谁要收命令，都得先在这里登记。
-    于是三方（Python 发出方 / Python 命令处理方 / 前端生成的类型）都从这一份派生。
-
-设计约束：
-    ① **单一事实来源，但要可自证**。字段是手写的，手写就会漂移 —— 所以
-       `工具/验证/契约自检.py` 会拿**真实 dataclass 的字段**与本表逐项比对，
-       不一致就报错。契约不是文档，是**可机检的不变量**（沿用本项目既有的工程纪律）。
-    ② **Python 侧不引入新依赖**。只用标准库（dataclasses / typing），
-       不引 pydantic 之类 —— 这个软件要能离线重建 `.venv`。
-    ③ **前端可以零依赖地拿到契约**。通过 `/api/contract` 与 WebSocket 握手消息下发，
-       前端不靠"抄一遍字段名"，而是靠生成/校验。
-
-字段类型用这几个记号（前端据此生成 TS 类型）：
-    "number" | "string" | "boolean" | "any"
-    "number[]" / "string[]" / "object[]"
-    "record<number>"  = {[键: string]: number}   （指标表、参数值表）
-    "record<any>"     = {[键: string]: any}
+The compatibility properties and constructor keywords support old extensions.
+Wire serialization remains owned by contract.to_dict().
 """
 from __future__ import annotations
 
-import dataclasses
-from typing import Any
-
-# 契约版本：**字段有增删改就必须递增**（前端据此判断要不要提示刷新）
-#   2（2026-10-16）：补 `命令.改参数`；并把「参数表」里 `参数` 项的真实形状写进说明
-#                    （原来写成 {值,最小,最大} 是按想象写的，与实现不符）。
-#   3（2026-10-17）：P4 起步，补「资产库」（可选模型清单）。
-#   4（2026-10-17）：补「系统」（RTF/步频/内存，监控视图的数据源）。
-#   5（2026-10-17）：补「诊断」+「命令.诊断」（把 10 套断言搬进界面）。
-#   6（2026-10-17）：补「插件目录」（本机算法库清单 + 元信息）。
-#   7（2026-10-17）：补「部署」+「命令.部署」（导出可带走的部署包）。
-#   8（2026-10-17）：补「规划结果」+「命令.规划」（关节航点轨迹规划）。
-#   9（2026-10-17）：补「参数事务」+「命令.参数事务」（全成功或全回滚）。
-#  10（2026-10-18）：补「命令.高亮」——日志/诊断里的关节警告在 3D 中定位（不动物理）。
-#  11（2026-10-19）：补「告警」——病态检出（振荡/发散/跟踪超差/饱和）。
-#  12（2026-10-20）：补「设备连接」+「命令.设备」——模拟后端/安全状态/遥测/审计。
-#  13（2026-10-26）：补「仿真状态」+「命令.仿真」—— Run/Pause/Reset 分离。
-#  14（2026-10-29）：运行/重力彻底分离；补关节控制目标与实时控制状态。
-#  15（2026-10-29）：补「实验状态」+「命令.实验」—— GUI 可选择并完整运行注册实验。
-#  16（2026-10-30）：补仿真速度倍率；只调整墙钟节拍，不修改 MuJoCo timestep。
-#  17（2026-11-02）：实验消息主题、类名和字段迁移为英文；删除中文实验桥兼容层。
-#  18（2026-11-02）：规划消息主题、类名和字段迁移为英文；删除中文规划桥模块。
-#  19（2026-11-02）：模型/项目状态及模型/算法命令迁移为英文；删除中文模型桥模块。
-#  20（2026-11-02）：仿真运行/重力消息迁移为英文；删除中文重力桥模块。
-#  21（2026-11-02）：参数表、参数修改与参数事务迁移为英文；删除中文参数桥模块。
-版本 = 21
+from functools import wraps
+import contract as _contract
 
 
-@dataclasses.dataclass(frozen=True)
-class 字段:
-    名: str
-    类型: str                 # 见文件头记号表
-    说明: str = ""
-
-
-@dataclasses.dataclass(frozen=True)
-class 主题:
-    名: str                   # 线上主题名（前端按它分发）
-    类名: str                 # 对应的 Python dataclass 名（用于自证比对）
-    方向: str                 # "下行" = 仿真→界面；"上行" = 界面→仿真
-    种类: str                 # "快照" = latest-wins；"命令" = 必须送达处理
-    摘要: str
-    字段: tuple[字段, ...]
-
-
-# ---------------------------------------------------------------------------
-# 下行：仿真 → 界面（现状即 P0 已通的 4 条 + 另外 2 条桥已有的）
-# ---------------------------------------------------------------------------
-_下行 = (
-    主题(
-        名="指标", 类名="MetricsSnapshot", 方向="下行", 种类="快照",
-        摘要="插件 指标() 报上来的实时数值，曲线的数据源（30 Hz 限频）",
-        字段=(
-            字段("时间", "number", "仿真时间（秒）"),
-            字段("墙钟", "number", "真实时间（秒），画曲线用它做横轴更平稳"),
-            字段("数值", "record<number>", "{指标名: 数值}，指标名形如「插件名·键名」"),
-        ),
-    ),
-    主题(
-        名="parameter.table", 类名="ParameterTable", 方向="下行", 种类="快照",
-        摘要="当前已装算法声明的可调参数（10 Hz 限频）",
-        字段=(
-            字段("parameters", "record<any>",
-                 "{全名: 参数项}，全名 = 「插件名·参数名」。参数项的形状见下：\n"
-                 "  {plugin, plugin_english, plugin_version, parameter, value, range, step, unit}\n"
-                 "★ 这份形状是从 `parameter_bridge.collect_parameters()` 的真实产物核对的：\n"
-                 "  早期契约里写成 {值,最小,最大} —— 那是**按想象写的**，与实现不符，\n"
-                 "  后果是前端把 `范围` 数组当成对象逐字符渲染，表格里出现一堆 0=N 1=· 的乱码。\n"
-                 "  这正是「契约必须对着实现自证」的理由：`工具/验证/契约自检.py` 现在会\n"
-                 "  用真实插件的 `adjustable_parameters()` 产出核对本字段的形状。"),
-        ),
-    ),
-    主题(
-        名="parameter.updated", 类名="ParameterUpdate", 方向="下行", 种类="快照",
-        摘要="参数被改动后的回执（界面照它更新控件）",
-        字段=(字段("updates", "record<any>", "{full parameter name: new value}"),),
-    ),
-    主题(
-        名="辨识状态", 类名="辨识状态", 方向="下行", 种类="快照",
-        摘要="参数辨识的进度与结果（5 Hz 限频）",
-        字段=(
-            字段("状态", "string", "空闲 / 采样中 / 辨识中 / 完成 / 出错"),
-            字段("进度", "string", "给人看的进度描述"),
-            字段("采样步数", "number", "已采样步数"),
-            字段("结果", "object[]", "辨识出的参数列表"),
-            字段("拟合", "record<any>", "拟合改善情况"),
-            字段("耗时", "number", "耗时（秒）"),
-            字段("日志", "string[]", "过程日志"),
-        ),
-    ),
-    主题(
-        名="model.state", 类名="ModelState", 方向="下行", 种类="快照",
-        摘要="当前加载的模型（2 Hz 限频）",
-        字段=(
-            字段("current_path", "string", "相对包根或绝对路径"),
-            字段("current_display_name", "string", "给人看的型号名"),
-            字段("dof", "number", "nq"),
-            字段("actuator_count", "number", "nu"),
-            字段("status", "string", "就绪 / ✓ … / ✗ …"),
-            字段("duration_s", "number", "上次加载耗时（秒）"),
-        ),
-    ),
-    主题(
-        名="设备连接", 类名="连接状态", 方向="下行", 种类="快照",
-        摘要="设备链路的状态机/劣化参数/实测遥测/审计（当前只有模拟后端，不是真机）",
-        字段=(
-            字段("后端", "string", "后端名字。**永远显示它**，避免把模拟当成真机"),
-            字段("已连接", "boolean", ""),
-            字段("安全状态", "string", "未连接/已连接（未使能）/使能中/运行/停止/故障/急停"),
-            字段("模式", "string", "空闲/位置/速度/力矩/阻尼/急停"),
-            字段("自由度", "number", ""),
-            字段("延迟毫秒", "number", "注入值"),
-            字段("抖动毫秒", "number", "注入值"),
-            字段("丢包率", "number", "注入值 0..1"),
-            字段("编码器分辨率", "number", "量化步长，0=不量化"),
-            字段("实测平均延迟", "number", "毫秒，来自真实帧时间戳差"),
-            字段("实测最大延迟", "number", "毫秒"),
-            字段("丢包数", "number", "后端统计"),
-            字段("错序数", "number", ""),
-            字段("拒绝数", "number", "安全层拒绝的命令数"),
-            字段("最近位置", "number[]", "空 = 还没有状态帧（不是 0）"),
-            字段("审计", "object[]", "最近 30 条：{时刻, 类别, 内容, 错误码}"),
-            字段("说明", "string", ""),
-        ),
-    ),
-    主题(
-        名="告警", 类名="告警消息", 方向="下行", 种类="快照",
-        摘要="当前**活动**的病态告警（含量化证据与经验建议）",
-        字段=(
-            字段("活动", "object[]",
-                 "每项：{类型, 严重度, 信号, 开始秒, 结束秒, 证据, 建议, 曲线[], 曲线t[]}"),
-            字段("已检出", "number", "本次会话累计检出过多少条"),
-        ),
-    ),
-    主题(
-        名="parameter.transaction", 类名="ParameterTransactionResult", 方向="下行", 种类="快照",
-        摘要="批量改参数的结果：要么全提交，要么全回滚（不会有「改了一半」）",
-        字段=(
-            字段("state", "string", "idle / committed / rolled_back"),
-            字段("success_count", "number", ""),
-            字段("failure_count", "number", ""),
-            字段("timestamp", "string", ""),
-            字段("changes", "object[]", "每项：{full_name, old_value, new_value}"),
-            字段("failures", "string[]", "逐条失败原因"),
-            字段("description", "string", "给人看的一句话"),
-        ),
-    ),
-    主题(
-        名="planning.result", 类名="PlanningResult", 方向="下行", 种类="快照",
-        摘要="关节航点轨迹规划的结果与校验（终端速度/余量/瓶颈/包络）",
-        字段=(
-            字段("status", "string", "idle / planning / completed / failed"),
-            字段("waypoint_count", "number", "参与规划的航点数"),
-            字段("dof", "number", "n"),
-            字段("duration_s", "number", "秒"),
-            字段("path_length", "number", "关节空间弧长 rad"),
-            字段("max_joint_velocity", "number", "rad/s"),
-            字段("max_joint_acceleration", "number", "rad/s²"),
-            字段("max_joint_jerk", "number", "rad/s³（只校验不整形）"),
-            字段("velocity_margin", "number", "1 - max(|qd|/vlim)，负数=超限"),
-            字段("acceleration_margin", "number", "同上"),
-            字段("jerk_margin", "number", "同上"),
-            字段("terminal_velocity", "number", "必须≈0"),
-            字段("smoothing_deviation", "number", "rad"),
-            字段("bottleneck_joint", "number", "-1 = 无"),
-            字段("bottleneck_type", "string", "速度 / 加速度 / 加加速度"),
-            字段("bottleneck_position", "number", "s ∈ [0,1]"),
-            字段("optimal_lower_bound", "number", "∫ds/v_max，纯理论下界"),
-            字段("actual_to_lower_bound", "number", "实际时长 / 下界"),
-            字段("limit_source", "string", "显式 / 估算（估算会写明）"),
-            字段("timestamp", "string", ""),
-            字段("reason", "string", "失败原因（空 = 正常）"),
-            字段("comparison", "object", "同一路径换约束重规划后的对比"),
-            字段("inverse_kinematics", "string", "笛卡尔输入的逆解说明；空 = 关节输入"),
-            字段("output_path", "string", "离线产物目录（输出/05_轨迹/…，空 = 没存）"),
-            字段("execution_status", "string", "idle / running / completed / interrupted"),
-            字段("execution_progress", "number", "0..1"),
-            字段("envelope", "number[]", "v_s_max(s) 采样（≤200 点）"),
-            字段("path_axis", "number[]", "对应的 s"),
-            字段("speed_axis", "number[]", "实际 sd(s)"),
-        ),
-    ),
-    主题(
-        名="部署", 类名="部署状态", 方向="下行", 种类="快照",
-        摘要="部署包导出状态（导出的是文件，**不是**真机连接）",
-        字段=(
-            字段("状态", "string", "空闲 / 导出中 / ✓ 完成 / ✗ 失败"),
-            字段("目录", "string", "导出到哪"),
-            字段("文件数", "number", "几个文件"),
-            字段("字节", "number", "总字节"),
-            字段("时间", "string", "几点导出的"),
-            字段("清单", "object[]", "每项：{文件, 说明, 字节}"),
-            字段("说明", "string", "给人看的一句话"),
-            字段("出错", "string", "失败原因（空 = 正常）"),
-        ),
-    ),
-    主题(
-        名="插件目录", 类名="PluginCatalog", 方向="下行", 种类="快照",
-        摘要="本机算法库里的插件清单（含版本/说明/作者/被哪些项目用到）",
-        字段=(
-            字段("数量", "number", "共几个"),
-            字段("插件", "object[]",
-                 "每项：{插件, 分组, 名称, 版本, 说明, 作者, 文件, 被项目使用[], 当前启用}"),
-            字段("说明", "string", "扫描失败时的说明（空 = 正常）"),
-        ),
-    ),
-    主题(
-        名="诊断", 类名="诊断报告", 方向="下行", 种类="快照",
-        摘要="自检结果：10 套断言逐条报（真跑 工具/验证 下的脚本）",
-        字段=(
-            字段("运行中", "boolean", "正在检查（界面据此把按钮变成检查中）"),
-            字段("通过", "number", "通过了多少套"),
-            字段("总数", "number", "一共跑了多少套"),
-            字段("耗时秒", "number", "总耗时"),
-            字段("时间", "string", "哪天几点跑的"),
-            字段("项", "object[]", "每项：{名, 通过, 说明, 秒}"),
-            字段("出错", "string", "跑不起来时的说明（空 = 正常）"),
-        ),
-    ),
-    主题(
-        名="系统", 类名="SystemState", 方向="下行", 种类="快照",
-        摘要="运行期系统指标（1 Hz）：实时率、步频、内存 —— 监控视图的数据源",
-        字段=(
-            字段("仿真时间", "number", "累计仿真时间（秒）"),
-            字段("墙钟", "number", "累计墙钟（秒，从开始跑算）"),
-            字段("RTF", "number", "实时率 = 仿真时间增量/墙钟增量（1.0 = 实速）"),
-            字段("步频", "number", "物理步/秒"),
-            字段("仿真步长", "number", "模型的 timestep（秒）"),
-            字段("内存MB", "number", "本进程常驻内存"),
-            字段("插件数", "number", "当前装了几个插件"),
-            字段("出错", "string", "采样失败时的说明（空 = 正常）"),
-        ),
-    ),
-    主题(
-        名="simulation.state", 类名="SimulationState", 方向="下行", 种类="快照",
-        摘要="全局仿真运行状态：运行/暂停、data.time、复位次数与目标速度",
-        字段=(
-            字段("state", "string", "running / paused"),
-            字段("gravity_enabled", "boolean", "是否使用模型 XML 中的重力；与运行/暂停相互独立"),
-            字段("simulation_time", "number", "MuJoCo data.time（秒）"),
-            字段("reset_count", "number", "本次会话执行 Reset 的累计次数"),
-            字段("speed_multiplier", "number", "目标墙钟速度；实际达到值以系统.RTF为准"),
-            字段("description", "string", "最近一次运行控制动作"),
-        ),
-    ),
-    主题(
-        名="experiment.state", 类名="ExperimentState", 方向="下行", 种类="快照",
-        摘要="当前实验、可选实验、运行进度与自动导出结果",
-        字段=(
-            字段("current", "string", "当前实验注册名；空表示未选择"),
-            字段("name", "string", "当前实验显示名"),
-            字段("status", "string", "not_selected / loaded / running / paused / completed / failed"),
-            字段("available", "object[]", "每项：{key,name,model,project,controllers[],duration_s,description}"),
-            字段("model", "string", "实验声明的模型路径"),
-            字段("project", "string", "实验声明的项目"),
-            字段("controllers", "string[]", "实验声明的控制器注册名"),
-            字段("duration_s", "number", "本次实验的仿真时长"),
-            字段("elapsed_s", "number", "从本次点击开始累计的仿真时间"),
-            字段("result_directory", "string", "自动导出完成后的目录"),
-            字段("description", "string", "最近一次实验操作说明"),
-        ),
-    ),
-    主题(
-        名="控制状态", 类名="ControlState", 方向="下行", 种类="快照",
-        摘要="关节目标输入区的数据源：当前位置、速度、控制量与已接受目标",
-        字段=(
-            字段("关节名", "string[]", "与 qpos 顺序对应的关节/坐标名称"),
-            字段("当前位置", "number[]", "data.qpos"),
-            字段("当前速度", "number[]", "data.qvel"),
-            字段("当前控制", "number[]", "data.ctrl"),
-            字段("目标", "number[]", "当前已接受的关节目标"),
-            字段("目标来源", "string", "当前位置 / 手动输入"),
-            字段("说明", "string", "最近一次目标处理结果"),
-        ),
-    ),
-    主题(
-        名="model.library", 类名="AssetLibrary", 方向="下行", 种类="快照",
-        摘要="可选模型清单（资产库视图）—— 与「模型状态」区分：那是当前装的哪台",
-        字段=(
-            字段("count", "number", "共几台"),
-            字段("models", "object[]",
-                 "每项：{id, display_name, category, dof, actuator_count, license, controllable, path}；"
-                 "路径是可直接加载的那个文件"),
-        ),
-    ),
-    主题(
-        名="project.state", 类名="ProjectState", 方向="下行", 种类="快照",
-        摘要="当前项目 + 挂了哪些算法 + 重力设置（方案 C 的核心状态）",
-        字段=(
-            字段("project", "string", "项目名（空 = 没有对应项目）"),
-            字段("model_path", "string", ""),
-            字段("model_display_name", "string", ""),
-            字段("algorithms", "object[]", "已装配算法元信息"),
-            字段("report", "string[]", "上次装配的逐行说明"),
-            字段("algorithm_library", "string[]", "算法库里可选的算法名"),
-            字段("saved", "boolean", "当前算法组是否已写回项目文件"),
-            字段("active_controller", "string", "谁在写 ctrl[:]（抢方向盘提示）"),
-            字段("overridden_controllers", "string[]", "输出被覆盖的算法名"),
-            字段("gravity_enabled", "boolean", "是否启用模型重力；不代表仿真是否运行"),
-        ),
-    ),
-)
-
-# ---------------------------------------------------------------------------
-# 上行：界面 → 仿真（命令）
-#
-# ★ 安全纪律（为什么命令要单独登记、单独白名单）：
-#   下行数据错了最多是"显示不对"；上行命令错了是"让机器人做别的事"。
-#   所以命令**逐条登记**：没登记的类型一律拒收；每条都要写明是否危险、
-#   是否需要限频。`Web桥` 只放行本表里的类型。
-# ---------------------------------------------------------------------------
-_上行 = (
-    主题(
-        名="command.parameter_transaction", 类名="ParameterTransactionCommand", 方向="上行", 种类="快照",
-        摘要="一次性应用一组参数（预检不过就一个都不改）",
-        字段=(
-            字段("action", "string", "apply"),
-            字段("parameters", "object[]", "每项 {full_name, value}"),
-        ),
-    ),
-    主题(
-        名="command.planning", 类名="PlanningCommand", 方向="上行", 种类="快照",
-        摘要="对已记录的关节航点跑一次规划",
-        字段=(
-            字段("action", "string", "plan / record_waypoint / clear_waypoints / load_waypoints"),
-            字段("waypoints", "object[]",
-                 "直接给航点（每项是一组关节角）。给了就用它，不给就用已记录的"),
-            字段("cartesian_waypoints", "object[]",
-                 "每项 {xyz: [x,y,z]}，单位米。给了就先做逆解；**只支持位置，姿态未实现**"),
-            字段("velocity_limits", "number[]", "rad/s（不给则从模型估算）"),
-            字段("acceleration_limits", "number[]", "rad/s²（不给则 4×速度）"),
-            字段("jerk_limits", "number[]", "rad/s³（不给则 20×加速度）"),
-            字段("grid_size", "number", "s 上离散点数，默认 2000"),
-            字段("smoothing_iterations", "number", "0 = 不平滑"),
-            字段("smoothing_factor", "number", "≤0.49"),
-            字段("deviation_tolerance", "number", "rad"),
-        ),
-    ),
-    主题(
-        名="命令.部署", 类名="部署命令", 方向="上行", 种类="快照",
-        摘要="导出一个部署包（只拷源码与配置，不含模型本体）",
-        字段=(字段("动作", "string", "导出（目前只认这个）"),),
-    ),
-    主题(
-        名="命令.诊断", 类名="诊断命令", 方向="上行", 种类="快照",
-        摘要="跑一遍自检（10 套断言真跑）",
-        字段=(字段("动作", "string", "运行 / 空闲（目前只认运行）"),),
-    ),
-    主题(
-        名="命令.设备", 类名="连接命令", 方向="上行", 种类="快照",
-        摘要="设备链路控制：打开/使能/进运行/停止/急停/设劣化/演练断线/导出审计",
-        字段=(
-            字段("动作", "string",
-                 "打开 / 使能 / 进运行 / 停止 / 急停 / 设劣化 / 演练断线 / 导出审计"),
-            字段("延迟毫秒", "number", "<0 = 不改"),
-            字段("抖动毫秒", "number", "<0 = 不改"),
-            字段("丢包率", "number", "0..1，<0 = 不改"),
-            字段("编码器分辨率", "number", "<0 = 不改"),
-        ),
-    ),
-    主题(
-        名="命令.高亮", 类名="高亮命令", 方向="上行", 种类="快照",
-        摘要="在 3D 视口高亮一个关节（视觉诊断；不改变物理/模型）",
-        字段=(
-            字段("关节", "number", "关节索引；-1 = 清除高亮"),
-            字段("秒", "number", "持续时间（秒），后端夹到 0..60"),
-        ),
-    ),
-    主题(
-        名="command.gravity", 类名="GravityState", 方向="上行", 种类="快照",
-        摘要="物理总闸：True = 推进物理（重力生效），False = 冻结在默认位置",
-        字段=(字段("gravity_enabled", "boolean", ""),),
-    ),
-    主题(
-        名="command.simulation", 类名="SimulationControlCommand", 方向="上行", 种类="命令",
-        摘要="全局仿真控制：运行、暂停、复位或设置墙钟速度倍率",
-        字段=(
-            字段("action", "string", "run / pause / reset / speed"),
-            字段("speed_multiplier", "number", "0.25..4；只调整墙钟节拍，不修改 timestep"),
-        ),
-    ),
-    主题(
-        名="command.experiment", 类名="ExperimentCommand", 方向="上行", 种类="命令",
-        摘要="按注册名加载实验；Run/Pause/Reset 继续复用全局仿真控制",
-        字段=(
-            字段("action", "string", "load"),
-            字段("experiment", "string", "ExperimentRegistry 中的注册名"),
-        ),
-    ),
-    主题(
-        名="命令.控制目标", 类名="ControlTargetCommand", 方向="上行", 种类="命令",
-        摘要="设置一组关节位置目标；由当前控制算法决定如何跟踪，不直接写 data.ctrl",
-        字段=(字段("target", "number[]", "按 qpos 顺序，转动关节单位 rad"),),
-    ),
-    主题(
-        名="command.model", 类名="SwitchModelCommand", 方向="上行", 种类="命令",
-        摘要="切换机械臂（会连带按项目重新装配算法）",
-        字段=(
-            字段("path", "string", "模型路径（相对包根或绝对）"),
-            字段("display_name", "string", "可留空"),
-        ),
-    ),
-    主题(
-        名="command.algorithms", 类名="ApplyAlgorithmsCommand", 方向="上行", 种类="命令",
-        摘要="换一组控制算法（等价于点【Algorithms】面板的 Apply）",
-        字段=(
-            字段("algorithms", "object[]", "[{plugin: 名字}]"),
-            字段("persist", "boolean", "是否写回项目文件"),
-            字段("reset_pose", "boolean", ""),
-        ),
-    ),
-    主题(
-        名="命令.辨识", 类名="辨识命令", 方向="上行", 种类="命令",
-        摘要="开始/停止参数辨识",
-        字段=(
-            字段("动作", "string", "开始 / 停止"),
-            字段("时长", "number", "采样时长（秒）"),
-        ),
-    ),
-    主题(
-        名="command.parameters", 类名="ParameterUpdate", 方向="上行", 种类="快照",
-        摘要="改一个或多个算法参数（等价于在【Controller params】面板拖滑杆）",
-        字段=(
-            字段("updates", "record<number>",
-                 "{全名: 新值}，全名必须是参数表里的键（形如「插件名·参数名」）。"
-                 "★ 为什么它不是普通命令而是快照语义：官方那条通道本来就是 latest-wins，"
-                 "拖滑杆会连发很多条，照旧沿用才不会出现「排队抖动」。"),
-        ),
-    ),
-    主题(
-        名="命令.录制", 类名="录制命令", 方向="上行", 种类="命令",
-        摘要="数据录制的开始/停止/回放",
-        字段=(
-            字段("动作", "string", "开始 / 停止 / 回放"),
-            字段("频率", "number", "采样频率（Hz）"),
-            字段("备注", "string", ""),
-        ),
-    ),
-)
-
-所有主题: tuple[主题, ...] = _下行 + _上行
-下行主题 = tuple(t for t in 所有主题 if t.方向 == "下行")
-上行主题 = tuple(t for t in 所有主题 if t.方向 == "上行")
-按名 = {t.名: t for t in 所有主题}
-按类名 = {t.类名: t for t in 所有主题}
-
-
-def 取(名: str) -> 主题 | None:
-    return 按名.get(名)
-
-
-def 类型记号们() -> tuple[str, ...]:
-    """本契约用到的基本类型记号（前端据此决定 TS 映射）。"""
-    return ("number", "string", "boolean", "any", "number[]", "string[]",
-            "object[]", "record<number>", "record<any>")
-
-
-def 转字典() -> dict:
-    """给前端/接口用的纯字典形态（含版本，便于前端判断是否要刷新）。"""
-    return {
-        "版本": 版本,
-        "类型记号": list(类型记号们()),
-        "下行": [
-            {"名": t.名, "类名": t.类名, "种类": t.种类, "摘要": t.摘要,
-             "字段": [{"名": f.名, "类型": f.类型, "说明": f.说明} for f in t.字段]}
-            for t in 下行主题
-        ],
-        "上行": [
-            {"名": t.名, "类名": t.类名, "种类": t.种类, "摘要": t.摘要,
-             "字段": [{"名": f.名, "类型": f.类型, "说明": f.说明} for f in t.字段]}
-            for t in 上行主题
-        ],
-    }
-
-
-# ---------------------------------------------------------------------------
-# 校验：命令进来先过这一关（类型 + 必填 + 取值范围）
-# ---------------------------------------------------------------------------
-def _符合(值: Any, 类型: str) -> bool:
-    """宽松但足够拦住"发错东西"的类型检查。"""
-    if 类型 == "any":
-        return True
-    if 类型 == "number":
-        return isinstance(值, (int, float)) and not isinstance(值, bool)
-    if 类型 == "string":
-        return isinstance(值, str)
-    if 类型 == "boolean":
-        return isinstance(值, bool)
-    if 类型 == "number[]":
-        return isinstance(值, (list, tuple)) and all(
-            isinstance(v, (int, float)) and not isinstance(v, bool) for v in 值)
-    if 类型 == "string[]":
-        return isinstance(值, (list, tuple)) and all(isinstance(v, str) for v in 值)
-    if 类型 == "object[]":
-        return isinstance(值, (list, tuple)) and all(isinstance(v, dict) for v in 值)
-    if 类型 == "record<number>":
-        return isinstance(值, dict) and all(
-            isinstance(v, (int, float)) and not isinstance(v, bool) for v in 值.values())
-    if 类型 == "record<any":
-        return isinstance(值, dict)
-    if 类型 == "record<any>":
-        return isinstance(值, dict)
-    return False
-
-
-# 每条命令字段的额外约束（不做的话，"动作" 写成任意字符串都能过）
-_枚举: dict[tuple[str, str], tuple[str, ...]] = {
-    ("command.parameter_transaction", "action"): ("apply",),
-    ("command.simulation", "action"): ("run", "pause", "reset", "speed"),
-    ("command.experiment", "action"): ("load",),
-    ("command.planning", "action"): (
-        "plan", "record_waypoint", "clear_waypoints", "load_waypoints",
-        "execute", "stop_execution",
-    ),
-    ("命令.辨识", "动作"): ("开始", "停止", "start", "stop"),
-    ("命令.录制", "动作"): ("开始", "停止", "回放", "start", "stop", "replay"),
+_FIELD_ALIASES = {"名": "name", "类型": "type", "说明": "description"}
+_TOPIC_ALIASES = {
+    "名": "name", "类名": "class_name", "方向": "direction",
+    "种类": "kind", "摘要": "summary", "字段": "fields",
 }
-_范围: dict[tuple[str, str], tuple[float, float]] = {
-    ("command.simulation", "speed_multiplier"): (0.25, 4.0),
-    ("命令.辨识", "时长"): (0.1, 3600.0),
-    ("命令.录制", "频率"): (1.0, 10000.0),
+_LEGACY_EXPORTS = {
+    "版本": "VERSION", "字段": "Field", "主题": "Topic",
+    "_下行": "_OUTBOUND", "_上行": "_INBOUND",
+    "所有主题": "ALL_TOPICS", "下行主题": "OUTBOUND_TOPICS", "上行主题": "INBOUND_TOPICS",
+    "按名": "BY_NAME", "按类名": "BY_CLASS_NAME", "取": "get_topic",
+    "类型记号们": "type_markers", "转字典": "to_dict", "_符合": "_matches_type",
+    "_枚举": "_ENUM_VALUES", "_范围": "_VALUE_RANGES",
+    "类名到主题": "class_name_to_topic", "校验": "validate", "查漂移": "find_drift",
 }
 
 
-def 类名到主题() -> dict[str, str]:
-    """{"指标消息": "指标", …} —— 给"通道水龙头"用。
-
-    ★ 为什么要这个函数、而不是让 `Web桥` 自己写一份白名单：
-      写两份就一定会漂移（P1 开发时实测：`Web桥` 的白名单里曾有一条 `录制状态`，
-      而 `录制桥` 从来没定义过这个 dataclass —— 幽灵条目，放行它等于没有校验）。
-      所以白名单**从契约派生**，契约又由 `工具/验证/契约自检.py` 对着真实 dataclass 自证。
-    """
-    return {t.类名: t.名 for t in 下行主题}
-
-
-def 校验(主题名: str, 负载: Any) -> tuple[bool, str]:
-    """校验一条上行命令。返回 (是否通过, 给人看的说明)。"""
-    t = 按名.get(主题名)
-    if t is None:
-        return False, f"未登记的主题「{主题名}」"
-    if t.方向 != "上行":
-        return False, f"「{主题名}」是下行主题，不能当命令发"
-    if not isinstance(负载, dict):
-        return False, "负载必须是对象"
-    已知 = {f.名 for f in t.字段}
-    多余 = set(负载) - 已知
-    if 多余:
-        return False, f"有未登记字段：{'、'.join(sorted(多余))}"
-    for f in t.字段:
-        if f.名 not in 负载:
-            continue                      # 缺省字段交给 Python dataclass 的默认值
-        值 = 负载[f.名]
-        if not _符合(值, f.类型):
-            return False, f"字段「{f.名}」类型不符（要 {f.类型}）"
-        枚 = _枚举.get((主题名, f.名))
-        if 枚 and 值 not in 枚:
-            return False, f"字段「{f.名}」取值必须是 {'/'.join(枚)}"
-        范 = _范围.get((主题名, f.名))
-        if 范 and not (范[0] <= float(值) <= 范[1]):
-            return False, f"字段「{f.名}」超出范围 [{范[0]}, {范[1]}]"
-    return True, "ok"
+def _accept_legacy_keywords(function, aliases):
+    @wraps(function)
+    def call(*args, **kwargs):
+        mapped = {}
+        for key, value in kwargs.items():
+            name = aliases.get(key, key)
+            if name in mapped:
+                raise TypeError(f"Multiple values for argument {name!r}")
+            mapped[name] = value
+        return function(*args, **mapped)
+    return call
 
 
-def 查漂移() -> list[str]:
-    """把本契约与**真实 dataclass** 逐项比对，返回不一致清单（空 = 一致）。
+def _install_metadata_aliases(cls, aliases):
+    if not getattr(cls.__init__, "_legacy_keywords_installed", False):
+        initializer = _accept_legacy_keywords(cls.__init__, aliases)
+        initializer._legacy_keywords_installed = True
+        cls.__init__ = initializer
+    for old_name, name in aliases.items():
+        setattr(cls, old_name, property(lambda instance, key=name: getattr(instance, key)))
 
-    ★ 为什么要有它：契约是手写的，手写就会漂移。这个函数让"契约与代码不一致"
-      从"人肉核对"变成"跑一次脚本就知道"。
-    """
-    import importlib
-    import sys
-    import os
 
-    软件目录 = os.path.dirname(os.path.abspath(__file__))
-    if 软件目录 not in sys.path:
-        sys.path.insert(0, 软件目录)
+_install_metadata_aliases(_contract.Field, _FIELD_ALIASES)
+_install_metadata_aliases(_contract.Topic, _TOPIC_ALIASES)
+_LEGACY_FUNCTIONS = {
+    "取": _accept_legacy_keywords(_contract.get_topic, {"名": "name"}),
+    "_符合": _accept_legacy_keywords(_contract._matches_type, {"值": "value", "类型": "type_marker"}),
+    "校验": _accept_legacy_keywords(_contract.validate, {"主题名": "topic_name", "负载": "payload"}),
+}
+__all__ = [*_contract.__all__, *[name for name in _LEGACY_EXPORTS if not name.startswith("_")]]
 
-    源模块 = {
-        "MetricsSnapshot": "metrics_bridge", "PluginCatalog": "插件桥",
-        "ParameterTable": "parameter_bridge",
-        "ParameterUpdate": "parameter_bridge",
-        "ParameterTransactionResult": "parameter_bridge",
-        "辨识状态": "辨识桥", "ModelState": "model_bridge",
-        "AssetLibrary": "model_bridge", "ProjectState": "model_bridge",
-        "GravityState": "simulation_control", "SimulationState": "simulation_control",
-        "SimulationControlCommand": "simulation_control",
-        "ExperimentState": "experiment_bridge", "ExperimentCommand": "experiment_bridge",
-        "PlanningResult": "planning_bridge", "PlanningCommand": "planning_bridge",
-        "ControlState": "control_bridge", "ControlTargetCommand": "control_bridge",
-        "SwitchModelCommand": "model_bridge", "ApplyAlgorithmsCommand": "model_bridge",
-        "ParameterTransactionCommand": "parameter_bridge",
-        "辨识命令": "辨识桥", "录制命令": "录制桥",
-    }
-    问题: list[str] = []
-    for t in 所有主题:
-        模块名 = 源模块.get(t.类名)
-        if 模块名 is None:
-            continue
-        try:
-            类 = getattr(importlib.import_module(模块名), t.类名)
-        except Exception as 异常:                                     # noqa: BLE001
-            问题.append(f"{t.名}：拿不到 {模块名}.{t.类名}（{type(异常).__name__}: {异常}）")
-            continue
-        真字段 = [f.name for f in dataclasses.fields(类)]
-        契约字段 = [f.名 for f in t.字段]
-        if 真字段 != 契约字段:
-            少了 = [x for x in 真字段 if x not in 契约字段]
-            多了 = [x for x in 契约字段 if x not in 真字段]
-            乱序 = (not 少了 and not 多了)
-            问题.append(
-                f"{t.名}（{模块名}.{t.类名}）字段不一致"
-                + (f"：缺少 {少了}" if 少了 else "")
-                + (f"：多出 {多了}" if 多了 else "")
-                + ("：顺序不同（会影响位置参数，请对齐）" if 乱序 else ""))
-    return 问题
+
+def __getattr__(name: str):
+    if name in _LEGACY_FUNCTIONS:
+        return _LEGACY_FUNCTIONS[name]
+    return getattr(_contract, _LEGACY_EXPORTS.get(name, name))
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_contract)) | set(_LEGACY_EXPORTS))
 
 
 if __name__ == "__main__":
-    import json as _json
-    问题 = 查漂移()
-    print("=" * 72)
-    print(f"  契约自检（版本 {版本}）")
-    print("=" * 72)
-    print(f"  主题数：下行 {len(下行主题)} / 上行 {len(上行主题)}")
-    if 问题:
-        print(f"\n  ✗ 发现 {len(问题)} 处与代码不一致：")
-        for p in 问题:
-            print(f"    · {p}")
-        raise SystemExit(1)
-    print("\n  ✓ 契约与真实 dataclass 完全一致")
-    print("\n  " + _json.dumps(转字典(), ensure_ascii=False)[:200] + " …")
+    import runpy
+    runpy.run_module("contract", run_name="__main__")

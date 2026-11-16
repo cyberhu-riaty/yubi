@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import dataclasses
+from wire_compatibility import legacy_wire
 from typing import Callable
 
 import numpy as np
 
-from 官方层 import messages
+from official_api import messages
 from ui_bridge import PanelTargetMessage
 
 
@@ -17,17 +18,18 @@ class ControlTargetCommand(messages.Snapshot):
     target: object = dataclasses.field(default_factory=list)
 
 
+@legacy_wire('ControlState', {'joint_names': '关节名', 'current_position': '当前位置', 'current_velocity': '当前速度', 'current_control': '当前控制', 'target': '目标', 'target_source': '目标来源', 'description': '说明'})
 @dataclasses.dataclass(frozen=True)
 class ControlState(messages.Snapshot):
     """仿真 → GUI：目标输入区需要的最小状态。"""
 
-    关节名: list = dataclasses.field(default_factory=list)
-    当前位置: list = dataclasses.field(default_factory=list)
-    当前速度: list = dataclasses.field(default_factory=list)
-    当前控制: list = dataclasses.field(default_factory=list)
-    目标: list = dataclasses.field(default_factory=list)
-    目标来源: str = "当前位置"
-    说明: str = ""
+    joint_names: list = dataclasses.field(default_factory=list)
+    current_position: list = dataclasses.field(default_factory=list)
+    current_velocity: list = dataclasses.field(default_factory=list)
+    current_control: list = dataclasses.field(default_factory=list)
+    target: list = dataclasses.field(default_factory=list)
+    target_source: str = "当前位置"
+    description: str = ""
 
 
 def _joint_labels(model) -> list[str]:
@@ -140,12 +142,12 @@ class ControlStatePublisher:
             return False
         self._next_publish = wall_clock + self._interval
         self._send(ControlState(
-            关节名=_joint_labels(model),
-            当前位置=np.asarray(data.qpos, dtype=float).reshape(-1).tolist(),
-            当前速度=np.asarray(data.qvel, dtype=float).reshape(-1).tolist(),
-            当前控制=np.asarray(data.ctrl, dtype=float).reshape(-1).tolist(),
-            目标=applier.target.tolist(),
-            目标来源=applier.source,
-            说明=applier.note,
+            joint_names=_joint_labels(model),
+            current_position=np.asarray(data.qpos, dtype=float).reshape(-1).tolist(),
+            current_velocity=np.asarray(data.qvel, dtype=float).reshape(-1).tolist(),
+            current_control=np.asarray(data.ctrl, dtype=float).reshape(-1).tolist(),
+            target=applier.target.tolist(),
+            target_source=applier.source,
+            description=applier.note,
         ))
         return True

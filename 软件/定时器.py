@@ -1,127 +1,30 @@
-"""
-定时器.py —— 一个**在本机真的会触发**的 run loop 定时器
-
-为什么需要它（这是 P3 花时间最多的一个坑，值得单独成文）：
-    PyObjC 的 `NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_`
-    在本机**完全不触发** —— 中文方法名（`画一帧_:`）和 ASCII 方法名（`probeTick_:`）都试过，
-    **而且不报任何错**：`isValid()` 返回 True、对象正常、就是不回调。
-
-    这个坑极难发现，因为它伪装成别的问题：
-      · P2 的 spike 看起来"能跑"（`GL 实际出帧数 350`），但那是**窗口系统的 drawRect_
-        自己在画**（`setNeedsDisplay_` 由窗口系统驱动），**跟定时器无关**；
-      · P2 验收里的 60.1 fps 也是这么来的。
-      · 于是"验收通过"了，而真正依赖定时器的东西（每帧同步状态、排空命令）一直没跑。
-
-    判别方法（一条命令）：往一个能跑的界面里插一个 0.8 秒一次性定时器，
-    看它有没有打印。不打印 = 定时器这条路不可用。
-
-    解法：用 **CoreFoundation 的 `CFRunLoopTimer`** —— 它走纯 C 回调，不过 PyObjC 的
-    选择器机制。实测稳定触发；本文件末尾保留了最小自测。
-
-用法：
-    定时器 = 起(1.0 / 60.0, 每帧函数)        # 返回句柄
-    定时器.停()
-    一次性(0.5, 某函数)
-"""
+"""Legacy naming compatibility; new code imports runloop_timers."""
 from __future__ import annotations
 
-import objc
-from Foundation import NSRunLoop
-from Quartz import (CFAbsoluteTimeGetCurrent, CFRunLoopAddTimer, CFRunLoopGetCurrent,
-                    CFRunLoopRemoveTimer, CFRunLoopTimerCreate, kCFRunLoopDefaultMode)
+from functools import wraps
+import runloop_timers as _implementation
 
-# ★ 回调**直接传 Python 函数**即可 —— PyObjC 会按 `CFRunLoopTimerCreate` 的元数据
-#   自动包装。不要自己造 `objc.FUNCTYPE`（本机 PyObjC 12 没这个名字）或
-#   `ctypes.CFUNCTYPE`（PyObjC 拒收，报 "argument 1: TypeError: wrong type"）。
-_保活: list = []          # 回调对象必须一直被引用，否则会被回收、定时器随即失效
+_ALIASES = {'平台适配层': 'platform_adapters', '契约': 'interface', '平台能力': 'PlatformCapabilities', '无可用平台': 'UnavailablePlatform', '可用平台': 'available_platforms', '取实现': 'get_implementation', '说明': 'describe', '_缓存': '_cache', '键': 'key', '实例': 'instance', '平台': 'platform', '可用': 'is_available', '原因': 'reason', '名称': 'name', '地址': 'url', '标题': 'title', '宽': 'width', '高': 'height', '命令队列': 'command_queue', '无3D': 'no_3d', '视口槽': 'viewport_slot', '视口矩形': 'viewport_rectangle', '统计': 'statistics', '宿主窗口': 'native_host', '跑': 'run', '取统计': 'get_statistics', '取视口矩形': 'get_viewport_rectangle', '_保活': '_keepalive', '_信息': '_info', '_回调': '_callback', '_定时器': '_timer', '_已停': '_stopped', '_报过错': '_reported_error', '_起': '_start', '一次性': 'once', '乙': 'once_timer', '停': 'stop', '函数': 'function', '包装': 'wrapped', '句柄': 'TimerHandle', '回调': 'callback', '好': 'passed', '定时器': 'timer', '延迟': 'delay', '延迟秒': 'delay_seconds', '异常': 'exc', '循环': 'run_loop', '甲': 'repeat_timer', '结束': 'end', '计数': 'counts', '起': 'start', '重复': 'repeat', '间隔': 'interval', '间隔秒': 'interval_seconds', '首次延迟': 'initial_delay', '_主筛选': '_primary_filter', '_主线程每帧': '_main_thread_tick', '_事件': '_event', '_分栏相机': '_splitter_camera', '_切分宽度': '_split_widths', '_参数': '_parameters', '_发送者': '_sender', '_取景': '_frame_model', '_取景异常': '_framing_error', '_同步面板事件': '_sync_panel_events', '_天空': '_sky', '_头高': '_header_height', '_尺度': '_scale', '_工程面板高度': '_engineering_panel_height', '_帧时刻': '_frame_times', '_建窗口': '_create_window', '_总': '_total', '_抓手': '_grip', '_折叠': '_collapse_button', '_拖拽中': '_dragging', '_拖拽动作': '_drag_action', '_拖拽起点': '_drag_origin', '_控制器': '_controller', '_收起': '_collapsed', '_文本': '_text', '_最后主人': '_last_host', '_标题': '_title', '_模型代': '_model_generation', '_模型包围盒': '_model_bounds', '_模型路径': '_model_path', '_每帧定时': '_frame_timer', '_清空': '_clear_button', '_渲染循环': '_render_loop', '_渲染线程': '_render_thread', '_滚动': '_scroll_view', '_状态同步': '_state_sync', '_画布上限': '_canvas_limit', '_画布目标': '_canvas_target', '_画布要重建': '_canvas_rebuild_pending', '_矩形': '_rectangle', '_筛': '_filter', '_筛选': '_filter_control', '_网格': '_grid', '_网格定尺': '_grid_dimensions', '_脏区': '_dirty_rectangle', '_自诊断': '_self_diagnose', '_色头': '_header_color', '_色文字': '_text_color', '_色次': '_secondary_color', '_色背景': '_background_color', '_行': '_rows', '_要渲': '_render_requested', '_计数': '_count', '_诊断定时': '_diagnostic_timer', '_诊断序号': '_diagnostic_sequence', '_诊断路径': '_diagnostic_path', '_该停': '_should_stop', '_起y': '_start_y', '_起点x': '_start_x', '_起点宽': '_start_width', '_起高': '_start_height', '_通知': '_notification', '_面板开上次': '_panel_previously_open', '_面板拖动中': '_panel_dragging', '_面板收起': '_panel_collapsed', '_面板高覆盖': '_panel_height_override', '_首帧已取景': '_first_frame_framed', '上': 'upper', '上下文': 'context', '上半': 'upper_half', '上次状态': 'previous_state', '上限面积': 'max_area', '下半': 'lower_half', '中': 'middle', '中位': 'median', '中心': 'center', '串': 'rendered_text', '临时': 'temporary', '主人': 'host', '主格': 'major_grid', '主线程帧': 'main_thread_frames', '事件': 'event', '交互锁定': 'interaction_locked', '代': 'generation', '仰角': 'elevation', '位置': 'position', '低': 'lower', '体': 'body', '余量': 'padding_factor', '值': 'value', '值s': 'value_text', '偏好': 'preferences', '偏移': 'offset', '停止_渲染线程': 'stop_render_thread', '关节': 'joint', '内容': 'content', '准_备': 'prepare_viewport', '几何': 'geometry', '出': 'output', '分栏': 'splitter', '分栏交互时刻': 'splitter_interaction_time', '分栏拖动中': 'splitter_dragging', '切换': 'switch', '切换_工程面板收起': 'toggle_engineering_panel', '切换_末端坐标': 'toggle_end_effector_axes', '切换_网格': 'toggle_grid', '切换中': 'switching', '切换标签': 'switch_label', '前': 'before', '加_线': 'add_line', '加_行': 'add_row', '加按钮': 'add_button', '加载地址': 'load_url', '动作': 'action', '半': 'half', '半宽': 'half_width', '半径': 'radius', '半高': 'half_height', '参数': 'parameters', '发_日志操作': 'send_log_action', '发送者': 'sender', '取_网页宽': 'get_web_width', '右': 'right', '同步_状态': 'sync_state', '同路径': 'same_path', '名': 'name', '后缀': 'suffix', '因子': 'factor', '图': 'image', '图例': 'legend', '图宽': 'image_width', '图比': 'image_aspect', '场景': 'scene', '头': 'header', '头高': 'header_height', '字': 'text', '存高': 'saved_height', '宽图': 'image_width', '宽画布': 'canvas_width', '宿主': 'host', '小写': 'lowercase', '就绪': 'ready', '尺寸': 'size', '尺度': 'scale', '属性': 'attributes', '工具条': 'toolbar', '工程面板': 'engineering_panel', '差': 'difference', '已传代': 'uploaded_generation', '平移': 'pan', '应用': 'application', '底': 'bottom', '建_视口工具条': 'create_viewport_toolbar', '开': 'enabled', '开始_分栏拖动': 'begin_splitter_drag', '开始_工程面板拖动': 'begin_panel_drag', '开始_拖拽': 'begin_drag', '当前模型路径': 'current_model_path', '待换': 'pending_model', '待换模型时刻': 'pending_model_time', '待换模型路径': 'pending_model_path', '快照': 'snapshot', '总': 'total', '总宽': 'total_width', '总数': 'total_count', '总高': 'total_height', '所属': 'owner', '折叠_': 'toggleCollapsed_', '拖拽_到': 'drag_to', '按视口重算画布': 'resize_canvas_for_viewport', '按钮': 'button', '按需_开缓冲': 'ensure_state_buffer', '换_模型': 'switch_model', '排_布局': 'layout_views', '排_视口工具条': 'layout_viewport_toolbar', '排_面板': 'layout_panel', '掩码': 'mask', '提示': 'hint', '插件': 'plugin', '摘要': 'summary', '收_状态': 'receive_state', '收起': 'collapsed', '数据': 'data', '文字': 'text', '文本': 'text', '方位': 'azimuth', '方向': 'direction', '旋转': 'rotation', '日志桥': 'log_bridge', '时': 'timestamp', '显示': 'display', '最新状态': 'latest_state', '有效': 'valid', '末端坐标开': 'end_effector_axes_enabled', '来源': 'source', '标': 'label', '标宽': 'label_width', '格': 'cell', '格式': 'pixel_format', '格数': 'cell_count', '模型': 'model', '模型路径': 'model_path', '止': 'end', '正常': 'normal', '步长': 'step', '消息': 'message', '深0': 'depth_zero', '清空_': 'clearLog_', '渲染器': 'renderer', '点': 'point', '状态': 'state', '状态消息': 'state_message', '状态缓冲': 'state_buffer', '现在': 'now', '球位置': 'sphere_position', '画_实验轨迹': 'draw_experiment_trajectory', '画_末端坐标': 'draw_end_effector_axes', '画_装饰': 'draw_decorations', '画布': 'canvas', '画布尺寸': 'canvas_size', '画面': 'frame_image', '画面_铺天空': 'paint_sky_background', '画面代': 'frame_generation', '目标': 'target', '相对': 'relative', '相机': 'camera', '相机0': 'initial_camera', '相机_移动': 'move_camera', '相机位': 'camera_position', '矩形': 'rectangle', '窗口': 'window', '窗口改尺寸_': 'windowResized_', '站点': 'site', '等级': 'level', '筛选_': 'filterChanged_', '签名': 'signature', '类型': 'kind', '类型s': 'kind_text', '纹理': 'texture', '线': 'line', '细节': 'details', '结束_分栏拖动': 'end_splitter_drag', '结束_工程面板拖动': 'end_panel_drag', '缓冲': 'buffer', '缓冲表': 'buffers', '网': 'web_width', '网格开': 'grid_enabled', '网格按钮': 'grid_button', '网页': 'web_view', '网页宽': 'web_width', '网页宽当前': 'current_web_width', '网页宽请求': 'requested_web_width', '网页最小宽': 'MIN_WEB_WIDTH', '脚本': 'script', '自动高': 'automatic_height', '色': 'shade', '色带': 'color_band', '范围': 'bounds', '行': 'row', '装载_干活': 'load_resources', '要_显示': 'should_display', '视口': 'viewport', '视口图例': 'viewport_legend', '视口宽': 'viewport_width', '视口工具条': 'viewport_toolbar', '视口帧率标签': 'viewport_fps_label', '视口提示': 'viewport_hint', '视口最小宽': 'MIN_VIEWPORT_WIDTH', '视比': 'viewport_aspect', '视角_复位': 'reset_camera', '角们': 'corners', '记诊断': 'record_diagnostic', '设_收起': 'set_collapsed', '设_状态': 'set_state', '设_网页宽': 'set_web_width', '设_面板高': 'set_panel_height', '请求渲染': 'request_render', '距离': 'distance', '跨度': 'span', '轴': 'axis', '轴长': 'axis_length', '边距': 'margin', '适配_视图': 'fit_view', '选': 'selection', '选项': 'options', '配置': 'configuration', '重_画': 'redraw_panel', '重置_分栏': 'reset_splitter', '重置_工程面板高': 'reset_panel_height', '针长': 'marker_length', '针顶': 'marker_tip', '错误': 'error', '长': 'length', '长度': 'length', '需要': 'needed', '面板': 'panel', '面板高': 'panel_height', '面积': 'area', '顶': 'top', '顶高': 'top_height', '颜色': 'color', '高亮': 'highlight', '高亮关节': 'highlighted_joint', '高图': 'image_height', '高画布': 'canvas_height', '高盒': 'box_height', '默认相机': 'default_camera', '默认窗口': 'DEFAULT_WINDOW_SIZE', '默认网页宽比': 'DEFAULT_WEB_WIDTH_RATIO', 'MuJoCo视口': 'MuJoCoViewport', 'windows_视口': 'windows_viewport', 'windows_运行信息': 'windows_runtime_info', '_保存分栏': '_save_splitters', '_允许保存分栏': '_splitter_save_enabled', '_分隔': '_splitter', '_分隔保存计时器': '_splitter_save_timer', '_右分隔': '_right_splitter', '_启用分栏保存': '_enable_splitter_save', '_应用': '_application', '_更新三维状态': '_update_viewport_status', '_检查模型切换': '_check_model_switch', '_模型显示名': '_model_display_name', '_模型计时器': '_model_timer', '_窗口': '_window', '_统计数据': '_statistics', '_网页': '_web_view', '_视口': '_viewport', '_视口槽': '_viewport_slot', '_视口模型标签': '_viewport_model_label', '_视口状态标签': '_viewport_status_label', '_读取分栏': '_read_splitter', '_读取右分栏': '_read_right_splitter', '_运行信息': '_runtime_info', '_页面加载结束': '_page_load_finished', '三维外壳': 'viewport_shell', '三维布局': 'viewport_shell_layout', '三维标题': 'viewport_title', '三维顶栏': 'viewport_header', '上默认': 'default_upper', '关闭': 'close', '分隔': 'splitter', '分隔保存计时器': 'splitter_save_timer', '可用默认': 'default_available', '右分隔': 'right_splitter', '右目标分栏': 'target_right_sizes', '合计': 'total', '同一个': 'same_model', '左': 'left', '左默认': 'default_left', '成功': 'success', '文': 'status_text', '模型标签': 'model_label', '模型计时器': 'model_timer', '状态改变': 'status_changed', '状态标签': 'status_label', '目标分栏': 'target_sizes', '结果': 'result', '视口布局': 'viewport_layout', '视口边框': 'viewport_frame', '起点': 'origin', '路径': 'path', '轨迹图例': 'trajectory_legend', '运行信息': 'runtime_info', '运行信息面板': 'RuntimeInfoPanel', '适配按钮': 'fit_button', '适配视角': 'fit_camera', '顶栏布局': 'header_layout', '默认': 'default', '_停止': '_stop', '_加线': '_add_line', '_唤醒': '_wake', '_处理相机操作': '_process_camera_actions', '_尺寸最终计时器': '_final_resize_timer', '_尺寸计时器': '_resize_timer', '_平移中': '_panning', '_待换模型': '_pending_model', '_待画布': '_pending_canvas', '_拖拽点': '_drag_point', '_接收帧': '_receive_frame', '_接收状态': '_receive_status', '_提交画布尺寸': '_commit_canvas_size', '_操作': '_actions', '_最新锁': '_latest_lock', '_状态文字': '_status_text', '_画实验轨迹': '_draw_experiment_trajectory', '_画面': '_frame_image', '_线程': '_thread', '_统计': '_statistics', '_适配相机': '_fit_camera', 'q图': 'qimage', '上次快照': 'previous_snapshot', '倍率': 'factor', '剩余': 'remaining', '图像': 'image', '尺寸改了': 'size_changed', '帧就绪': 'frame_ready', '帧时刻': 'frame_time', '当前画布': 'current_canvas', '操作': 'action', '改了': 'changed', '有新状态': 'has_new_state', '期望': 'desired', '比例': 'ratio', '画笔': 'painter', '相机改了': 'camera_changed', '缩放': 'zoom', '被唤醒': 'woken', '面积上限': 'max_area', '_上次诊断': '_last_diagnostic', '_写输入表': '_write_input_table', '_刷新': '_refresh', '_同步': '_sync_label', '_帧率': '_fps_label', '_数值们': '_numeric_values', '_时间': '_time_label', '_模型': '_model_label', '_计时器': '_timer', '_设置单元格': '_set_cell', '_诊断': '_diagnostic', '_输入表': '_input_table', '信息': 'info', '值们': 'values', '列': 'column', '布局': 'layout', '文本们': 'texts', '状态表': 'state_form', '状态页': 'state_page', '等待状态': 'waiting_for_state', '行数': 'row_count', '计时器': 'timer', '诊断': 'diagnostic', '页签': 'tabs', '项': 'item'}
+_KEYWORDS = {'平台适配层': 'platform_adapters', '契约': 'interface', '平台能力': 'PlatformCapabilities', '无可用平台': 'UnavailablePlatform', '可用平台': 'available_platforms', '取实现': 'get_implementation', '说明': 'describe', '_缓存': '_cache', '键': 'key', '实例': 'instance', '平台': 'platform', '可用': 'is_available', '原因': 'reason', '名称': 'name', '地址': 'url', '标题': 'title', '宽': 'width', '高': 'height', '命令队列': 'command_queue', '无3D': 'no_3d', '视口槽': 'viewport_slot', '视口矩形': 'viewport_rectangle', '统计': 'statistics', '宿主窗口': 'native_host', '跑': 'run', '取统计': 'get_statistics', '取视口矩形': 'get_viewport_rectangle', '_保活': '_keepalive', '_信息': '_info', '_回调': '_callback', '_定时器': '_timer', '_已停': '_stopped', '_报过错': '_reported_error', '_起': '_start', '一次性': 'once', '乙': 'once_timer', '停': 'stop', '函数': 'function', '包装': 'wrapped', '句柄': 'TimerHandle', '回调': 'callback', '好': 'passed', '定时器': 'timer', '延迟': 'delay', '延迟秒': 'delay_seconds', '异常': 'exc', '循环': 'run_loop', '甲': 'repeat_timer', '结束': 'end', '计数': 'counts', '起': 'start', '重复': 'repeat', '间隔': 'interval', '间隔秒': 'interval_seconds', '首次延迟': 'initial_delay', '_主筛选': '_primary_filter', '_主线程每帧': '_main_thread_tick', '_事件': '_event', '_分栏相机': '_splitter_camera', '_切分宽度': '_split_widths', '_参数': '_parameters', '_发送者': '_sender', '_取景': '_frame_model', '_取景异常': '_framing_error', '_同步面板事件': '_sync_panel_events', '_天空': '_sky', '_头高': '_header_height', '_尺度': '_scale', '_工程面板高度': '_engineering_panel_height', '_帧时刻': '_frame_times', '_建窗口': '_create_window', '_总': '_total', '_抓手': '_grip', '_折叠': '_collapse_button', '_拖拽中': '_dragging', '_拖拽动作': '_drag_action', '_拖拽起点': '_drag_origin', '_控制器': '_controller', '_收起': '_collapsed', '_文本': '_text', '_最后主人': '_last_host', '_标题': '_title', '_模型代': '_model_generation', '_模型包围盒': '_model_bounds', '_模型路径': '_model_path', '_每帧定时': '_frame_timer', '_清空': '_clear_button', '_渲染循环': '_render_loop', '_渲染线程': '_render_thread', '_滚动': '_scroll_view', '_状态同步': '_state_sync', '_画布上限': '_canvas_limit', '_画布目标': '_canvas_target', '_画布要重建': '_canvas_rebuild_pending', '_矩形': '_rectangle', '_筛': '_filter', '_筛选': '_filter_control', '_网格': '_grid', '_网格定尺': '_grid_dimensions', '_脏区': '_dirty_rectangle', '_自诊断': '_self_diagnose', '_色头': '_header_color', '_色文字': '_text_color', '_色次': '_secondary_color', '_色背景': '_background_color', '_行': '_rows', '_要渲': '_render_requested', '_计数': '_count', '_诊断定时': '_diagnostic_timer', '_诊断序号': '_diagnostic_sequence', '_诊断路径': '_diagnostic_path', '_该停': '_should_stop', '_起y': '_start_y', '_起点x': '_start_x', '_起点宽': '_start_width', '_起高': '_start_height', '_通知': '_notification', '_面板开上次': '_panel_previously_open', '_面板拖动中': '_panel_dragging', '_面板收起': '_panel_collapsed', '_面板高覆盖': '_panel_height_override', '_首帧已取景': '_first_frame_framed', '上': 'upper', '上下文': 'context', '上半': 'upper_half', '上次状态': 'previous_state', '上限面积': 'max_area', '下半': 'lower_half', '中': 'middle', '中位': 'median', '中心': 'center', '串': 'rendered_text', '临时': 'temporary', '主人': 'host', '主格': 'major_grid', '主线程帧': 'main_thread_frames', '事件': 'event', '交互锁定': 'interaction_locked', '代': 'generation', '仰角': 'elevation', '位置': 'position', '低': 'lower', '体': 'body', '余量': 'padding_factor', '值': 'value', '值s': 'value_text', '偏好': 'preferences', '偏移': 'offset', '停止_渲染线程': 'stop_render_thread', '关节': 'joint', '内容': 'content', '准_备': 'prepare_viewport', '几何': 'geometry', '出': 'output', '分栏': 'splitter', '分栏交互时刻': 'splitter_interaction_time', '分栏拖动中': 'splitter_dragging', '切换': 'switch', '切换_工程面板收起': 'toggle_engineering_panel', '切换_末端坐标': 'toggle_end_effector_axes', '切换_网格': 'toggle_grid', '切换中': 'switching', '切换标签': 'switch_label', '前': 'before', '加_线': 'add_line', '加_行': 'add_row', '加按钮': 'add_button', '加载地址': 'load_url', '动作': 'action', '半': 'half', '半宽': 'half_width', '半径': 'radius', '半高': 'half_height', '参数': 'parameters', '发_日志操作': 'send_log_action', '发送者': 'sender', '取_网页宽': 'get_web_width', '右': 'right', '同步_状态': 'sync_state', '同路径': 'same_path', '名': 'name', '后缀': 'suffix', '因子': 'factor', '图': 'image', '图例': 'legend', '图宽': 'image_width', '图比': 'image_aspect', '场景': 'scene', '头': 'header', '头高': 'header_height', '字': 'text', '存高': 'saved_height', '宽图': 'image_width', '宽画布': 'canvas_width', '宿主': 'host', '小写': 'lowercase', '就绪': 'ready', '尺寸': 'size', '尺度': 'scale', '属性': 'attributes', '工具条': 'toolbar', '工程面板': 'engineering_panel', '差': 'difference', '已传代': 'uploaded_generation', '平移': 'pan', '应用': 'application', '底': 'bottom', '建_视口工具条': 'create_viewport_toolbar', '开': 'enabled', '开始_分栏拖动': 'begin_splitter_drag', '开始_工程面板拖动': 'begin_panel_drag', '开始_拖拽': 'begin_drag', '当前模型路径': 'current_model_path', '待换': 'pending_model', '待换模型时刻': 'pending_model_time', '待换模型路径': 'pending_model_path', '快照': 'snapshot', '总': 'total', '总宽': 'total_width', '总数': 'total_count', '总高': 'total_height', '所属': 'owner', '折叠_': 'toggleCollapsed_', '拖拽_到': 'drag_to', '按视口重算画布': 'resize_canvas_for_viewport', '按钮': 'button', '按需_开缓冲': 'ensure_state_buffer', '换_模型': 'switch_model', '排_布局': 'layout_views', '排_视口工具条': 'layout_viewport_toolbar', '排_面板': 'layout_panel', '掩码': 'mask', '提示': 'hint', '插件': 'plugin', '摘要': 'summary', '收_状态': 'receive_state', '收起': 'collapsed', '数据': 'data', '文字': 'text', '文本': 'text', '方位': 'azimuth', '方向': 'direction', '旋转': 'rotation', '日志桥': 'log_bridge', '时': 'timestamp', '显示': 'display', '最新状态': 'latest_state', '有效': 'valid', '末端坐标开': 'end_effector_axes_enabled', '来源': 'source', '标': 'label', '标宽': 'label_width', '格': 'cell', '格式': 'pixel_format', '格数': 'cell_count', '模型': 'model', '模型路径': 'model_path', '止': 'end', '正常': 'normal', '步长': 'step', '消息': 'message', '深0': 'depth_zero', '清空_': 'clearLog_', '渲染器': 'renderer', '点': 'point', '状态': 'state', '状态消息': 'state_message', '状态缓冲': 'state_buffer', '现在': 'now', '球位置': 'sphere_position', '画_实验轨迹': 'draw_experiment_trajectory', '画_末端坐标': 'draw_end_effector_axes', '画_装饰': 'draw_decorations', '画布': 'canvas', '画布尺寸': 'canvas_size', '画面': 'frame_image', '画面_铺天空': 'paint_sky_background', '画面代': 'frame_generation', '目标': 'target', '相对': 'relative', '相机': 'camera', '相机0': 'initial_camera', '相机_移动': 'move_camera', '相机位': 'camera_position', '矩形': 'rectangle', '窗口': 'window', '窗口改尺寸_': 'windowResized_', '站点': 'site', '等级': 'level', '筛选_': 'filterChanged_', '签名': 'signature', '类型': 'kind', '类型s': 'kind_text', '纹理': 'texture', '线': 'line', '细节': 'details', '结束_分栏拖动': 'end_splitter_drag', '结束_工程面板拖动': 'end_panel_drag', '缓冲': 'buffer', '缓冲表': 'buffers', '网': 'web_width', '网格开': 'grid_enabled', '网格按钮': 'grid_button', '网页': 'web_view', '网页宽': 'web_width', '网页宽当前': 'current_web_width', '网页宽请求': 'requested_web_width', '网页最小宽': 'MIN_WEB_WIDTH', '脚本': 'script', '自动高': 'automatic_height', '色': 'shade', '色带': 'color_band', '范围': 'bounds', '行': 'row', '装载_干活': 'load_resources', '要_显示': 'should_display', '视口': 'viewport', '视口图例': 'viewport_legend', '视口宽': 'viewport_width', '视口工具条': 'viewport_toolbar', '视口帧率标签': 'viewport_fps_label', '视口提示': 'viewport_hint', '视口最小宽': 'MIN_VIEWPORT_WIDTH', '视比': 'viewport_aspect', '视角_复位': 'reset_camera', '角们': 'corners', '记诊断': 'record_diagnostic', '设_收起': 'set_collapsed', '设_状态': 'set_state', '设_网页宽': 'set_web_width', '设_面板高': 'set_panel_height', '请求渲染': 'request_render', '距离': 'distance', '跨度': 'span', '轴': 'axis', '轴长': 'axis_length', '边距': 'margin', '适配_视图': 'fit_view', '选': 'selection', '选项': 'options', '配置': 'configuration', '重_画': 'redraw_panel', '重置_分栏': 'reset_splitter', '重置_工程面板高': 'reset_panel_height', '针长': 'marker_length', '针顶': 'marker_tip', '错误': 'error', '长': 'length', '长度': 'length', '需要': 'needed', '面板': 'panel', '面板高': 'panel_height', '面积': 'area', '顶': 'top', '顶高': 'top_height', '颜色': 'color', '高亮': 'highlight', '高亮关节': 'highlighted_joint', '高图': 'image_height', '高画布': 'canvas_height', '高盒': 'box_height', '默认相机': 'default_camera', '默认窗口': 'DEFAULT_WINDOW_SIZE', '默认网页宽比': 'DEFAULT_WEB_WIDTH_RATIO', 'MuJoCo视口': 'MuJoCoViewport', 'windows_视口': 'windows_viewport', 'windows_运行信息': 'windows_runtime_info', '_保存分栏': '_save_splitters', '_允许保存分栏': '_splitter_save_enabled', '_分隔': '_splitter', '_分隔保存计时器': '_splitter_save_timer', '_右分隔': '_right_splitter', '_启用分栏保存': '_enable_splitter_save', '_应用': '_application', '_更新三维状态': '_update_viewport_status', '_检查模型切换': '_check_model_switch', '_模型显示名': '_model_display_name', '_模型计时器': '_model_timer', '_窗口': '_window', '_统计数据': '_statistics', '_网页': '_web_view', '_视口': '_viewport', '_视口槽': '_viewport_slot', '_视口模型标签': '_viewport_model_label', '_视口状态标签': '_viewport_status_label', '_读取分栏': '_read_splitter', '_读取右分栏': '_read_right_splitter', '_运行信息': '_runtime_info', '_页面加载结束': '_page_load_finished', '三维外壳': 'viewport_shell', '三维布局': 'viewport_shell_layout', '三维标题': 'viewport_title', '三维顶栏': 'viewport_header', '上默认': 'default_upper', '关闭': 'close', '分隔': 'splitter', '分隔保存计时器': 'splitter_save_timer', '可用默认': 'default_available', '右分隔': 'right_splitter', '右目标分栏': 'target_right_sizes', '合计': 'total', '同一个': 'same_model', '左': 'left', '左默认': 'default_left', '成功': 'success', '文': 'status_text', '模型标签': 'model_label', '模型计时器': 'model_timer', '状态改变': 'status_changed', '状态标签': 'status_label', '目标分栏': 'target_sizes', '结果': 'result', '视口布局': 'viewport_layout', '视口边框': 'viewport_frame', '起点': 'origin', '路径': 'path', '轨迹图例': 'trajectory_legend', '运行信息': 'runtime_info', '运行信息面板': 'RuntimeInfoPanel', '适配按钮': 'fit_button', '适配视角': 'fit_camera', '顶栏布局': 'header_layout', '默认': 'default', '_停止': '_stop', '_加线': '_add_line', '_唤醒': '_wake', '_处理相机操作': '_process_camera_actions', '_尺寸最终计时器': '_final_resize_timer', '_尺寸计时器': '_resize_timer', '_平移中': '_panning', '_待换模型': '_pending_model', '_待画布': '_pending_canvas', '_拖拽点': '_drag_point', '_接收帧': '_receive_frame', '_接收状态': '_receive_status', '_提交画布尺寸': '_commit_canvas_size', '_操作': '_actions', '_最新锁': '_latest_lock', '_状态文字': '_status_text', '_画实验轨迹': '_draw_experiment_trajectory', '_画面': '_frame_image', '_线程': '_thread', '_统计': '_statistics', '_适配相机': '_fit_camera', 'q图': 'qimage', '上次快照': 'previous_snapshot', '倍率': 'factor', '剩余': 'remaining', '图像': 'image', '尺寸改了': 'size_changed', '帧就绪': 'frame_ready', '帧时刻': 'frame_time', '当前画布': 'current_canvas', '操作': 'action', '改了': 'changed', '有新状态': 'has_new_state', '期望': 'desired', '比例': 'ratio', '画笔': 'painter', '相机改了': 'camera_changed', '缩放': 'zoom', '被唤醒': 'woken', '面积上限': 'max_area', '_上次诊断': '_last_diagnostic', '_写输入表': '_write_input_table', '_刷新': '_refresh', '_同步': '_sync_label', '_帧率': '_fps_label', '_数值们': '_numeric_values', '_时间': '_time_label', '_模型': '_model_label', '_计时器': '_timer', '_设置单元格': '_set_cell', '_诊断': '_diagnostic', '_输入表': '_input_table', '信息': 'info', '值们': 'values', '列': 'column', '布局': 'layout', '文本们': 'texts', '状态表': 'state_form', '状态页': 'state_page', '等待状态': 'waiting_for_state', '行数': 'row_count', '计时器': 'timer', '诊断': 'diagnostic', '页签': 'tabs', '项': 'item'}
 
+def __getattr__(name):
+    value = getattr(_implementation, _ALIASES.get(name, name))
+    if callable(value) and not isinstance(value, type) and _KEYWORDS:
+        @wraps(value)
+        def call(*args, **kwargs):
+            mapped = {}
+            for key, item in kwargs.items():
+                translated = _KEYWORDS.get(key, key)
+                if translated in mapped:
+                    raise TypeError(f"Multiple values for argument {translated!r}")
+                mapped[translated] = item
+            return value(*args, **mapped)
+        return call
+    return value
 
-def 起(间隔秒: float, 函数, 首次延迟: float | None = None) -> "句柄":
-    """起一个**重复**的 run loop 定时器。`函数()` 不接受参数。"""
-    return _起(间隔秒, 函数, 重复=True, 首次延迟=首次延迟)
+def __dir__():
+    return sorted(set(globals()) | set(dir(_implementation)) | set(_ALIASES))
 
-
-def 一次性(延迟秒: float, 函数) -> "句柄":
-    """起一个只触发一次的定时器。"""
-    return _起(延迟秒, 函数, 重复=False, 首次延迟=延迟秒)
-
-
-class 句柄:
-    def __init__(self, 定时器, 回调):
-        self._定时器 = 定时器
-        self._回调 = 回调
-        self._已停 = False
-
-    def 停(self) -> None:
-        if self._已停:
-            return
-        self._已停 = True
-        try:
-            CFRunLoopRemoveTimer(CFRunLoopGetCurrent(), self._定时器, kCFRunLoopDefaultMode)
-        except Exception:                                             # noqa: BLE001
-            pass
-
-
-def _起(间隔秒: float, 函数, 重复: bool, 首次延迟: float | None) -> 句柄:
-    间隔 = max(1e-4, float(间隔秒))
-    延迟 = float(首次延迟) if 首次延迟 is not None else 间隔
-
-    def 包装(_定时器, _信息):
-        try:
-            函数()
-        except Exception as 异常:                                     # noqa: BLE001
-            # 回调里出错绝不能把 run loop 弄崩；打一次就够，避免刷屏
-            if not getattr(包装, "_报过错", False):
-                包装._报过错 = True
-                print(f"⚠ 定时器回调出错（后续不再重复报）："
-                      f"{type(异常).__name__}: {异常}", flush=True)
-
-    回调 = 包装
-    _保活.append(回调)
-    del _保活[:-64]                                   # 只留最近 64 个，别无限增长
-    定时器 = CFRunLoopTimerCreate(
-        None,
-        CFAbsoluteTimeGetCurrent() + 延迟,
-        间隔 if 重复 else 0,                          # interval=0 → 只触发一次
-        0, 0, 回调, None)
-    # ★ 关键：不仅要加到 default mode，还要加到**所有 common modes**。
-    #   实测：只加 default mode 时，AppKit 的活动（窗口拖动、菜单跟踪、事件等待）
-    #   会把 run loop 切到 `NSEventTrackingRunLoopMode` 等别的 mode，
-    #   于是定时器**在那些 mode 下完全不触发** —— 表现为"窗口在、界面不动"，
-    #   而且不报任何错。`NSRunLoopCommonModes` 是 Cocoa 给的标准做法。
-    循环 = CFRunLoopGetCurrent()
-    CFRunLoopAddTimer(循环, 定时器, kCFRunLoopDefaultMode)
-    # ⚠️ 别在这里 print 循环对象。排查时我曾打过一行
-    #    `print(f"... {循环} ...")`，而 `CFRunLoop` 的 `__str__` 会把**整个 run loop
-    #    （所有 source / observer / timer / mode）dump 出来**，一次几十行。
-    #    日志因此被彻底淹没（真正有用的诊断被埋在中间）。
-    try:
-        CFRunLoopAddTimer(循环, 定时器, "kCFRunLoopCommonModes")
-    except Exception:                                                 # noqa: BLE001
-        pass
-    return 句柄(定时器, 回调)
-
-
-# ---------------------------------------------------------------------------
-# 自测：不依赖任何界面，直接泵 run loop 看定时器会不会来
-#   .venv/bin/python 软件/定时器.py
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    from Quartz import CFRunLoopRunInMode
-
-    计数 = {"重复": 0, "一次": 0}
-    甲 = 起(0.05, lambda: 计数.__setitem__("重复", 计数["重复"] + 1))
-    乙 = 一次性(0.4, lambda: 计数.__setitem__("一次", 计数["一次"] + 1))
-
-    print("=" * 62)
-    print("  定时器自测（泵 run loop 1 秒）")
-    print("=" * 62)
-    结束 = CFAbsoluteTimeGetCurrent() + 1.0
-    while CFAbsoluteTimeGetCurrent() < 结束:
-        CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.02, False)
-    甲.停()
-    print(f"  重复定时器（50ms）：触发 {计数['重复']} 次（期望约 20）")
-    print(f"  一次性定时器（400ms）：触发 {计数['一次']} 次（期望 1）")
-    好 = 计数["重复"] >= 10 and 计数["一次"] == 1
-    print(f"\n  结论：{'✓ 可用' if 好 else '✗ 不可用'}")
-    raise SystemExit(0 if 好 else 1)
+    import runpy
+    runpy.run_module("runloop_timers", run_name="__main__")

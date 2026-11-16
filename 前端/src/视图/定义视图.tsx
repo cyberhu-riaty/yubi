@@ -16,15 +16,15 @@
  *   · 模型/项目字段用两列表格；长路径、长状态截断并提供完整内容。
  */
 import { useEffect, useState } from "react";
-import { 数值表, 文本, type 数值行 } from "../组件/数值表";
-import { 可折叠区块 } from "../组件/可折叠区块";
-import { 按钮 } from "../组件/按钮";
-import { 标签 } from "../组件/标签";
-import { 路径值 } from "../组件/路径值";
+import { ValueTable, formatValue, type ValueRow } from "../组件/数值表";
+import { CollapsibleSection } from "../组件/可折叠区块";
+import { Button } from "../组件/按钮";
+import { Tag } from "../组件/标签";
+import { PathValue } from "../组件/路径值";
 import { 命令, 用仓库 } from "../数据/仓库";
 import { 命令收尾, 记命令发出, 记注意 } from "../数据/日志";
 import type { 回执 } from "../数据/连接";
-import { use取 } from "./文案";
+import { useTranslation } from "./文案";
 
 /** 从 `算法` 那一列里取一个字段（后端给的是 `Record<string, unknown>[]`，形状由插件定） */
 function 取字段(项: Record<string, unknown>, 名: string): unknown {
@@ -50,11 +50,11 @@ function 模型状态({ 状态 }: { 状态?: string }) {
 
 /** 顶部的兼容性提示：只显示报告里真的写了「不兼容」的行 */
 function 兼容性提示({ 行们, on查看 }: { 行们: string[]; on查看: () => void }) {
-  const t = use取();
+  const t = useTranslation();
   return (
     <div className="兼容条" role="alert">
       <div className="flex flex-wrap items-center gap-1.5">
-        <标签 语气="警告">! {t("定义.兼容性")}</标签>
+        <Tag tone="warning">! {t("定义.兼容性")}</Tag>
         <span className="兼容标题">{t("定义.兼容性.标题")}</span>
       </div>
       <ul className="mt-1.5 space-y-0.5 text-[0.82em]">
@@ -70,16 +70,16 @@ function 兼容性提示({ 行们, on查看 }: { 行们: string[]; on查看: () 
         <span>{t("定义.兼容性.下一步")}</span>
       </div>
       <div className="mt-1.5">
-        <按钮 尺寸="小" 种类="幽灵" on按下={on查看}>
+        <Button size="small" variant="ghost" onPress={on查看}>
           {t("定义.兼容性.查看")}
-        </按钮>
+        </Button>
       </div>
     </div>
   );
 }
 
 export function 定义视图() {
-  const t = use取();
+  const t = useTranslation();
   const 模型 = 用仓库((s) => s.模型.数据);
   const 模型帧号 = 用仓库((s) => s.模型.帧号);
   const 资产 = 用仓库((s) => s.资产.数据);
@@ -221,49 +221,49 @@ export function 定义视图() {
     }, 0);
   };
 
-  const 模型行: 数值行[] = 模型
+  const 模型行: ValueRow[] = 模型
     ? [
-        { 键: t("定义.模型显示名"), 值: 模型.current_display_name || t("通用.无"), 纯文本: 模型.current_display_name },
+        { key: t("定义.模型显示名"), value: 模型.current_display_name || t("通用.无"), plainText: 模型.current_display_name },
         {
-          键: t("定义.模型路径"),
-          值: <路径值 路径={模型.current_path} />,
-          纯文本: 模型.current_path,
+          key: t("定义.模型路径"),
+          value: <PathValue path={模型.current_path} />,
+          plainText: 模型.current_path,
         },
         {
-          键: t("定义.自由度"),
-          值: <span className="等宽">{模型.dof ?? "--"}</span>,
-          提示: t("定义.自由度.提示"),
+          key: t("定义.自由度"),
+          value: <span className="等宽">{模型.dof ?? "--"}</span>,
+          hint: t("定义.自由度.提示"),
         },
         {
-          键: t("定义.执行器数"),
-          值: <span className="等宽">{模型.actuator_count ?? "--"}</span>,
-          提示: t("定义.执行器数.提示"),
+          key: t("定义.执行器数"),
+          value: <span className="等宽">{模型.actuator_count ?? "--"}</span>,
+          hint: t("定义.执行器数.提示"),
         },
         {
-          键: t("定义.模型状态"),
-          值: <模型状态 状态={模型.status} />,
-          纯文本: 模型.status,
+          key: t("定义.模型状态"),
+          value: <模型状态 状态={模型.status} />,
+          plainText: 模型.status,
         },
         {
-          键: t("定义.加载耗时"),
-          值: <span className="等宽">{模型.duration_s === undefined ? "--" : `${模型.duration_s.toFixed(3)} s`}</span>,
+          key: t("定义.加载耗时"),
+          value: <span className="等宽">{模型.duration_s === undefined ? "--" : `${模型.duration_s.toFixed(3)} s`}</span>,
         },
       ]
     : [];
 
-  const 项目行: 数值行[] = 项目
+  const 项目行: ValueRow[] = 项目
     ? [
-        { 键: t("定义.项目名"), 值: 项目.project || t("通用.无"), 纯文本: 项目.project },
-        { 键: t("定义.算法数"), 值: <span className="等宽">{项目.algorithms?.length ?? 0}</span> },
-        { 键: t("定义.控盘"), 值: 项目.active_controller || t("通用.无"), 纯文本: 项目.active_controller },
+        { key: t("定义.项目名"), value: 项目.project || t("通用.无"), plainText: 项目.project },
+        { key: t("定义.算法数"), value: <span className="等宽">{项目.algorithms?.length ?? 0}</span> },
+        { key: t("定义.控盘"), value: 项目.active_controller || t("通用.无"), plainText: 项目.active_controller },
         {
-          键: t("定义.被覆盖"),
-          值: 项目.overridden_controllers?.length ? 项目.overridden_controllers.join(" / ") : t("通用.无"),
-          纯文本: 项目.overridden_controllers?.join(" / "),
+          key: t("定义.被覆盖"),
+          value: 项目.overridden_controllers?.length ? 项目.overridden_controllers.join(" / ") : t("通用.无"),
+          plainText: 项目.overridden_controllers?.join(" / "),
         },
         {
-          键: t("定义.已存盘"),
-          值: 项目.saved === undefined ? "--" : 项目.saved ? t("通用.是") : t("通用.否"),
+          key: t("定义.已存盘"),
+          value: 项目.saved === undefined ? "--" : 项目.saved ? t("通用.是") : t("通用.否"),
         },
       ]
     : [];
@@ -274,25 +274,25 @@ export function 定义视图() {
     <div className="定义页固定">
       {不兼容行.length ? <兼容性提示 行们={不兼容行} on查看={打开报告} /> : null}
 
-      <可折叠区块
-        标题={t("定义.当前模型")}
+      <CollapsibleSection
+        title={t("定义.当前模型")}
         {...控制区("模型")}
-        徽标={
+        badge={
           模型 ? (
             <span className="flex items-center gap-1.5">
               {模型.dof !== undefined && 模型.actuator_count !== undefined && 模型.dof !== 模型.actuator_count ? (
-                <标签 语气="警告" title={t("定义.nqnu.说明")}>! nq≠nu</标签>
+                <Tag tone="warning" title={t("定义.nqnu.说明")}>! nq≠nu</Tag>
               ) : null}
               <span className="等宽">{模型.dof === undefined ? "" : `${模型.dof} DoF`}</span>
             </span>
           ) : (
-            <标签 语气="警示">{t("通用.未接入")}</标签>
+            <Tag tone="notice">{t("通用.未接入")}</Tag>
           )
         }
       >
         {模型 ? (
           <>
-            <数值表 行={模型行} />
+            <ValueTable rows={模型行} />
             <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.78em] text-dim">
               <span>{t("定义.nqnu.说明")}</span>
               <span className="等宽">#{模型帧号}</span>
@@ -302,19 +302,19 @@ export function 定义视图() {
         ) : (
           <div className="text-dim">{t("定义.没模型")}</div>
         )}
-      </可折叠区块>
+      </CollapsibleSection>
 
-      <可折叠区块
-        标题={t("定义.当前项目")}
+      <CollapsibleSection
+        title={t("定义.当前项目")}
         {...控制区("项目")}
-        徽标={
+        badge={
           <span className="flex items-center gap-1.5">
             {不兼容行.length ? (
-              <标签 语气="警告">! {t("定义.兼容性")}</标签>
+              <Tag tone="warning">! {t("定义.兼容性")}</Tag>
             ) : 无算法 ? (
-              <标签 语气="中性">{t("定义.兼容性.未评估")}</标签>
+              <Tag tone="neutral">{t("定义.兼容性.未评估")}</Tag>
             ) : 项目?.report?.length ? (
-              <标签 语气="成功">✓ {t("定义.兼容性.通过")}</标签>
+              <Tag tone="success">✓ {t("定义.兼容性.通过")}</Tag>
             ) : null}
             <span className="等宽 text-[0.78em] text-dim" title={t("定义.算法数")}>
               {项目 ? t("定义.算法数.短", { 数量: 项目.algorithms?.length ?? 0 }) : ""}
@@ -324,7 +324,7 @@ export function 定义视图() {
       >
         {项目 ? (
           <>
-            <数值表 行={项目行} />
+            <ValueTable rows={项目行} />
 
             {无算法 ? (
               <div className="mt-2 rounded border border-dashed px-2 py-1.5 text-[0.8em] text-dim" style={{ borderColor: "var(--border-strong)" }}>
@@ -335,15 +335,15 @@ export function 定义视图() {
             {项目.algorithms?.length ? (
               <ul className="mt-2 space-y-1">
                 {项目.algorithms.map((a, i) => {
-                  const 名 = 文本(取字段(a, "名称") ?? 取字段(a, "插件"));
-                  const 版本 = 文本(取字段(a, "版本"));
+                  const 名 = formatValue(取字段(a, "名称") ?? 取字段(a, "插件"));
+                  const 版本 = formatValue(取字段(a, "版本"));
                   const 不兼容 = 不兼容行.some((行) => 名 && 行.includes(名));
                   return (
                     <li key={i} className="算法项">
                       <span className="算法名">{名}</span>
                       {版本 !== "--" ? <span className="算法版本 等宽 text-dim">v{版本}</span> : null}
-                      {取字段(a, "接管控制") ? <标签 语气="强调">{t("定义.控盘")}</标签> : null}
-                      {不兼容 ? <标签 语气="警告">! {t("定义.算法状态.不兼容")}</标签> : null}
+                      {取字段(a, "接管控制") ? <Tag tone="emphasis">{t("定义.控盘")}</Tag> : null}
+                      {不兼容 ? <Tag tone="warning">! {t("定义.算法状态.不兼容")}</Tag> : null}
                     </li>
                   );
                 })}
@@ -373,15 +373,15 @@ export function 定义视图() {
         ) : (
           <div className="text-dim">{t("定义.没项目")}</div>
         )}
-      </可折叠区块>
+      </CollapsibleSection>
 
-      <可折叠区块
-        标题={t("定义.控制目标")}
+      <CollapsibleSection
+        title={t("定义.控制目标")}
         {...控制区("控制")}
-        徽标={
+        badge={
           <span className="flex items-center gap-1.5">
             <span className="等宽 text-[0.78em]">{控制?.关节名?.length ?? 0} DoF</span>
-            {项目?.active_controller ? <标签 语气="成功">{项目.active_controller}</标签> : <标签 语气="警告">{t("定义.控制目标.无算法")}</标签>}
+            {项目?.active_controller ? <Tag tone="success">{项目.active_controller}</Tag> : <Tag tone="warning">{t("定义.控制目标.无算法")}</Tag>}
           </span>
         }
       >
@@ -424,15 +424,15 @@ export function 定义视图() {
               </table>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <按钮 尺寸="小" 种类="次" on按下={用当前位置}>{t("定义.控制目标.取当前")}</按钮>
-              <按钮
-                尺寸="小"
-                种类="主"
+              <Button size="small" variant="secondary" onPress={用当前位置}>{t("定义.控制目标.取当前")}</Button>
+              <Button
+                size="small"
+                variant="primary"
                 disabled={目标忙 || 连接状态 !== "已连接" || 目标草稿.length !== 控制.关节名.length}
-                on按下={() => void 提交控制目标()}
+                onPress={() => void 提交控制目标()}
               >
                 {目标忙 ? "…" : t("定义.控制目标.应用")}
-              </按钮>
+              </Button>
               <span className="text-[0.78em] text-dim">{控制.说明}</span>
             </div>
             {目标回执 ? (
@@ -444,16 +444,16 @@ export function 定义视图() {
         ) : (
           <div className="text-dim">{t("定义.控制目标.无关节")}</div>
         )}
-      </可折叠区块>
+      </CollapsibleSection>
 
-      <可折叠区块
-        标题={t("定义.资产库")}
+      <CollapsibleSection
+        title={t("定义.资产库")}
         {...控制区("资产")}
-        徽标={
+        badge={
           资产?.count ? (
-            <标签>{资产.count}</标签>
+            <Tag>{资产.count}</Tag>
           ) : (
-            <标签 语气="警示">{t("通用.待接入")}</标签>
+            <Tag tone="notice">{t("通用.待接入")}</Tag>
           )
         }
       >
@@ -463,13 +463,13 @@ export function 定义视图() {
               const 是当前 = !!项.path && 项.path === 模型?.current_path;
               return (
                 <li key={项.id ?? 项.path}>
-                  <按钮
-                    种类="次"
-                    尺寸="小"
+                  <Button
+                    variant="secondary"
+                    size="small"
                     className="w-full"
                     disabled={忙 || 是当前}
                     title={是当前 ? t("定义.资产库.带星") : t("定义.资产库.点选", { 名: 项.display_name ?? "?" })}
-                    on按下={() => {
+                    onPress={() => {
                       if (!项.path) return;
                       void 发换模型(项.path, 项.display_name ?? "");
                     }}
@@ -484,9 +484,9 @@ export function 定义视图() {
                       <span className="hidden w-[86px] flex-none truncate text-right text-[0.8em] text-dim sm:inline">
                         {项.license ?? ""}
                       </span>
-                      {是当前 ? <标签>{t("定义.资产库.带星")}</标签> : null}
+                      {是当前 ? <Tag>{t("定义.资产库.带星")}</Tag> : null}
                     </span>
-                  </按钮>
+                  </Button>
                 </li>
               );
             })}
@@ -494,15 +494,15 @@ export function 定义视图() {
         ) : (
           <div className="mt-2 text-dim">{t("定义.资产库.空")}</div>
         )}
-      </可折叠区块>
+      </CollapsibleSection>
 
-      <可折叠区块
-        标题={t("定义.算法库")}
+      <CollapsibleSection
+        title={t("定义.算法库")}
         {...控制区("算法")}
-        徽标={
+        badge={
           <span className="flex items-center gap-1.5">
-            {有算法改动 ? <标签 语气="警告">{t("定义.算法库.待应用")}</标签> : null}
-            {项目?.saved === false ? <标签 语气="强调">{t("定义.算法库.未保存")}</标签> : null}
+            {有算法改动 ? <Tag tone="warning">{t("定义.算法库.待应用")}</Tag> : null}
+            {项目?.saved === false ? <Tag tone="emphasis">{t("定义.算法库.未保存")}</Tag> : null}
             <span className="等宽">{插件项们.length || ""}</span>
           </span>
         }
@@ -533,10 +533,10 @@ export function 定义视图() {
                         <span className="flex flex-wrap items-center gap-1.5">
                           <span className="break-all font-semibold">{显示名}</span>
                           {项.版本 ? <span className="等宽 text-[0.8em] text-dim">v{项.版本}</span> : null}
-                          {已生效 ? <标签 语气="成功">{t("定义.算法库.已生效")}</标签> : null}
-                          {待启用 ? <标签 语气="警告">{t("定义.算法库.待启用")}</标签> : null}
-                          {待停用 ? <标签 语气="警告">{t("定义.算法库.待停用")}</标签> : null}
-                          {不兼容 ? <标签 语气="错误">! {t("定义.算法状态.不兼容")}</标签> : null}
+                          {已生效 ? <Tag tone="success">{t("定义.算法库.已生效")}</Tag> : null}
+                          {待启用 ? <Tag tone="warning">{t("定义.算法库.待启用")}</Tag> : null}
+                          {待停用 ? <Tag tone="warning">{t("定义.算法库.待停用")}</Tag> : null}
+                          {不兼容 ? <Tag tone="error">! {t("定义.算法状态.不兼容")}</Tag> : null}
                         </span>
                         <span className="mt-0.5 block break-all text-[0.8em] text-dim">
                           {[项.分组, 名 && 名 !== 显示名 ? 名 : ""].filter(Boolean).join(" · ")}
@@ -549,18 +549,18 @@ export function 定义视图() {
             </ul>
 
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <按钮
-                种类="主"
-                尺寸="小"
+              <Button
+                variant="primary"
+                size="small"
                 disabled={!!算法忙 || 连接状态 !== "已连接" || !有算法改动}
                 title={t("定义.算法库.临时应用说明")}
-                on按下={() => void 提交算法(false)}
+                onPress={() => void 提交算法(false)}
               >
                 {算法忙 === "应用" ? "…" : t("定义.算法库.临时应用")}
-              </按钮>
-              <按钮
-                种类="次"
-                尺寸="小"
+              </Button>
+              <Button
+                variant="secondary"
+                size="small"
                 disabled={
                   !!算法忙
                   || 连接状态 !== "已连接"
@@ -568,18 +568,18 @@ export function 定义视图() {
                   || (!有算法改动 && 项目.saved !== false)
                 }
                 title={!项目?.project ? t("定义.算法库.无项目不能保存") : t("定义.算法库.保存说明")}
-                on按下={() => void 提交算法(true)}
+                onPress={() => void 提交算法(true)}
               >
                 {算法忙 === "保存"
                   ? "…"
                   : 有算法改动
                     ? t("定义.算法库.保存并应用")
                     : t("定义.算法库.保存")}
-              </按钮>
+              </Button>
               {有算法改动 ? (
-                <按钮 尺寸="小" 种类="幽灵" disabled={!!算法忙} on按下={() => 设待选(new Set(生效序))}>
+                <Button size="small" variant="ghost" disabled={!!算法忙} onPress={() => 设待选(new Set(生效序))}>
                   {t("定义.算法库.恢复")}
-                </按钮>
+                </Button>
               ) : null}
             </div>
 
@@ -601,9 +601,9 @@ export function 定义视图() {
         ) : (
           <div className="text-dim">{t("定义.算法库.空")}</div>
         )}
-      </可折叠区块>
+      </CollapsibleSection>
 
-      <可折叠区块 标题={t("定义.换模型")} {...控制区("换模型")}>
+      <CollapsibleSection title={t("定义.换模型")} {...控制区("换模型")}>
         <div className="space-y-2">
           <label className="block">
             <span className="text-dim">{t("定义.换模型.路径")}</span>
@@ -630,9 +630,9 @@ export function 定义视图() {
               }}
             />
           </label>
-          <按钮 种类="主" 尺寸="中" disabled={忙 || !路径.trim()} title={t("定义.换模型.说明")} on按下={() => void 提交换模型()}>
+          <Button variant="primary" size="medium" disabled={忙 || !路径.trim()} title={t("定义.换模型.说明")} onPress={() => void 提交换模型()}>
             {忙 ? "…" : t("定义.换模型.提交")}
-          </按钮>
+          </Button>
           {回执条 ? (
             <div className="text-[0.9em]" style={{ color: 回执条.通过 ? "var(--ok)" : "var(--danger)" }}>
               <span className="等宽">
@@ -641,7 +641,7 @@ export function 定义视图() {
             </div>
           ) : null}
         </div>
-      </可折叠区块>
+      </CollapsibleSection>
     </div>
   );
 }

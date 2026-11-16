@@ -35,7 +35,7 @@ def 加载插件():
         raise RuntimeError("无法加载抓取插件")
     模块 = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(模块)
-    return 模块.Panda抓取演示插件
+    return 模块.PandaPickPlaceController
 
 
 def main() -> int:

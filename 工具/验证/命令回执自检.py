@@ -12,11 +12,11 @@ import sys
 if str(软件目录) not in sys.path:
     sys.path.insert(0, str(软件目录))
 
-import 控制台  # noqa: E402
+import console_support  # noqa: E402
 
-控制台.准备输出()
+console_support.prepare_output()
 
-import Web桥  # noqa: E402
+import web_bridge  # noqa: E402
 
 
 class _假连接:
@@ -28,11 +28,11 @@ class _假连接:
 
 
 async def 检查() -> None:
-    服务 = Web桥.服务端("127.0.0.1", 0)
+    服务 = web_bridge.Server("127.0.0.1", 0)
     连接 = _假连接()
 
     for 请求号, 开 in (("same-topic-1", True), ("same-topic-2", False)):
-        await 服务._收一帧(连接, json.dumps({
+        await 服务._receive_frame(连接, json.dumps({
             "请求": 请求号,
             "主题": "command.gravity",
             "数据": {"gravity_enabled": 开},
@@ -43,9 +43,9 @@ async def 检查() -> None:
     assert [回执["请求"] for 回执 in 回执们] == ["same-topic-1", "same-topic-2"]
     assert all(回执["主题"] == "command.gravity" for 回执 in 回执们)
     assert all(回执["通过"] for 回执 in 回执们)
-    assert len(服务.取命令()) == 2, "两条合法命令都应进入后端命令队列"
+    assert len(服务.get_commands()) == 2, "两条合法命令都应进入后端命令队列"
 
-    await 服务._收一帧(连接, json.dumps({
+    await 服务._receive_frame(连接, json.dumps({
         "请求": 123,
         "主题": "command.gravity",
         "数据": {"gravity_enabled": True},

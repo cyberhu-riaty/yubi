@@ -38,51 +38,51 @@ import plugin_system as plugin
 from plugin_system import ControlPlugin, step_handler
 
 # MJPC Panda 任务里残差/动作依赖的传感器；少一个就没法算 cost
-需要的传感器 = ("hand", "box", "box1", "box2", "target1", "target2")
-状态规格 = int(mujoco.mjtState.mjSTATE_FULLPHYSICS)
+REQUIRED_SENSORS = ("hand", "box", "box1", "box2", "target1", "target2")
+STATE_SPEC = int(mujoco.mjtState.mjSTATE_FULLPHYSICS)
 
 
-def _传感器切片(模型: mujoco.MjModel) -> dict[str, tuple[int, int]]:
-    切片 = {}
-    for 名 in 需要的传感器:
-        号 = mujoco.mj_name2id(模型, mujoco.mjtObj.mjOBJ_SENSOR, 名)
-        if 号 < 0:
-            raise ValueError(f"缺少传感器 {名}")
-        起 = int(模型.sensor_adr[号])
-        切片[名] = (起, 起 + int(模型.sensor_dim[号]))
-    return 切片
+def _sensor_slices(model: mujoco.MjModel) -> dict[str, tuple[int, int]]:
+    slices = {}
+    for name in REQUIRED_SENSORS:
+        index = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SENSOR, name)
+        if index < 0:
+            raise ValueError(f'缺少传感器 {name}')
+        start = int(model.sensor_adr[index])
+        slices[name] = (start, start + int(model.sensor_dim[index]))
+    return slices
 
 
-def _残差(切片: dict[str, tuple[int, int]], 传感器数据: np.ndarray) -> np.ndarray:
+def _residuals(slices: dict[str, tuple[int, int]], sensor_data: np.ndarray) -> np.ndarray:
     """(…, nsensordata) -> (…, 9)，对应 panda.cc 的三组残差。"""
-    取 = lambda 名: 传感器数据[..., 切片[名][0]:切片[名][1]]
+    get = lambda name: sensor_data[..., slices[name][0]:slices[name][1]]
     return np.concatenate([
-        取("hand") - 取("box"),
-        取("box1") - 取("target1"),
-        取("box2") - 取("target2"),
+        get("hand") - get("box"),
+        get("box1") - get("target1"),
+        get("box2") - get("target2"),
     ], axis=-1)
 
 
-class _规划器:
+class _Planner:
     """独立线程里的随机采样 MPC；只碰自己的 MjData。"""
 
-    def __init__(self, 模型: mujoco.MjModel, 参数: dict) -> None:
-        self.模型 = 模型
-        self.数据 = mujoco.MjData(模型)
-        self.状态规格 = 状态规格
-        self.状态尺寸 = int(mujoco.mj_stateSize(模型, self.状态规格))
-        self.切片 = _传感器切片(模型)
+    def __init__(self, model: mujoco.MjModel, parameters: dict) -> None:
+        self.model = model
+        self.data = mujoco.MjData(model)
+        self.STATE_SPEC = STATE_SPEC
+        self.state_size = int(mujoco.mj_stateSize(model, self.STATE_SPEC))
+        self.slices = _sensor_slices(model)
 
-        self._锁 = threading.Lock()
-        self._状态: np.ndarray | None = None
+        self._lock = threading.Lock()
+        self._state: np.ndarray | None = None
         self._mocap_pos: np.ndarray | None = None
         self._mocap_quat: np.ndarray | None = None
-        self._新状态 = threading.Event()
-        self._停止 = threading.Event()
+        self._new_state = threading.Event()
+        self._stop = threading.Event()
 
-        self._动作 = np.zeros(int(模型.nu), dtype=float)
-        self._动作时刻 = 0.0
-        self._统计 = {
+        self._action = np.zeros(int(model.nu), dtype=float)
+        self._action_time = 0.0
+        self._statistics = {
             "规划次数": 0.0,
             "规划耗时ms": 0.0,
             "cost": 0.0,
@@ -97,177 +97,178 @@ class _规划器:
             "动作年龄ms": 0.0,
             "错误次数": 0.0,
         }
-        self._错误 = ""
-        self._参数 = dict(参数)
+        self._error = ""
+        self._parameters = dict(parameters)
         # CEM 的均值/标准差跨规划保留（暖启动）；换模型/改 horizon 时形状不符就重置
-        self._均值: np.ndarray | None = None
-        self._标准差: np.ndarray | None = None
+        self._mean: np.ndarray | None = None
+        self._standard_deviation: np.ndarray | None = None
         self._rollout = mjroll.Rollout(nthread=0)
-        self._线程 = threading.Thread(target=self._循环, daemon=True,
+        self._thread = threading.Thread(target=self._loop, daemon=True,
                                        name="Panda-MPC规划")
-        self._线程.start()
+        self._thread.start()
 
     # ---------- 仿真线程调用 ----------
-    def 更新状态(self, 状态: np.ndarray, mocap_pos, mocap_quat) -> None:
-        with self._锁:
-            self._状态 = np.array(状态, dtype=float, copy=True)
+    def update_state(self, state: np.ndarray, mocap_pos, mocap_quat) -> None:
+        with self._lock:
+            self._state = np.array(state, dtype=float, copy=True)
             self._mocap_pos = None if mocap_pos is None else np.array(mocap_pos, copy=True)
             self._mocap_quat = None if mocap_quat is None else np.array(mocap_quat, copy=True)
-        self._新状态.set()
+        self._new_state.set()
 
-    def 取动作(self) -> tuple[np.ndarray, float, dict]:
-        with self._锁:
-            动作 = self._动作.copy()
-            年龄 = (time.monotonic() - self._动作时刻) * 1000.0 if self._动作时刻 else 1e9
-            统计 = dict(self._统计)
-            统计["错误信息"] = self._错误
-            return 动作, 年龄, 统计
+    def get_action(self) -> tuple[np.ndarray, float, dict]:
+        with self._lock:
+            action = self._action.copy()
+            age = (time.monotonic() - self._action_time) * 1000.0 if self._action_time else 1e9
+            statistics = dict(self._statistics)
+            statistics["错误信息"] = self._error
+            return action, age, statistics
 
-    def 设参数(self, 名: str, 值: float) -> None:
-        with self._锁:
-            self._参数[名] = 值
+    def set_parameter(self, name: str, value: float) -> None:
+        with self._lock:
+            self._parameters[name] = value
 
-    def 停止(self) -> None:
-        self._停止.set()
-        self._新状态.set()
-        if self._线程.is_alive():
-            self._线程.join(timeout=2.0)
+    def stop(self) -> None:
+        self._stop.set()
+        self._new_state.set()
+        if self._thread.is_alive():
+            self._thread.join(timeout=2.0)
 
     # ---------- 规划线程 ----------
-    def _循环(self) -> None:
-        序 = 0
-        while not self._停止.is_set():
-            if not self._新状态.wait(0.2):
+    def _loop(self) -> None:
+        sequence = 0
+        while not self._stop.is_set():
+            if not self._new_state.wait(0.2):
                 continue
-            self._新状态.clear()
-            with self._锁:
-                状态 = None if self._状态 is None else self._状态.copy()
+            self._new_state.clear()
+            with self._lock:
+                state = None if self._state is None else self._state.copy()
                 mocap_pos = None if self._mocap_pos is None else self._mocap_pos.copy()
                 mocap_quat = None if self._mocap_quat is None else self._mocap_quat.copy()
-                参数 = dict(self._参数)
-            if 状态 is None:
+                parameters = dict(self._parameters)
+            if state is None:
                 continue
-            开始 = time.perf_counter()
+            started = time.perf_counter()
             try:
-                mujoco.mj_setState(self.模型, self.数据, 状态, self.状态规格)
-                if mocap_pos is not None and self.数据.mocap_pos.size:
-                    self.数据.mocap_pos[:] = mocap_pos
-                if mocap_quat is not None and self.数据.mocap_quat.size:
-                    self.数据.mocap_quat[:] = mocap_quat
-                mujoco.mj_forward(self.模型, self.数据)
+                mujoco.mj_setState(self.model, self.data, state, self.STATE_SPEC)
+                if mocap_pos is not None and self.data.mocap_pos.size:
+                    self.data.mocap_pos[:] = mocap_pos
+                if mocap_quat is not None and self.data.mocap_quat.size:
+                    self.data.mocap_quat[:] = mocap_quat
+                mujoco.mj_forward(self.model, self.data)
 
-                采样数 = max(2, int(参数.get("采样数", 48)))
-                步数 = max(1, int(参数.get("规划步数", 20)))
-                迭代数 = max(1, int(参数.get("CEM迭代", 2)))
-                精英比例 = min(0.9, max(0.05, float(参数.get("精英比例", 0.2))))
-                初始标准差 = max(0.01, float(参数.get("采样标准差", 0.35)))
-                手权重 = float(参数.get("手方块权重", 5.0))
-                目标权重 = float(参数.get("方块目标权重", 1.0))
-                控制权重 = float(参数.get("控制权重", 0.001))
-                权重 = np.array([手权重] * 3 + [目标权重] * 6, dtype=float)
+                sample_count = max(2, int(parameters.get("采样数", 48)))
+                step_count = max(1, int(parameters.get("规划步数", 20)))
+                iteration_count = max(1, int(parameters.get("CEM迭代", 2)))
+                elite_fraction = min(0.9, max(0.05, float(parameters.get("精英比例", 0.2))))
+                initial_stddev = max(0.01, float(parameters.get("采样标准差", 0.35)))
+                hand_weight = float(parameters.get("手方块权重", 5.0))
+                target_weight = float(parameters.get("方块目标权重", 1.0))
+                control_weight = float(parameters.get("控制权重", 0.001))
+                weights = np.array([hand_weight] * 3 + [target_weight] * 6, dtype=float)
 
-                下界 = np.asarray(self.模型.actuator_ctrlrange[:, 0], dtype=float)
-                上界 = np.asarray(self.模型.actuator_ctrlrange[:, 1], dtype=float)
-                幅度 = np.maximum(上界 - 下界, 1e-9)
-                nu = int(self.模型.nu)
+                lower = np.asarray(self.model.actuator_ctrlrange[:, 0], dtype=float)
+                upper = np.asarray(self.model.actuator_ctrlrange[:, 1], dtype=float)
+                amplitude = np.maximum(upper - lower, 1e-9)
+                nu = int(self.model.nu)
 
                 # 暖启动：上一次的最优序列往前挪一步；形状变了（改 horizon/换模型）就重置
-                if self._均值 is None or self._均值.shape != (步数, nu):
-                    self._均值 = np.zeros((步数, nu), dtype=float)
-                    self._标准差 = 幅度[None, :] * 初始标准差
+                if self._mean is None or self._mean.shape != (step_count, nu):
+                    self._mean = np.zeros((step_count, nu), dtype=float)
+                    self._standard_deviation = amplitude[None, :] * initial_stddev
                 else:
-                    self._均值 = np.vstack([self._均值[1:], self._均值[-1:]])
+                    self._mean = np.vstack([self._mean[1:], self._mean[-1:]])
 
-                rng = np.random.default_rng(序)
-                序 += 1
-                输出状态 = np.empty((采样数, 步数, self.状态尺寸), dtype=float)
-                输出传感器 = np.empty((采样数, 步数, int(self.模型.nsensordata)), dtype=float)
-                最优代价 = float("inf")
-                最优动作 = None
-                最优传感器 = None
+                rng = np.random.default_rng(sequence)
+                sequence += 1
+                output_states = np.empty((sample_count, step_count, self.state_size), dtype=float)
+                output_sensors = np.empty((sample_count, step_count, int(self.model.nsensordata)), dtype=float)
+                best_cost = float("inf")
+                best_action = None
+                best_sensors = None
 
                 # CEM：采样 → 选精英 → 更新均值/标准差；每次规划迭代几次
-                for 迭代 in range(迭代数):
-                    噪声 = rng.standard_normal((采样数, 步数, nu))
-                    动作们 = np.clip(
-                        self._均值[None, :, :] + 噪声 * self._标准差[None, :, :],
-                        下界, 上界)
-                    if 迭代 == 0:
-                        动作们[0] = 0.0          # 保一条"不动"的基线
+                for iteration in range(iteration_count):
+                    noise = rng.standard_normal((sample_count, step_count, nu))
+                    actions = np.clip(
+                        self._mean[None, :, :] + noise * self._standard_deviation[None, :, :],
+                        lower, upper)
+                    if iteration == 0:
+                        actions[0] = 0.0          # 保一条"不动"的基线
                     self._rollout.rollout(
-                        self.模型, self.数据, np.tile(状态, (采样数, 1)),
-                        control=动作们, nstep=步数,
-                        state=输出状态, sensordata=输出传感器,
+                        self.model, self.data, np.tile(state, (sample_count, 1)),
+                        control=actions, nstep=step_count,
+                        state=output_states, sensordata=output_sensors,
                     )
-                    残差 = _残差(self.切片, 输出传感器)              # (N,H,9)
-                    代价 = (np.sum(权重 * 残差 * 残差, axis=(1, 2))
-                            + 控制权重 * np.sum(动作们 * 动作们, axis=(1, 2)))
-                    本次最优 = int(np.argmin(代价))
-                    if float(代价[本次最优]) < 最优代价:
-                        最优代价 = float(代价[本次最优])
-                        最优动作 = np.array(动作们[本次最优], dtype=float, copy=True)
-                        最优传感器 = np.array(输出传感器[本次最优], dtype=float, copy=True)
+                    residuals = _residuals(self.slices, output_sensors)              # (N,H,9)
+                    costs = (np.sum(weights * residuals * residuals, axis=(1, 2))
+                            + control_weight * np.sum(actions * actions, axis=(1, 2)))
+                    best_index = int(np.argmin(costs))
+                    if float(costs[best_index]) < best_cost:
+                        best_cost = float(costs[best_index])
+                        best_action = np.array(actions[best_index], dtype=float, copy=True)
+                        best_sensors = np.array(output_sensors[best_index], dtype=float, copy=True)
 
-                    精英数 = max(1, int(采样数 * 精英比例))
-                    精英 = 动作们[np.argsort(代价)[:精英数]]
-                    self._均值 = np.clip(精英.mean(axis=0), 下界, 上界)
-                    self._标准差 = np.clip(
-                        精英.std(axis=0) + 0.02 * 幅度[None, :],
-                        0.05 * 幅度[None, :], 0.75 * 幅度[None, :])
+                    elite_count = max(1, int(sample_count * elite_fraction))
+                    elites = actions[np.argsort(costs)[:elite_count]]
+                    self._mean = np.clip(elites.mean(axis=0), lower, upper)
+                    self._standard_deviation = np.clip(
+                        elites.std(axis=0) + 0.02 * amplitude[None, :],
+                        0.05 * amplitude[None, :], 0.75 * amplitude[None, :])
 
-                if 最优动作 is None or 最优传感器 is None:
+                if best_action is None or best_sensors is None:
                     raise RuntimeError("CEM 没有产出可用动作")
                 # 下一次从这个最优序列暖启动（上面会再往前挪一步）
-                self._均值 = np.array(最优动作, dtype=float, copy=True)
-                手到方块 = float(np.linalg.norm(
-                    最优传感器[-1, self.切片["hand"][0]:self.切片["hand"][1]]
-                    - 最优传感器[-1, self.切片["box"][0]:self.切片["box"][1]]))
+                self._mean = np.array(best_action, dtype=float, copy=True)
+                hand_to_box = float(np.linalg.norm(
+                    best_sensors[-1, self.slices["hand"][0]:self.slices["hand"][1]]
+                    - best_sensors[-1, self.slices["box"][0]:self.slices["box"][1]]))
                 # 把总 cost 拆开，界面才能回答"为什么"：
                 #   cost_手   = 手到方块残差（3 维）
                 #   cost_目标 = 方块两侧到目标（6 维）
                 #   cost_动作 = 动作大小正则
-                最优残差 = _残差(self.切片, 最优传感器)              # (H,9)
-                手代价 = float(np.sum(最优残差[:, :3] ** 2)) * 手权重
-                目标代价 = float(np.sum(最优残差[:, 3:] ** 2)) * 目标权重
-                动作代价 = float(np.sum(最优动作 ** 2)) * 控制权重
-                方块到目标 = float(
-                    (np.linalg.norm(最优残差[-1, 3:6])
-                     + np.linalg.norm(最优残差[-1, 6:9])) / 2.0)
-                动作范数 = float(np.linalg.norm(最优动作[0, :6]))
-                夹爪 = float(最优动作[0, 6])
-            except Exception as 异常:                                  # noqa: BLE001
-                with self._锁:
-                    self._统计["错误次数"] += 1
-                    self._错误 = f"{type(异常).__name__}: {异常}"
-                self._停止.wait(0.05)
+                best_residuals = _residuals(self.slices, best_sensors)              # (H,9)
+                hand_cost = float(np.sum(best_residuals[:, :3] ** 2)) * hand_weight
+                target_cost = float(np.sum(best_residuals[:, 3:] ** 2)) * target_weight
+                action_cost = float(np.sum(best_action ** 2)) * control_weight
+                box_to_target = float(
+                    (np.linalg.norm(best_residuals[-1, 3:6])
+                     + np.linalg.norm(best_residuals[-1, 6:9])) / 2.0)
+                action_norm = float(np.linalg.norm(best_action[0, :6]))
+                gripper = float(best_action[0, 6])
+            except Exception as exc:                                  # noqa: BLE001
+                with self._lock:
+                    self._statistics["错误次数"] += 1
+                    self._error = f'{type(exc).__name__}: {exc}'
+                self._stop.wait(0.05)
                 continue
 
-            with self._锁:
-                self._动作 = np.array(最优动作[0], dtype=float, copy=True)
-                self._动作时刻 = time.monotonic()
-                self._统计["规划次数"] += 1
-                self._统计["规划耗时ms"] = (time.perf_counter() - 开始) * 1000.0
-                self._统计["cost"] = float(最优代价)
-                self._统计["hand-box(mm)"] = 手到方块 * 1000.0
-                self._统计["box-target(mm)"] = 方块到目标 * 1000.0
-                self._统计["cost_手"] = 手代价
-                self._统计["cost_目标"] = 目标代价
-                self._统计["cost_动作"] = 动作代价
-                self._统计["动作范数"] = 动作范数
-                self._统计["动作峰值"] = max(
-                    float(self._统计.get("动作峰值", 0.0)), 动作范数)
-                self._统计["夹爪"] = 夹爪
-                self._统计["动作年龄ms"] = 0.0
-                self._错误 = ""
+            with self._lock:
+                self._action = np.array(best_action[0], dtype=float, copy=True)
+                self._action_time = time.monotonic()
+                self._statistics["规划次数"] += 1
+                self._statistics["规划耗时ms"] = (time.perf_counter() - started) * 1000.0
+                self._statistics["cost"] = float(best_cost)
+                self._statistics["hand-box(mm)"] = hand_to_box * 1000.0
+                self._statistics["box-target(mm)"] = box_to_target * 1000.0
+                self._statistics["cost_手"] = hand_cost
+                self._statistics["cost_目标"] = target_cost
+                self._statistics["cost_动作"] = action_cost
+                self._statistics["动作范数"] = action_norm
+                self._statistics["动作峰值"] = max(
+                    float(self._statistics.get("动作峰值", 0.0)), action_norm)
+                self._statistics["夹爪"] = gripper
+                self._statistics["动作年龄ms"] = 0.0
+                self._error = ""
 
             # 限频：规划频率默认 20 Hz；算得快也不要空转烧 CPU
-            周期 = 1.0 / max(1.0, float(参数.get("规划频率", 20.0)))
-            剩余 = 周期 - (time.perf_counter() - 开始)
-            if 剩余 > 0:
-                self._停止.wait(剩余)
+            period = 1.0 / max(1.0, float(parameters.get("规划频率", 20.0)))
+            remaining = period - (time.perf_counter() - started)
+            if remaining > 0:
+                self._stop.wait(remaining)
 
 
-class Panda官方MPC插件(ControlPlugin):
+class PandaMPCController(ControlPlugin):
+    parameter_aliases = {'CEM迭代': 'cem_iterations', '规划频率': 'planning_frequency', '超时秒': 'timeout_seconds', '控制权重': 'control_weight', '规划步数': 'horizon_steps', '精英比例': 'elite_fraction', '方块目标权重': 'box_target_weight', '采样标准差': 'sampling_stddev', '手方块权重': 'hand_box_weight', '采样数': 'sample_count'}
     name = "Panda 官方 MPC（移植）"
     version = "0.2"
     english_name = "Panda MJPC port (CEM)"
@@ -276,152 +277,152 @@ class Panda官方MPC插件(ControlPlugin):
     takes_control = True
 
     # ---- 可调参数（界面滑杆直接改；规划线程每次规划读一次）----
-    采样数 = 48
-    规划步数 = 20
-    CEM迭代 = 2
-    精英比例 = 0.2
-    采样标准差 = 0.35
-    手方块权重 = 5.0
-    方块目标权重 = 1.0
-    控制权重 = 0.001
-    规划频率 = 20.0
-    超时秒 = 0.25
+    sample_count = 48
+    horizon_steps = 20
+    cem_iterations = 2
+    elite_fraction = 0.2
+    sampling_stddev = 0.35
+    hand_box_weight = 5.0
+    box_target_weight = 1.0
+    control_weight = 0.001
+    planning_frequency = 20.0
+    timeout_seconds = 0.25
 
     def __init__(self) -> None:
-        self._规划器: _规划器 | None = None
-        self._模型 = None
-        self._启动失败 = ""
-        self._回退次数 = 0
-        self._步数 = 0
-        self._状态缓冲: np.ndarray | None = None
+        self._Planner: _Planner | None = None
+        self._model = None
+        self._startup_error = ""
+        self._fallback_count = 0
+        self._step_count = 0
+        self._state_buffer: np.ndarray | None = None
 
     # ------------------------------------------------------------------
-    def check_model_compatibility(self, 模型) -> str:
-        if int(getattr(模型, "nu", 0)) != 7:
-            return f"需要 MJPC Panda 的 7 维动作（本模型 nu={getattr(模型, 'nu', 0)}）"
-        for 名 in 需要的传感器:
-            if mujoco.mj_name2id(模型, mujoco.mjtObj.mjOBJ_SENSOR, 名) < 0:
-                return f"缺少传感器「{名}」——这不是 MJPC 的 Panda 任务模型"
+    def check_model_compatibility(self, model) -> str:
+        if int(getattr(model, "nu", 0)) != 7:
+            return f"需要 MJPC Panda 的 7 维动作（本模型 nu={getattr(model, 'nu', 0)}）"
+        for name in REQUIRED_SENSORS:
+            if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SENSOR, name) < 0:
+                return f'缺少传感器「{name}」——这不是 MJPC 的 Panda 任务模型'
         return ""
 
-    def _启动(self, 模型) -> bool:
+    def _start(self, model) -> bool:
         try:
-            self._规划器 = _规划器(模型, self._参数快照())
-            self._状态缓冲 = np.empty(
-                int(mujoco.mj_stateSize(模型, 状态规格)), dtype=float)
+            self._Planner = _Planner(model, self._parameter_snapshot())
+            self._state_buffer = np.empty(
+                int(mujoco.mj_stateSize(model, STATE_SPEC)), dtype=float)
             return True
-        except Exception as 异常:                                      # noqa: BLE001
-            self._启动失败 = f"{type(异常).__name__}: {异常}"
-            print(f"⚠ 【{self.name}】启动失败：{self._启动失败}", flush=True)
+        except Exception as exc:                                      # noqa: BLE001
+            self._startup_error = f'{type(exc).__name__}: {exc}'
+            print(f'⚠ 【{self.name}】启动失败：{self._startup_error}', flush=True)
             return False
 
-    def _参数快照(self) -> dict:
+    def _parameter_snapshot(self) -> dict:
         return {
-            "采样数": self.采样数,
-            "规划步数": self.规划步数,
-            "CEM迭代": self.CEM迭代,
-            "精英比例": self.精英比例,
-            "采样标准差": self.采样标准差,
-            "手方块权重": self.手方块权重,
-            "方块目标权重": self.方块目标权重,
-            "控制权重": self.控制权重,
-            "规划频率": self.规划频率,
+            "采样数": self.sample_count,
+            "规划步数": self.horizon_steps,
+            "CEM迭代": self.cem_iterations,
+            "精英比例": self.elite_fraction,
+            "采样标准差": self.sampling_stddev,
+            "手方块权重": self.hand_box_weight,
+            "方块目标权重": self.box_target_weight,
+            "控制权重": self.control_weight,
+            "规划频率": self.planning_frequency,
         }
 
-    def set_parameter(self, 名: str, 值: float) -> str:
-        原因 = super().set_parameter(名, 值)
-        if not 原因 and self._规划器 is not None:
-            self._规划器.设参数(名, getattr(self, 名))
-        return 原因
+    def set_parameter(self, name: str, value: float) -> str:
+        reason = super().set_parameter(name, value)
+        if not reason and self._Planner is not None:
+            self._Planner.set_parameter(name, getattr(self, self.parameter_aliases.get(name, name)))
+        return reason
 
     # ------------------------------------------------------------------
     @step_handler
     def step(self, event: plugin.messages.StepEvent) -> bool:
-        模型, 数据 = event.model, event.data
-        if self._规划器 is None and not self._启动失败:
-            self._启动(模型)
-        if self._规划器 is None:
+        model, data = event.model, event.data
+        if self._Planner is None and not self._startup_error:
+            self._start(model)
+        if self._Planner is None:
             return False
 
-        self._步数 += 1
+        self._step_count += 1
         try:
-            mujoco.mj_getState(模型, 数据, self._状态缓冲, 状态规格)
-            self._规划器.更新状态(
-                self._状态缓冲,
-                None if 数据.mocap_pos.size == 0 else 数据.mocap_pos,
-                None if 数据.mocap_quat.size == 0 else 数据.mocap_quat,
+            mujoco.mj_getState(model, data, self._state_buffer, STATE_SPEC)
+            self._Planner.update_state(
+                self._state_buffer,
+                None if data.mocap_pos.size == 0 else data.mocap_pos,
+                None if data.mocap_quat.size == 0 else data.mocap_quat,
             )
-        except Exception as 异常:                                      # noqa: BLE001
-            if self._步数 % 500 == 1:
-                print(f"⚠ 【{self.name}】同步状态失败：{type(异常).__name__}: {异常}", flush=True)
+        except Exception as exc:                                      # noqa: BLE001
+            if self._step_count % 500 == 1:
+                print(f'⚠ 【{self.name}】同步状态失败：{type(exc).__name__}: {exc}', flush=True)
             return False
 
-        动作, 年龄毫秒, _统计 = self._规划器.取动作()
-        if 年龄毫秒 <= max(0.0, self.超时秒) * 1000.0 and np.all(np.isfinite(动作)):
-            数据.ctrl[:] = 动作
+        action, age_ms, _statistics = self._Planner.get_action()
+        if age_ms <= max(0.0, self.timeout_seconds) * 1000.0 and np.all(np.isfinite(action)):
+            data.ctrl[:] = action
         else:
             # 规划没跟上：退回 0 力矩（模型有 gravcomp，不会砸下来），并计数
-            数据.ctrl[:] = 0.0
-            self._回退次数 += 1
+            data.ctrl[:] = 0.0
+            self._fallback_count += 1
         return False
 
     # ------------------------------------------------------------------
     def adjustable_parameters(self) -> dict:
         return {
-            "采样数": {"value": self.采样数, "range": (2.0, 200.0), "step": 1.0},
-            "规划步数": {"value": self.规划步数, "range": (1.0, 60.0), "step": 1.0},
-            "CEM迭代": {"value": self.CEM迭代, "range": (1.0, 6.0), "step": 1.0},
-            "精英比例": {"value": self.精英比例, "range": (0.05, 0.9)},
-            "采样标准差": {"value": self.采样标准差, "range": (0.05, 1.0)},
-            "手方块权重": {"value": self.手方块权重, "range": (0.0, 100.0)},
-            "方块目标权重": {"value": self.方块目标权重, "range": (0.0, 100.0)},
-            "控制权重": {"value": self.控制权重, "range": (0.0, 1.0)},
-            "规划频率": {"value": self.规划频率, "range": (1.0, 100.0), "unit": "Hz"},
-            "超时秒": {"value": self.超时秒, "range": (0.05, 2.0), "unit": "s"},
+            "采样数": {"value": self.sample_count, "range": (2.0, 200.0), "step": 1.0},
+            "规划步数": {"value": self.horizon_steps, "range": (1.0, 60.0), "step": 1.0},
+            "CEM迭代": {"value": self.cem_iterations, "range": (1.0, 6.0), "step": 1.0},
+            "精英比例": {"value": self.elite_fraction, "range": (0.05, 0.9)},
+            "采样标准差": {"value": self.sampling_stddev, "range": (0.05, 1.0)},
+            "手方块权重": {"value": self.hand_box_weight, "range": (0.0, 100.0)},
+            "方块目标权重": {"value": self.box_target_weight, "range": (0.0, 100.0)},
+            "控制权重": {"value": self.control_weight, "range": (0.0, 1.0)},
+            "规划频率": {"value": self.planning_frequency, "range": (1.0, 100.0), "unit": "Hz"},
+            "超时秒": {"value": self.timeout_seconds, "range": (0.05, 2.0), "unit": "s"},
         }
 
     def metrics(self) -> dict:
-        if self._规划器 is None:
-            return {"规划次数": 0.0, "回退次数": float(self._回退次数)}
-        动作, 年龄毫秒, 统计 = self._规划器.取动作()
+        if self._Planner is None:
+            return {"规划次数": 0.0, "回退次数": float(self._fallback_count)}
+        action, age_ms, statistics = self._Planner.get_action()
         return {
-            "规划次数": 统计.get("规划次数", 0.0),
-            "规划耗时(ms)": 统计.get("规划耗时ms", 0.0),
-            "cost": 统计.get("cost", 0.0),
-            "hand-box(mm)": 统计.get("hand-box(mm)", 0.0),
-            "box-target(mm)": 统计.get("box-target(mm)", 0.0),
-            "cost_手": 统计.get("cost_手", 0.0),
-            "cost_目标": 统计.get("cost_目标", 0.0),
-            "cost_动作": 统计.get("cost_动作", 0.0),
-            "动作范数": 统计.get("动作范数", 0.0),
-            "动作峰值": 统计.get("动作峰值", 0.0),
-            "夹爪": 统计.get("夹爪", 0.0),
-            "动作年龄(ms)": 年龄毫秒,
-            "回退次数": float(self._回退次数),
-            "错误次数": 统计.get("错误次数", 0.0),
+            "规划次数": statistics.get("规划次数", 0.0),
+            "规划耗时(ms)": statistics.get("规划耗时ms", 0.0),
+            "cost": statistics.get("cost", 0.0),
+            "hand-box(mm)": statistics.get("hand-box(mm)", 0.0),
+            "box-target(mm)": statistics.get("box-target(mm)", 0.0),
+            "cost_手": statistics.get("cost_手", 0.0),
+            "cost_目标": statistics.get("cost_目标", 0.0),
+            "cost_动作": statistics.get("cost_动作", 0.0),
+            "动作范数": statistics.get("动作范数", 0.0),
+            "动作峰值": statistics.get("动作峰值", 0.0),
+            "夹爪": statistics.get("夹爪", 0.0),
+            "动作年龄(ms)": age_ms,
+            "回退次数": float(self._fallback_count),
+            "错误次数": statistics.get("错误次数", 0.0),
         }
 
     def status(self) -> dict:
-        if self._启动失败:
-            return {"状态": f"启动失败：{self._启动失败}"}
-        if self._规划器 is None:
+        if self._startup_error:
+            return {"状态": f'启动失败：{self._startup_error}'}
+        if self._Planner is None:
             return {"状态": "等待第一步"}
-        动作, 年龄毫秒, 统计 = self._规划器.取动作()
+        action, age_ms, statistics = self._Planner.get_action()
         return {
-            "步数": self._步数,
-            "规划次数": int(统计.get("规划次数", 0)),
-            "hand-box": f"{统计.get('hand-box(mm)', 0.0):.0f} mm",
-            "box-target": f"{统计.get('box-target(mm)', 0.0):.0f} mm",
-            "动作年龄": f"{年龄毫秒:.0f} ms",
-            "回退": self._回退次数,
+            "步数": self._step_count,
+            "规划次数": int(statistics.get("规划次数", 0)),
+            "hand-box": f"{statistics.get('hand-box(mm)', 0.0):.0f} mm",
+            "box-target": f"{statistics.get('box-target(mm)', 0.0):.0f} mm",
+            "动作年龄": f'{age_ms:.0f} ms',
+            "回退": self._fallback_count,
         }
 
     # ------------------------------------------------------------------
     def close(self) -> None:
-        规划器, self._规划器 = self._规划器, None
-        if 规划器 is not None:
+        planner, self._Planner = self._Planner, None
+        if planner is not None:
             try:
-                规划器.停止()
+                planner.stop()
             except Exception:                                         # noqa: BLE001
                 pass
 

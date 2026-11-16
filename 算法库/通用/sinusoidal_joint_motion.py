@@ -25,17 +25,17 @@ class SinusoidalJointMotionController(ControlPlugin):
     author = "数字样机"
 
     # ---- 调参入口 ----
-    振幅 = 0.35        # 摆动幅度（rad），0.35 rad ≈ 20°
-    频率 = 0.3         # 摆动频率（Hz）
+    amplitude = 0.35        # 摆动幅度（rad），0.35 rad ≈ 20°
+    frequency = 0.3         # 摆动频率（Hz）
     KP = 200.0
     KD = 30.0
 
     def __init__(self):
-        self.基准 = None
-        self.步数 = 0
-        self.当前目标 = None
+        self.baseline = None
+        self.step_count = 0
+        self.current_target = None
 
-    def check_model_compatibility(self, 模型) -> str:
+    def check_model_compatibility(self, model) -> str:
         """要求 nu == nq（同样要写 `ctrl[:]`）且至少有 3 个关节。
 
         ★ 关于"摆哪个关节"的诚实说明：下面的代码固定摆 `qpos[1]`（第 2 个关节），
@@ -44,8 +44,8 @@ class SinusoidalJointMotionController(ControlPlugin):
           所以这里只挡"必然出错"的情况（关节太少 / 执行器对不上），
           关节语义的差别留在注释里提示。
         """
-        nq = int(getattr(模型, "nq", 0))
-        nu = int(getattr(模型, "nu", 0))
+        nq = int(getattr(model, "nq", 0))
+        nu = int(getattr(model, "nu", 0))
         if nq < 3 or nu == 0:
             return f"需要至少 3 个关节且带执行器（本模型 nq={nq}、nu={nu}）"
         if nu != nq:
@@ -54,27 +54,27 @@ class SinusoidalJointMotionController(ControlPlugin):
 
     @step_handler
     def step(self, event: studio.messages.StepEvent) -> bool:
-        数据 = event.data
+        data = event.data
         # ★ 空场景没有关节：直接返回，别让 目标[1] 越界（越界会被"出错隔离"停用插件）
-        if 数据.qpos.size < 3 or 数据.ctrl.size == 0:
-            self.基准 = None
+        if data.qpos.size < 3 or data.ctrl.size == 0:
+            self.baseline = None
             return False
-        if self.基准 is None:                       # 第一次：记住初始姿势当摆动中心
-            self.基准 = 数据.qpos.copy()
+        if self.baseline is None:                       # 第一次：记住初始姿势当摆动中心
+            self.baseline = data.qpos.copy()
 
-        目标 = self.基准.copy()
-        目标[1] += self.振幅 * np.sin(2 * np.pi * self.频率 * 数据.time)
-        self.当前目标 = 目标
+        target = self.baseline.copy()
+        target[1] += self.amplitude * np.sin(2 * np.pi * self.frequency * data.time)
+        self.current_target = target
 
-        数据.ctrl[:] = self.KP * (目标 - 数据.qpos) - self.KD * 数据.qvel + 数据.qfrc_bias
-        self.步数 += 1
+        data.ctrl[:] = self.KP * (target - data.qpos) - self.KD * data.qvel + data.qfrc_bias
+        self.step_count += 1
         return False
 
     def status(self) -> dict:
-        if self.当前目标 is None:
+        if self.current_target is None:
             return {"状态": "等待第一步"}
-        return {"步数": self.步数,
-                "摆动到": f"{np.degrees(self.当前目标[1] - self.基准[1]):+.1f}°"}
+        return {"步数": self.step_count,
+                "摆动到": f'{np.degrees(self.current_target[1] - self.baseline[1]):+.1f}°'}
 
 
 plugin_class = SinusoidalJointMotionController

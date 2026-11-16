@@ -336,9 +336,9 @@ def main() -> int:
     print("=" * 74)
 
     # ---- ① 算法库本身 ----
-    算法们 = 项目.发现的算法()
+    算法们 = 项目.discover_algorithms()
     结.检查("算法库非空", bool(算法们),
-            f"{项目.相对包根(项目.算法库目录)} 里一个算法都没有")
+            f"{项目.relative_to_package(项目.ALGORITHM_DIRECTORY)} 里一个算法都没有")
     算法名 = [d["插件"] for d in 算法们]
     重名 = sorted({n for n in 算法名 if 算法名.count(n) > 1})
     结.检查("算法文件名互不重复", not 重名, f"重复的是：{'、'.join(重名)}")
@@ -437,27 +437,27 @@ def main() -> int:
                     (进程.stderr or 进程.stdout or "")[-500:])
 
     # ---- ② 项目文件 ----
-    项目们 = 项目.列出项目()
+    项目们 = 项目.list_projects()
     结.检查("存在至少一个项目", bool(项目们),
-            f"{项目.相对包根(项目.项目目录)} 下没有有效的项目文件")
+            f"{项目.relative_to_package(项目.PROJECT_DIRECTORY)} 下没有有效的项目文件")
 
     被引用的算法: set[str] = set()
     模型清单: list[tuple[str, str]] = []
     for 名 in 项目们:
-        数据 = 项目.读项目(名)
+        数据 = 项目.load_project(名)
         if not 结.检查(f"项目「{名}」可读", 数据 is not None):
             continue
 
         # 模型字段必须能解析到一个存在的文件
         模型写法 = str(数据.get("模型") or "")
-        模型绝对 = 项目.绝对(模型写法)
+        模型绝对 = 项目.absolute_path(模型写法)
         结.检查(f"项目「{名}」的模型文件存在", bool(模型写法) and os.path.exists(模型绝对),
                 f"写法 {模型写法!r} → 解析为 {模型绝对}（不存在）")
         模型清单.append((名, os.path.normpath(模型绝对)))
 
         # 算法字段：解析出来的条目必须和"项目里写的"一样多（少一个就说明有引用不到的）
         原始 = 数据.get("算法", "*")
-        条目 = 项目.解析算法(数据)
+        条目 = 项目.parse_algorithms(数据)
         想要数 = len(算法们) if isinstance(原始, str) and 原始.strip() in ("*", "全部", "all")\
             else (len(原始) if isinstance(原始, list) else 0)
         结.检查(f"项目「{名}」声明的算法都能解析", len(条目) == 想要数,
@@ -478,10 +478,10 @@ def main() -> int:
     # ---- ③ 模型 ↔ 项目 的对应关系 ----
     # 规则：每个可控制的机械臂都应该能在项目里找到归宿（否则点它就没算法）
     未覆盖: list[str] = []
-    for m in 项目.模型库条目():
+    for m in 项目.model_library_entries():
         if not m.get("可控制"):
             continue
-        路径 = os.path.normpath(项目.绝对(str(m.get("扭矩模型") or "")))
+        路径 = os.path.normpath(项目.absolute_path(str(m.get("扭矩模型") or "")))
         命中 = [n for n, p in 模型清单 if p == 路径]
         if not 命中:
             未覆盖.append(str(m.get("显示名") or m.get("标识")))

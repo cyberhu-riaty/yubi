@@ -1,4 +1,4 @@
-"""Check the incremental ASCII/English module migration boundary.
+"""Check migrated APIs and the repository-wide internal naming baseline.
 
 Legacy modules remain supported, but files already migrated in a completed batch
 must not start importing their Chinese module names again.
@@ -84,12 +84,21 @@ REMOVED_LEGACY_MODULES = {
     "插件系统", "装配器", "项目", "启动", "主程序窗口", "主程序Web",
     "控制桥", "指标桥", "系统桥",
 }
+# These shims remain available to external plugins, but application code must
+# depend on the English implementation so the old import cannot grow back.
+COMPATIBILITY_ONLY_MODULES = {"官方层", "契约"}
 REMOVED_PLUGIN_METHODS = {
     "可调参数", "设置参数", "收到模型", "模型兼容性", "每步控制", "每步目标",
     "每步录制", "指标", "插件状态", "绑定模型路径", "模型已切换",
 }
 REMOVED_PLUGIN_ATTRIBUTES = {"名称", "英文名", "版本", "作者", "说明", "接管控制"}
 ASCII_IDENTIFIER_FILES = (
+    "软件/contract.py",
+    "软件/契约.py",
+    "软件/official_api.py",
+    "软件/官方层.py",
+    "工具/验证/official_api_selfcheck.py",
+    "工具/验证/官方层自检.py",
     "软件/plugin_system.py",
     "软件/plugin_assembler.py",
     "软件/runtime_engine.py",
@@ -125,32 +134,31 @@ def imported_modules(path: Path) -> list[tuple[int, str]]:
         if isinstance(node, ast.Import):
             found.extend((node.lineno, item.name.split(".")[0]) for item in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
-            found.append((node.lineno, node.module.split(".")[0]))
+            # Device/platform packages also have their own 契约 modules. Relative
+            # imports resolve there, not to the root compatibility shim.
+            found.append((node.lineno, "." * node.level + node.module.split(".")[0]))
     return found
 
 
-def main() -> int:
+def check_migration_boundary() -> int:
     errors: list[str] = []
     for module in REMOVED_LEGACY_MODULES:
         removed_path = ROOT / "软件" / f"{module}.py"
         if removed_path.exists():
             errors.append(f"removed legacy module still exists: 软件/{module}.py")
-    for path in ROOT.rglob("*.py"):
-        if ".venv" in path.parts or "__pycache__" in path.parts:
-            continue
-        # `ur10/` and report folders may hold upstream source or illustrative
-        # snippets; only the application's own Python paths form this contract.
-        relative = path.relative_to(ROOT)
-        if relative.parts[0] not in {
-            "软件", "算法库", "工具", "scripts", "前端",
-            "run_yubi.py", "run_yubi_web.py", "run_experiment_cli.py",
-            "compare_experiments_cli.py",
-        }:
+    from audit_naming import SCOPE_FILE, discover_files, read_json
+    for path in discover_files(ROOT, read_json(SCOPE_FILE)):
+        if path.suffix != ".py":
             continue
         for line, module in imported_modules(path):
             if module in REMOVED_LEGACY_MODULES:
                 errors.append(
                     f"{path.relative_to(ROOT)}:{line} imports removed module {module}")
+            elif module in COMPATIBILITY_ONLY_MODULES:
+                replacement = {"官方层": "official_api", "契约": "contract"}[module]
+                errors.append(
+                    f"{path.relative_to(ROOT)}:{line} imports compatibility module {module}; "
+                    f"use {replacement}")
     for name in PUBLIC_MODULES:
         path = ROOT / "软件" / name
         if not path.is_file():
@@ -231,10 +239,18 @@ def main() -> int:
             print(f"  - {error}")
         return 1
     print(
-        f"Naming migration check passed: {len(PUBLIC_MODULES)} public modules, "
+        f"Migrated API boundary passed: {len(PUBLIC_MODULES)} public modules, "
         f"{len(MIGRATED_FILES)} migrated callers."
     )
     return 0
+
+
+def main() -> int:
+    status = check_migration_boundary()
+    if status:
+        return status
+    from audit_naming import main as audit_main
+    return audit_main()
 
 
 if __name__ == "__main__":

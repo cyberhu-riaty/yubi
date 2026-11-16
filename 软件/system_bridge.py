@@ -27,15 +27,17 @@ Publish runtime system health and performance measurements.
 from __future__ import annotations
 
 import dataclasses
+from wire_compatibility import legacy_wire
 import time
 from typing import Any, Callable
 
-from 官方层 import messages          # 全部走适配层，见 软件/官方层.py
+from official_api import messages          # 全部走适配层，见 软件/official_api.py
 
 
 # ---------------------------------------------------------------------------
 # 仿真侧 → 界面：运行期系统指标
 # ---------------------------------------------------------------------------
+@legacy_wire('SystemState', {'simulation_time': '仿真时间', 'wall_clock': '墙钟', 'RTF': 'RTF', 'step_rate': '步频', 'timestep': '仿真步长', 'memory_mb': '内存MB', 'plugin_count': '插件数', 'errors': '出错'})
 @dataclasses.dataclass(frozen=True)
 class SystemState(messages.Snapshot):
     """运行期系统指标（监控视图的数据源）。
@@ -43,13 +45,13 @@ class SystemState(messages.Snapshot):
     ★ 字段都是"每秒算一次"的瞬时/累计量，**不是**高频变化的东西 ——
       所以频率 1 Hz 足够，不需要按帧发。
     """
-    仿真时间: float = 0.0          # 累计仿真时间（秒）
-    墙钟: float = 0.0              # 累计墙钟（秒，从开始跑算）
+    simulation_time: float = 0.0          # 累计仿真时间（秒）
+    wall_clock: float = 0.0              # 累计墙钟（秒，从开始跑算）
     RTF: float = 0.0               # 实时率 = 仿真时间增量 / 墙钟增量（1.0 = 实速）
-    步频: float = 0.0              # 物理步/秒
-    仿真步长: float = 0.0          # 模型的 timestep（秒）
-    内存MB: float = 0.0            # 本进程常驻内存
-    插件数: int = 0                # 当前装了几个插件
+    step_rate: float = 0.0              # 物理步/秒
+    timestep: float = 0.0          # 模型的 timestep（秒）
+    memory_mb: float = 0.0            # 本进程常驻内存
+    plugin_count: int = 0                # 当前装了几个插件
     errors: str = ""                 # 采样失败时的说明（空 = 正常）
 
 
@@ -123,13 +125,13 @@ class Publisher:
         self._last_step_count = steps
 
         state = SystemState(
-            仿真时间=float(simulation_time),
-            墙钟=float(now - self._start_time),
+            simulation_time=float(simulation_time),
+            wall_clock=float(now - self._start_time),
             RTF=float(RTF),
-            步频=float(step_rate),
-            仿真步长=float(timestep),
-            内存MB=float(_memory_mb()),
-            插件数=int(plugin_count),
+            step_rate=float(step_rate),
+            timestep=float(timestep),
+            memory_mb=float(_memory_mb()),
+            plugin_count=int(plugin_count),
             errors="",
         )
         self.latest = state

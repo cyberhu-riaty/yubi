@@ -6,10 +6,10 @@
  * 读屏能念出来。容器本身 `pointer-events: none`，不挡住下面的界面。
  */
 import { 移除, 用提示 } from "../数据/提示";
-import { use取 } from "../视图/文案";
+import { useTranslation } from "../视图/文案";
 
 export function 提示区() {
-  const t = use取();
+  const t = useTranslation();
   const 快照 = 用提示();
 
   if (!快照.条.length) return null;

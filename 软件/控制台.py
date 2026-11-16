@@ -1,17 +1,30 @@
-"""主程序入口的控制台兼容处理。"""
+"""Legacy naming compatibility; new code imports console_support."""
 from __future__ import annotations
 
-import os
-import sys
+from functools import wraps
+import console_support as _implementation
 
+_ALIASES = {'准备输出': 'prepare_output'}
+_KEYWORDS = {}
 
-def 准备输出() -> None:
-    """避免 Windows 默认 GBK 因界面日志中的 Unicode 符号而退出。"""
-    if os.name != "nt":
-        return
-    for 流 in (sys.stdout, sys.stderr):
-        try:
-            流.reconfigure(encoding="utf-8", errors="replace")
-        except (AttributeError, ValueError):
-            # IDE、测试框架可能把标准输出替换成不支持 reconfigure 的对象。
-            pass
+def __getattr__(name):
+    value = getattr(_implementation, _ALIASES.get(name, name))
+    if callable(value) and not isinstance(value, type) and _KEYWORDS:
+        @wraps(value)
+        def call(*args, **kwargs):
+            mapped = {}
+            for key, item in kwargs.items():
+                translated = _KEYWORDS.get(key, key)
+                if translated in mapped:
+                    raise TypeError(f"Multiple values for argument {translated!r}")
+                mapped[translated] = item
+            return value(*args, **mapped)
+        return call
+    return value
+
+def __dir__():
+    return sorted(set(globals()) | set(dir(_implementation)) | set(_ALIASES))
+
+if __name__ == "__main__":
+    import runpy
+    runpy.run_module("console_support", run_name="__main__")

@@ -79,18 +79,18 @@ import sys
 # ---------------------------------------------------------------------------
 # 路径（相对本文件定位，跟着包走 —— 不写死任何绝对路径）
 # ---------------------------------------------------------------------------
-软件目录 = os.path.dirname(os.path.abspath(__file__))
-包根 = os.path.dirname(软件目录)
-项目目录 = os.path.join(包根, "项目")
-算法库目录 = os.path.join(包根, "算法库")
-模型目录 = os.path.join(包根, "模型")
-设置路径 = os.path.join(包根, "输出", "设置.json")
+RUNTIME_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
+PACKAGE_ROOT = os.path.dirname(RUNTIME_DIRECTORY)
+PROJECT_DIRECTORY = os.path.join(PACKAGE_ROOT, "项目")
+ALGORITHM_DIRECTORY = os.path.join(PACKAGE_ROOT, "算法库")
+MODEL_DIRECTORY = os.path.join(PACKAGE_ROOT, "模型")
+SETTINGS_PATH = os.path.join(PACKAGE_ROOT, "输出", "设置.json")
 
 # 项目文件的后缀（`项目/索引.json` 这种不是项目，靠"必须有 `项目` 与 `模型` 字段"排除）
-后缀 = ".json"
+PROJECT_SUFFIX = ".json"
 
 
-def _读json(路径: str) -> dict:
+def _read_json(path: str) -> dict:
     """读一个 JSON 文件；失败返回 {}（并打一句人话提示，不抛异常）。
 
     ★ 为什么这里要临时抬高递归上限（这是个踩出来的坑）：
@@ -103,40 +103,40 @@ def _读json(路径: str) -> dict:
       代价很隐蔽：`_读json` 返回 {} → 模型库"看起来是空的" → 界面列表为空、
       路径反查全部退化成全盘搜索。所以这里在解析期间临时抬高上限，读完还原。
     """
-    旧上限 = sys.getrecursionlimit()
+    old_limit = sys.getrecursionlimit()
     try:
-        if 旧上限 < 8000:
+        if old_limit < 8000:
             sys.setrecursionlimit(8000)
-        with open(路径, encoding="utf-8") as f:
-            数据 = json.load(f)
-        return 数据 if isinstance(数据, dict) else {}
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
     except FileNotFoundError:
         return {}
-    except Exception as 异常:                                          # noqa: BLE001
-        print(f"⚠ 读取失败 {os.path.basename(路径)}：{type(异常).__name__}: {异常}")
+    except Exception as exc:                                          # noqa: BLE001
+        print(f'⚠ 读取失败 {os.path.basename(path)}：{type(exc).__name__}: {exc}')
         return {}
     finally:
-        sys.setrecursionlimit(旧上限)
+        sys.setrecursionlimit(old_limit)
 
 
-def _写json(路径: str, 数据: dict) -> bool:
+def _write_json(path: str, data: dict) -> bool:
     """原子写一个 JSON 文件（先写 .tmp 再 replace —— 中途崩了不会留下半个文件）。"""
     try:
-        os.makedirs(os.path.dirname(路径), exist_ok=True)
-        临时 = 路径 + ".tmp"
-        with open(临时, "w", encoding="utf-8") as f:
-            json.dump(数据, f, ensure_ascii=False, indent=2)
-        os.replace(临时, 路径)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        temporary = path + ".tmp"
+        with open(temporary, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(temporary, path)
         return True
-    except Exception as 异常:                                          # noqa: BLE001
-        print(f"⚠ 保存失败 {os.path.basename(路径)}：{type(异常).__name__}: {异常}")
+    except Exception as exc:                                          # noqa: BLE001
+        print(f'⚠ 保存失败 {os.path.basename(path)}：{type(exc).__name__}: {exc}')
         return False
 
 
 # ---------------------------------------------------------------------------
 # 路径解析
 # ---------------------------------------------------------------------------
-def 绝对(路径: str) -> str:
+def absolute_path(path: str) -> str:
     """把项目文件里的路径写法规范成绝对路径。
 
     三种输入都要能吃下（顺序就是判断顺序）：
@@ -151,163 +151,163 @@ def 绝对(路径: str) -> str:
       实测撞上过：5 个模型的循环里抛 `RecursionError: maximum recursion depth exceeded`，
       看起来像 mujoco 的问题，其实是本函数自己绕圈。
     """
-    文本 = str(路径 or "").strip()
-    if not 文本:
+    text = str(path or "").strip()
+    if not text:
         return ""
-    for 候选 in (文本, os.path.join(包根, 文本)):
-        if os.path.exists(候选):
-            return os.path.abspath(候选)
+    for candidates in (text, os.path.join(PACKAGE_ROOT, text)):
+        if os.path.exists(candidates):
+            return os.path.abspath(candidates)
 
     # 只有文件名 → 查模型库（用纯字符串候选，见下面的★）
-    名 = os.path.basename(文本)
-    for 原始 in _模型库里的写法(名):
-        命中 = _直接解析(原始)
-        if 命中:
-            return 命中
+    name = os.path.basename(text)
+    for original in _library_spelling(name):
+        matches = _parse_direct(original)
+        if matches:
+            return matches
 
     # 再全库搜一遍（模型库里没登记的模型也能用）
-    for 根 in (模型目录, 算法库目录, 项目目录):
-        if not os.path.isdir(根):
+    for root in (MODEL_DIRECTORY, ALGORITHM_DIRECTORY, PROJECT_DIRECTORY):
+        if not os.path.isdir(root):
             continue
-        for 当前, _目录, 文件们 in os.walk(根):
-            if 名 in 文件们:
-                return os.path.abspath(os.path.join(当前, 名))
-    return os.path.normpath(os.path.join(包根, 文本))
+        for current, _directory, files in os.walk(root):
+            if name in files:
+                return os.path.abspath(os.path.join(current, name))
+    return os.path.normpath(os.path.join(PACKAGE_ROOT, text))
 
 
-def _直接解析(写法: str) -> str:
+def _parse_direct(spelling: str) -> str:
     """只做"绝对路径 / 相对包根"两种解析，**不反查模型库**（用来打断递归）。"""
-    文本 = str(写法 or "").strip()
-    if not 文本:
+    text = str(spelling or "").strip()
+    if not text:
         return ""
-    for 候选 in (文本, os.path.join(包根, 文本)):
-        if os.path.exists(候选):
-            return os.path.abspath(候选)
+    for candidates in (text, os.path.join(PACKAGE_ROOT, text)):
+        if os.path.exists(candidates):
+            return os.path.abspath(candidates)
     return ""
 
 
-def _模型库里的写法(文件名: str) -> list[str]:
+def _library_spelling(filename: str) -> list[str]:
     """在模型库索引里找出某个文件名对应的**原始写法**（只做字符串比较，不解析路径）。"""
-    结果: list[str] = []
-    for m in 模型库条目():
+    result: list[str] = []
+    for m in model_library_entries():
         if not isinstance(m, dict):
             continue
-        for 键 in ("扭矩模型", "位置模型", "路径", "XML"):
-            候选 = str(m.get(键) or "")
-            if 候选 and os.path.basename(候选.replace("\\", "/")) == 文件名:
-                结果.append(候选)
-    return 结果
+        for key in ("扭矩模型", "位置模型", "路径", "XML"):
+            candidates = str(m.get(key) or "")
+            if candidates and os.path.basename(candidates.replace("\\", "/")) == filename:
+                result.append(candidates)
+    return result
 
 
-def 相对包根(路径: str) -> str:
+def relative_to_package(path: str) -> str:
     """把绝对路径写回项目文件时用：能相对包根就相对，否则保留绝对。"""
-    绝对路径 = 绝对(路径)
-    前缀 = 包根 + os.sep
-    return 绝对路径[len(前缀):] if 绝对路径.startswith(前缀) else 绝对路径
+    absolute = absolute_path(path)
+    prefix = PACKAGE_ROOT + os.sep
+    return absolute[len(prefix):] if absolute.startswith(prefix) else absolute
 
 
-def 模型库条目() -> list[dict]:
+def model_library_entries() -> list[dict]:
     """读 `模型/模型库.json` 的条目（读不到就返回空表，调用方按"没有"处理）。"""
-    数据 = _读json(os.path.join(模型目录, "模型库.json"))
-    条目 = 数据.get("模型", [])
-    return 条目 if isinstance(条目, list) else []
+    data = _read_json(os.path.join(MODEL_DIRECTORY, "模型库.json"))
+    entry = data.get("模型", [])
+    return entry if isinstance(entry, list) else []
 
 
-def 显示模型名(模型绝对路径: str) -> str:
+def display_model_name(absolute_model_path: str) -> str:
     """给一个模型路径起个给人看的名字（模型库里有就用库里的显示名）。"""
-    目标 = os.path.normpath(绝对(模型绝对路径))
-    for m in 模型库条目():
-        for 键 in ("扭矩模型", "位置模型", "路径", "XML"):
-            候选 = str(m.get(键) or "")
-            if 候选 and os.path.normpath(绝对(候选)) == 目标:
-                return str(m.get("显示名") or m.get("标识") or os.path.basename(目标))
-    return os.path.basename(目标)
+    target = os.path.normpath(absolute_path(absolute_model_path))
+    for m in model_library_entries():
+        for key in ("扭矩模型", "位置模型", "路径", "XML"):
+            candidates = str(m.get(key) or "")
+            if candidates and os.path.normpath(absolute_path(candidates)) == target:
+                return str(m.get("显示名") or m.get("标识") or os.path.basename(target))
+    return os.path.basename(target)
 
 
 # ---------------------------------------------------------------------------
 # 项目清单：扫描 / 读 / 写
 # ---------------------------------------------------------------------------
-def 列出项目(只列有效: bool = True) -> list[str]:
+def list_projects(valid_only: bool = True) -> list[str]:
     """列出所有项目名（按名字排序）。
 
     怎么判断"这是一个项目文件"：**必须是 dict 且有非空的 `项目` 与 `模型` 两个字段**。
     所以 `项目/索引.json`、`.DS_Store`、临时文件都会被自动跳过，不需要额外维护排除表。
     """
-    结果 = []
-    for 路径 in sorted(glob.glob(os.path.join(项目目录, "*" + 后缀))):
-        if os.path.basename(路径).startswith("_"):
+    result = []
+    for path in sorted(glob.glob(os.path.join(PROJECT_DIRECTORY, "*" + PROJECT_SUFFIX))):
+        if os.path.basename(path).startswith("_"):
             continue
-        数据 = _读json(路径)
-        if not 数据:
+        data = _read_json(path)
+        if not data:
             continue
-        if 只列有效 and not (数据.get("项目") and 数据.get("模型")):
+        if valid_only and not (data.get("项目") and data.get("模型")):
             continue
-        结果.append(str(数据.get("项目") or os.path.splitext(os.path.basename(路径))[0]))
-    return 结果
+        result.append(str(data.get("项目") or os.path.splitext(os.path.basename(path))[0]))
+    return result
 
 
-def 项目文件路径(项目名: str) -> str:
+def project_file_path(project_name: str) -> str:
     """项目名 → 文件路径。优先同名文件；找不到就按名字新建一个（保存时用）。"""
-    候选 = os.path.join(项目目录, str(项目名) + 后缀)
-    if os.path.exists(候选):
-        return 候选
-    for 路径 in sorted(glob.glob(os.path.join(项目目录, "*" + 后缀))):
-        数据 = _读json(路径)
-        if str(数据.get("项目") or "") == str(项目名):
-            return 路径
-    return 候选
+    candidates = os.path.join(PROJECT_DIRECTORY, str(project_name) + PROJECT_SUFFIX)
+    if os.path.exists(candidates):
+        return candidates
+    for path in sorted(glob.glob(os.path.join(PROJECT_DIRECTORY, "*" + PROJECT_SUFFIX))):
+        data = _read_json(path)
+        if str(data.get("项目") or "") == str(project_name):
+            return path
+    return candidates
 
 
-def 读项目(项目名: str) -> dict | None:
+def load_project(project_name: str) -> dict | None:
     """按名字读一个项目；不存在返回 None。"""
-    路径 = 项目文件路径(项目名)
-    if not os.path.exists(路径):
+    path = project_file_path(project_name)
+    if not os.path.exists(path):
         return None
-    数据 = _读json(路径)
-    return 数据 or None
+    data = _read_json(path)
+    return data or None
 
 
-def 保存项目(数据: dict) -> bool:
+def save_project(data: dict) -> bool:
     """整体写回一个项目（`数据["项目"]` 必须有名字）。"""
-    名 = str(数据.get("项目") or "").strip()
-    if not 名:
+    name = str(data.get("项目") or "").strip()
+    if not name:
         print("⚠ 项目没有名字，拒绝保存")
         return False
-    return _写json(项目文件路径(名), 数据)
+    return _write_json(project_file_path(name), data)
 
 
-def 按模型找项目(模型路径: str) -> str:
+def find_project_for_model(model_path: str) -> str:
     """★ 核心入口：点一个模型 → 找到它对应的项目名。
 
     匹配规则 = **项目里的 `模型` 字段规范化后相等**。一个模型对应多个项目时，
     取名字排序第一个，并把其余几个打到终端（提示还有别的选择）。
     找不到返回空串 —— 调用方按"这个模型还没有项目"处理（用空算法集启动）。
     """
-    目标 = os.path.normpath(绝对(模型路径)) if 模型路径 else ""
-    if not 目标:
+    target = os.path.normpath(absolute_path(model_path)) if model_path else ""
+    if not target:
         return ""
-    命中 = []
-    for 名 in 列出项目():
-        数据 = 读项目(名) or {}
+    matches = []
+    for name in list_projects():
+        data = load_project(name) or {}
         # 实验专用项目只能由 ExperimentRegistry 显式选择，普通“点模型”流程不自动命中。
         # 否则同一模型有多个实验时，按字母排序随便挑一个会让机器人意外开始运动。
-        if bool(数据.get("实验专用", False)):
+        if bool(data.get("实验专用", False)):
             continue
-        if os.path.normpath(绝对(str(数据.get("模型") or ""))) == 目标:
-            命中.append(名)
-    if not 命中:
+        if os.path.normpath(absolute_path(str(data.get("模型") or ""))) == target:
+            matches.append(name)
+    if not matches:
         return ""
-    if len(命中) > 1:
-        print(f"ℹ 模型「{显示模型名(模型路径)}」对应 {len(命中)} 个项目：{'、'.join(命中)}"
-              f" —— 本次用第一个「{命中[0]}」（切换项目：改 项目/{命中[0]}{后缀}，"
+    if len(matches) > 1:
+        print(f"ℹ 模型「{display_model_name(model_path)}」对应 {len(matches)} 个项目：{'、'.join(matches)}"
+              f' —— 本次用第一个「{matches[0]}」（切换项目：改 项目/{matches[0]}{PROJECT_SUFFIX}，'
               f"或删掉其余几个的同名 `模型` 字段）", flush=True)
-    return 命中[0]
+    return matches[0]
 
 
 # ---------------------------------------------------------------------------
 # 算法解析
 # ---------------------------------------------------------------------------
-算法别名 = {
+ALGORITHM_ALIASES = {
     "关节pd控制": "joint_pd_control",
     "关节pid控制": "joint_pid_control",
     "参数辨识插件": "parameter_identification_plugin",
@@ -320,42 +320,42 @@ def 按模型找项目(模型路径: str) -> str:
 }
 
 
-def 规范算法名(名称: str) -> str:
+def normalize_algorithm_name(display_name: str) -> str:
     """把历史插件文件名转换为当前稳定标识；未知名称保持原样。"""
-    名 = str(名称 or "").strip()
-    return 算法别名.get(名, 名)
+    name = str(display_name or "").strip()
+    return ALGORITHM_ALIASES.get(name, name)
 
 
-def 算法文件(条目) -> str:
+def algorithm_file(entry) -> str:
     """算法条目 → 绝对文件路径。
 
     条目可以是两种写法：
         {"插件": "joint_pd_control", "类": "JointPDController"}
         "joint_pd_control"                                  ← 简写（类由扫描推断）
     """
-    模块名 = 规范算法名(
-        (条目 or {}).get("插件") if isinstance(条目, dict) else 条目 or "")
-    if not 模块名:
+    module_name = normalize_algorithm_name(
+        (entry or {}).get("插件") if isinstance(entry, dict) else entry or "")
+    if not module_name:
         return ""
-    if os.path.isabs(模块名) and 模块名.endswith(".py"):
-        return 模块名
+    if os.path.isabs(module_name) and module_name.endswith(".py"):
+        return module_name
     # ① 算法库里找（含子目录，所以"通用/关节pd控制"这种写法也认）
-    候选 = os.path.join(算法库目录, 模块名.replace("\\", "/"))
-    for 试 in (候选 + ".py", 候选, os.path.join(软件目录, "plugins", 模块名 + ".py")):
-        if os.path.isfile(试):
-            return os.path.abspath(试)
+    candidates = os.path.join(ALGORITHM_DIRECTORY, module_name.replace("\\", "/"))
+    for attempt in (candidates + ".py", candidates, os.path.join(RUNTIME_DIRECTORY, "plugins", module_name + ".py")):
+        if os.path.isfile(attempt):
+            return os.path.abspath(attempt)
     # ② 全库按文件名找（大小写与中文都按原样比）
-    for 根 in (算法库目录, os.path.join(软件目录, "plugins")):
-        if not os.path.isdir(根):
+    for root in (ALGORITHM_DIRECTORY, os.path.join(RUNTIME_DIRECTORY, "plugins")):
+        if not os.path.isdir(root):
             continue
-        for 当前, _目录, 文件们 in os.walk(根):
-            for 文件 in 文件们:
-                if 文件 == 模块名 + ".py" or os.path.splitext(文件)[0] == 模块名:
-                    return os.path.abspath(os.path.join(当前, 文件))
+        for current, _directory, files in os.walk(root):
+            for file in files:
+                if file == module_name + ".py" or os.path.splitext(file)[0] == module_name:
+                    return os.path.abspath(os.path.join(current, file))
     return ""
 
 
-def 解析算法(数据: dict | None) -> list[dict]:
+def parse_algorithms(data: dict | None) -> list[dict]:
     """项目数据 → 规范化后的算法条目列表（外壳装配插件时用）。
 
     三种写法都收：
@@ -364,157 +364,133 @@ def 解析算法(数据: dict | None) -> list[dict]:
         "算法": [{"插件": …, "类": …}]      → 这些（显式指定类名，模块里有多个子类时必须写）
     不认识的条目只打警告、跳过 —— 一个写错的项目文件不该让整个软件起不来。
     """
-    原始 = (数据 or {}).get("算法", "*")
-    已知 = 发现的算法()                      # 只扫一次目录（扫盘不便宜，别在循环里反复扫）
-    if isinstance(原始, str):
-        if 原始.strip() in ("*", "全部", "all"):
-            条目 = [{"插件": d["插件"], "文件": d["文件"]} for d in 已知]
-        elif 原始.strip():
-            条目 = [{"插件": 原始.strip()}]
+    original = (data or {}).get("算法", "*")
+    known = discover_algorithms()                      # 只扫一次目录（扫盘不便宜，别在循环里反复扫）
+    if isinstance(original, str):
+        if original.strip() in ("*", "全部", "all"):
+            entry = [{"插件": d["插件"], "文件": d["文件"]} for d in known]
+        elif original.strip():
+            entry = [{"插件": original.strip()}]
         else:
-            条目 = []
-    elif isinstance(原始, list):
-        条目 = list(原始)
+            entry = []
+    elif isinstance(original, list):
+        entry = list(original)
     else:
-        条目 = []
+        entry = []
 
-    结果: list[dict] = []
-    认识 = {d["插件"] for d in 已知}
-    for 一条 in 条目:
-        名 = 规范算法名(
-            (一条 or {}).get("插件") if isinstance(一条, dict) else 一条 or "")
-        if not 名:
+    result: list[dict] = []
+    recognized = {d["插件"] for d in known}
+    for item in entry:
+        name = normalize_algorithm_name(
+            (item or {}).get("插件") if isinstance(item, dict) else item or "")
+        if not name:
             continue
-        if 名 not in 认识:
-            print(f"⚠ 项目里写了算法「{名}」，但算法库里找不到这个文件（已跳过）。"
-                  f"现有：{'、'.join(sorted(认识)) or '（空）'}")
+        if name not in recognized:
+            print(f'⚠ 项目里写了算法「{name}」，但算法库里找不到这个文件（已跳过）。'
+                  f"现有：{'、'.join(sorted(recognized)) or '（空）'}")
             continue
-        规范 = {"插件": 名}
-        if isinstance(一条, dict):
-            if 一条.get("类"):
-                规范["类"] = str(一条["类"])
-            if 一条.get("文件"):
-                规范["文件"] = str(一条["文件"])
-        结果.append(规范)
-    return 结果
+        normalized = {"插件": name}
+        if isinstance(item, dict):
+            if item.get("类"):
+                normalized["类"] = str(item["类"])
+            if item.get("文件"):
+                normalized["文件"] = str(item["文件"])
+        result.append(normalized)
+    return result
 
 
-def 发现的算法() -> list[dict]:
+def discover_algorithms() -> list[dict]:
     """扫一遍算法库，返回"有哪些算法、各自在哪个文件、类名是什么"。
 
     这一步**只读文件、不 import**（import 有副作用，不能在扫描阶段做）：
     类名靠"条目里写了就用条目的，没写就等装配时按模块里的子类推断"。
     界面上的"可选算法清单"、`工具/` 下的检查脚本都用它。
     """
-    结果: list[dict] = []
-    根们 = [算法库目录, os.path.join(软件目录, "plugins")]
-    for 根 in 根们:
-        if not os.path.isdir(根):
+    result: list[dict] = []
+    roots = [ALGORITHM_DIRECTORY, os.path.join(RUNTIME_DIRECTORY, "plugins")]
+    for root in roots:
+        if not os.path.isdir(root):
             continue
-        for 当前, 目录们, 文件们 in os.walk(根):
-            目录们[:] = [d for d in 目录们 if not d.startswith(("_", ".")) and d != "__pycache__"]
-            for 文件 in sorted(文件们):
-                if not 文件.endswith(".py") or 文件.startswith("_"):
+        for current, directories, files in os.walk(root):
+            directories[:] = [d for d in directories if not d.startswith(("_", ".")) and d != "__pycache__"]
+            for file in sorted(files):
+                if not file.endswith(".py") or file.startswith("_"):
                     continue
-                模块名 = os.path.splitext(文件)[0]
+                module_name = os.path.splitext(file)[0]
                 # 模板不是算法：文件名里带「模板」的一律跳过（`我的控制律_模板.py` 这种），
                 # 否则它会被当成一个可装配的算法，而它里面的 `我的插件` 只是给人抄的示例。
-                if "模板" in 模块名 or "template" in 模块名.lower():
+                if "模板" in module_name or "template" in module_name.lower():
                     continue
-                结果.append({
-                    "插件": 模块名,
-                    "文件": os.path.abspath(os.path.join(当前, 文件)),
-                    "相对包根": 相对包根(os.path.join(当前, 文件)),
-                    "分组": os.path.relpath(当前, 根).replace("\\", "/")
-                            if os.path.relpath(当前, 根) != "." else "",
+                result.append({
+                    "插件": module_name,
+                    "文件": os.path.abspath(os.path.join(current, file)),
+                    "相对包根": relative_to_package(os.path.join(current, file)),
+                    "分组": os.path.relpath(current, root).replace("\\", "/")
+                            if os.path.relpath(current, root) != "." else "",
                 })
-    return 结果
+    return result
 
 
 # ---------------------------------------------------------------------------
 # 参数（按项目持久化）
 # ---------------------------------------------------------------------------
-def 读参数(项目名: str) -> dict:
+def load_parameters(project_name: str) -> dict:
     """读一个项目里已保存的参数：{插件名: {参数名: 值}}。"""
-    return dict((读项目(项目名) or {}).get("参数") or {})
+    return dict((load_project(project_name) or {}).get("参数") or {})
 
 
-def 保存参数(项目名: str, 插件名: str, 参数: dict) -> bool:
+def save_parameters(project_name: str, plugin_name: str, parameters: dict) -> bool:
     """把某个插件的参数写回项目文件（其它插件的参数保持不动）。
 
     ★ 为什么要落盘：参数面板拖出来的值今天只活在内存里，换项目/重启就没了。
       落到项目文件之后，"这一组参数"成了实验记录的一部分 —— 这正是方案 C 要的。
     """
-    数据 = 读项目(项目名)
-    if 数据 is None:
+    data = load_project(project_name)
+    if data is None:
         return False
-    if not 参数:
+    if not parameters:
         return True
-    全部 = dict(数据.get("参数") or {})
-    该插件 = dict(全部.get(插件名) or {})
-    该插件.update({str(k): float(v) for k, v in 参数.items()})
-    全部[插件名] = 该插件
-    数据["参数"] = 全部
-    return 保存项目(数据)
+    all_parameters = dict(data.get("参数") or {})
+    plugin_parameters = dict(all_parameters.get(plugin_name) or {})
+    plugin_parameters.update({str(k): float(v) for k, v in parameters.items()})
+    all_parameters[plugin_name] = plugin_parameters
+    data["参数"] = all_parameters
+    return save_project(data)
 
 
 # ---------------------------------------------------------------------------
 # 记住"上次用的项目"（启动时恢复用）
 # ---------------------------------------------------------------------------
-def _读设置() -> dict:
-    数据 = _读json(设置路径)
-    return 数据
+def _read_settings() -> dict:
+    data = _read_json(SETTINGS_PATH)
+    return data
 
 
-def 读取上次项目() -> str:
+def load_last_project() -> str:
     """上次用的项目名；没有 / 项目文件已不在 → 返回空串。"""
-    名 = str(_读设置().get("上次项目") or "")
-    if 名 and 读项目(名) is None:
+    name = str(_read_settings().get("上次项目") or "")
+    if name and load_project(name) is None:
         return ""
-    return 名
+    return name
 
 
-def 保存上次项目(项目名: str) -> None:
+def save_last_project(project_name: str) -> None:
     """记住这次用的项目（空串 = 清掉）。写失败不影响使用。"""
-    数据 = _读设置()
-    if 数据.get("上次项目") == 项目名:
+    data = _read_settings()
+    if data.get("上次项目") == project_name:
         return
-    if 项目名:
-        数据["上次项目"] = 项目名
+    if project_name:
+        data["上次项目"] = project_name
     else:
-        数据.pop("上次项目", None)
-    os.makedirs(os.path.dirname(设置路径), exist_ok=True)
-    _写json(设置路径, 数据)
+        data.pop("上次项目", None)
+    os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
+    _write_json(SETTINGS_PATH, data)
 
 
 # ---------------------------------------------------------------------------
 # Stable English public API
 # ---------------------------------------------------------------------------
-PACKAGE_ROOT = 包根
-PROJECT_DIRECTORY = 项目目录
-ALGORITHM_DIRECTORY = 算法库目录
-MODEL_DIRECTORY = 模型目录
-SETTINGS_PATH = 设置路径
-PROJECT_SUFFIX = 后缀
 
-absolute_path = 绝对
-relative_to_package = 相对包根
-model_library_entries = 模型库条目
-display_model_name = 显示模型名
-list_projects = 列出项目
-project_file_path = 项目文件路径
-load_project = 读项目
-save_project = 保存项目
-find_project_for_model = 按模型找项目
-ALGORITHM_ALIASES = 算法别名
-normalize_algorithm_name = 规范算法名
-algorithm_file = 算法文件
-parse_algorithms = 解析算法
-discover_algorithms = 发现的算法
-load_parameters = 读参数
-save_parameters = 保存参数
-load_last_project = 读取上次项目
-save_last_project = 保存上次项目
 
 
 __all__ = [

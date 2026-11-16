@@ -1,226 +1,30 @@
-"""
-设备/连接桥.py —— 把设备链路接到界面上的桥（部署页的控制端）
-
-═══ 它连哪几样 ════════════════════════════════════════════════════════════
-    界面 ──命令──► 连接桥 ──► 安全层 ──► 模拟后端
-                      │
-                      └──快照──► 界面（安全状态 / 遥测 / 审计）
-
-═══ 三条必须守住的规矩 ═════════════════════════════════════════════════════
-    ① **界面只能"请求"，不能"命令"**。
-       进「运行」必须由人显式点按（规格 B3-8：禁用高风险自动化），
-       所以这里没有任何"连上就自动跑"的入口。
-    ② **来自真实硬件的量，没有硬件就显示"未接入"，不能显示 0**。
-       现在只有模拟后端，所以 `后端=模拟` 会一路带到界面上，让人看得见。
-    ③ **审计要能导出**。这是事后复盘的唯一依据，不能只留在内存里。
-
-═══ 为什么把安全层建在这里，而不是建在界面里 ══════════════════════════════
-    安全逻辑必须与 UI 无关：UI 崩了、关了，安全状态机不该跟着消失。
-    所以连接桥持有 `安全层` 实例，UI 只是它的一个观察者。
-"""
+"""Legacy naming compatibility; new code imports devices.connection_bridge."""
 from __future__ import annotations
 
-import dataclasses
-import os
-import time
-from typing import Any, Callable
+from functools import wraps
+import devices.connection_bridge as _implementation
 
-from 官方层 import messages
+_ALIASES = {'设备': 'devices', '契约': 'contract', '安全层': 'SafetyLayer', '模拟后端': 'SimulatedBackend', '跟踪回路': 'TrackingLoop', '连接桥': 'connection_bridge', '控制模式': 'ControlMode', '安全状态': 'SafetyState', '错误码': 'ErrorCode', '设备能力': 'DeviceCapabilities', '命令帧': 'CommandFrame', '状态帧': 'StateFrame', '写结果': 'WriteResult', '健康报告': 'HealthReport', '设备后端': 'DeviceBackend', '审计条目': 'AuditEntry', '审计日志': 'AuditLog', '简单物理': 'SimplePhysics', '连接命令': 'ConnectionCommand', '连接状态': 'ConnectionState', '_上限': '_limit', '_条': '_entries', '上限': 'limit', '丢包数': 'dropped_packets', '位置': 'position', '使能中': 'enabling', '停止': 'stop', '健康': 'health', '全部': 'all_entries', '关闭': 'close', '内容': 'content', '内部错误': 'internal_error', '写命令': 'write_command', '力矩': 'torque', '协议错误': 'protocol_error', '可读位置': 'can_read_position', '可读力矩': 'can_read_torque', '可读温度': 'can_read_temperature', '可读速度': 'can_read_velocity', '名称': 'name', '命令': 'command', '增量超限': 'increment_exceeded', '导出csv': 'export_csv', '已连接': 'connected', '平均延迟毫秒': 'mean_latency_ms', '序号': 'sequence', '延迟毫秒': 'latency_ms', '心跳计数': 'heartbeat_count', '急停': 'emergency_stop', '成功': 'success', '打开': 'open', '接收时刻': 'received_at', '支持': 'supports', '支持位置模式': 'supports_position_mode', '支持力矩模式': 'supports_torque_mode', '支持速度模式': 'supports_velocity_mode', '故障': 'fault', '时刻': 'timestamp', '最大命令频率': 'max_command_frequency', '最大延迟毫秒': 'max_latency_ms', '最近': 'latest', '期望位置': 'target_position', '期望力矩': 'target_torque', '期望生效时刻': 'effective_at', '期望速度': 'target_velocity', '未使能': 'not_enabled', '未连接': 'disconnected', '条': 'entry', '条数': 'entry_count', '模式': 'mode', '正常': 'ok', '清空': 'clear', '温度': 'temperature', '版本': 'version', '空闲': 'idle', '类别': 'category', '编码器分辨率': 'encoder_resolution', '能力': 'capabilities', '能力不支持': 'unsupported_capability', '自由度': 'dof', '记': 'record', '设模式': 'set_mode', '说明': 'description', '读状态': 'read_state', '超时': 'timeout', '越限位': 'limit_exceeded', '路径': 'path', '运行': 'running', '速度': 'velocity', '配置': 'config', '采集时刻': 'sampled_at', '错序数': 'out_of_order_packets', '阻尼': 'damping', '_上次命令位置': '_last_command_position', '_上次状态时刻': '_last_state_time', '_序号': '_sequence', '_心跳': '_heartbeat', '_拒绝数': '_rejected_count', '_最近状态': '_latest_state', '_查看门狗': '_check_watchdog', '_限幅': '_clamp', '_首帧待发': '_first_frame_pending', '位置限位': 'position_limits', '低': 'lower', '使能': 'enable', '单周期最大位移': 'max_step_displacement', '原因': 'reason', '后': 'backend', '后端': 'backend', '增量': 'increment', '夹后': 'clamped', '审计': 'audit', '帧': 'frame', '异常': 'exc', '当前': 'current', '快照': 'snapshot', '改过': 'changed', '最大': 'maximum', '果': 'result', '状态': 'state', '看门狗毫秒': 'watchdog_ms', '经过': 'elapsed', '软件限速': 'speed_limit', '进运行': 'enter_running', '高': 'upper', '_丢包': '_dropped_packets', '_产生一帧': '_produce_frame', '_命令序号': '_command_sequence', '_已连接': '_connected', '_延迟们': '_latencies', '_待发': '_pending', '_最后出帧': '_last_frame_time', '_最新': '_latest', '_模式': '_mode', '_物理': '_physics', '_错序': '_out_of_order', '_错误': '_error', '_随机': '_random', 'τ': 'torque', '丢包率': 'packet_loss_rate', '出帧周期毫秒': 'frame_interval_ms', '刚度': 'stiffness', '加速度': 'acceleration', '参考': 'reference', '外': 'external_torque', '属性': 'attribute', '延迟': 'latency', '惯量': 'inertia', '抖动毫秒': 'jitter_ms', '期望': 'target', '步进': 'step', '物理': 'physics', '现在': 'now', '设参考': 'set_reference', '键': 'key', '随机种子': 'random_seed', '_上次指令': '_last_command', '层': 'safety_layer', '步长秒': 'timestep', '目标': 'target', '历史': 'history', '设目标': 'set_target', '实际': 'actual', '误差': 'error', '指令': 'command', '时长秒': 'duration', '截止': 'deadline', '回路': 'loop', '峰': 'peak', '末': 'final', '实际延迟': 'actual_latency', '阶跃响应': 'step_response', '_下次发布': '_next_publish_time', '_包根': '_package_root', '_发布': '_publish', '_发送': '_send', '_导出审计': '_export_audit', '_建': '_build', '_打开': '_open', '_演练断线': '_simulate_disconnect', '_自由度': '_dof', '_设劣化': '_set_impairments', '动作': 'action', '包根': 'package_root', '发送函数': 'send', '墙钟': 'wall_clock', '实测平均延迟': 'measured_mean_latency', '实测最大延迟': 'measured_max_latency', '健': 'health', '打开次数': 'open_count', '拒绝数': 'rejected_count', '收命令': 'receive_command', '最近位置': 'latest_position', '间隔秒': 'interval_seconds'}
+_KEYWORDS = {'设备': 'devices', '契约': 'contract', '安全层': 'SafetyLayer', '模拟后端': 'SimulatedBackend', '跟踪回路': 'TrackingLoop', '连接桥': 'connection_bridge', '控制模式': 'ControlMode', '安全状态': 'SafetyState', '错误码': 'ErrorCode', '设备能力': 'DeviceCapabilities', '命令帧': 'CommandFrame', '状态帧': 'StateFrame', '写结果': 'WriteResult', '健康报告': 'HealthReport', '设备后端': 'DeviceBackend', '审计条目': 'AuditEntry', '审计日志': 'AuditLog', '简单物理': 'SimplePhysics', '连接命令': 'ConnectionCommand', '连接状态': 'ConnectionState', '_上限': '_limit', '_条': '_entries', '上限': 'limit', '丢包数': 'dropped_packets', '位置': 'position', '使能中': 'enabling', '停止': 'stop', '健康': 'health', '全部': 'all_entries', '关闭': 'close', '内容': 'content', '内部错误': 'internal_error', '写命令': 'write_command', '力矩': 'torque', '协议错误': 'protocol_error', '可读位置': 'can_read_position', '可读力矩': 'can_read_torque', '可读温度': 'can_read_temperature', '可读速度': 'can_read_velocity', '名称': 'name', '命令': 'command', '增量超限': 'increment_exceeded', '导出csv': 'export_csv', '已连接': 'connected', '平均延迟毫秒': 'mean_latency_ms', '序号': 'sequence', '延迟毫秒': 'latency_ms', '心跳计数': 'heartbeat_count', '急停': 'emergency_stop', '成功': 'success', '打开': 'open', '接收时刻': 'received_at', '支持': 'supports', '支持位置模式': 'supports_position_mode', '支持力矩模式': 'supports_torque_mode', '支持速度模式': 'supports_velocity_mode', '故障': 'fault', '时刻': 'timestamp', '最大命令频率': 'max_command_frequency', '最大延迟毫秒': 'max_latency_ms', '最近': 'latest', '期望位置': 'target_position', '期望力矩': 'target_torque', '期望生效时刻': 'effective_at', '期望速度': 'target_velocity', '未使能': 'not_enabled', '未连接': 'disconnected', '条': 'entry', '条数': 'entry_count', '模式': 'mode', '正常': 'ok', '清空': 'clear', '温度': 'temperature', '版本': 'version', '空闲': 'idle', '类别': 'category', '编码器分辨率': 'encoder_resolution', '能力': 'capabilities', '能力不支持': 'unsupported_capability', '自由度': 'dof', '记': 'record', '设模式': 'set_mode', '说明': 'description', '读状态': 'read_state', '超时': 'timeout', '越限位': 'limit_exceeded', '路径': 'path', '运行': 'running', '速度': 'velocity', '配置': 'config', '采集时刻': 'sampled_at', '错序数': 'out_of_order_packets', '阻尼': 'damping', '_上次命令位置': '_last_command_position', '_上次状态时刻': '_last_state_time', '_序号': '_sequence', '_心跳': '_heartbeat', '_拒绝数': '_rejected_count', '_最近状态': '_latest_state', '_查看门狗': '_check_watchdog', '_限幅': '_clamp', '_首帧待发': '_first_frame_pending', '位置限位': 'position_limits', '低': 'lower', '使能': 'enable', '单周期最大位移': 'max_step_displacement', '原因': 'reason', '后': 'backend', '后端': 'backend', '增量': 'increment', '夹后': 'clamped', '审计': 'audit', '帧': 'frame', '异常': 'exc', '当前': 'current', '快照': 'snapshot', '改过': 'changed', '最大': 'maximum', '果': 'result', '状态': 'state', '看门狗毫秒': 'watchdog_ms', '经过': 'elapsed', '软件限速': 'speed_limit', '进运行': 'enter_running', '高': 'upper', '_丢包': '_dropped_packets', '_产生一帧': '_produce_frame', '_命令序号': '_command_sequence', '_已连接': '_connected', '_延迟们': '_latencies', '_待发': '_pending', '_最后出帧': '_last_frame_time', '_最新': '_latest', '_模式': '_mode', '_物理': '_physics', '_错序': '_out_of_order', '_错误': '_error', '_随机': '_random', 'τ': 'torque', '丢包率': 'packet_loss_rate', '出帧周期毫秒': 'frame_interval_ms', '刚度': 'stiffness', '加速度': 'acceleration', '参考': 'reference', '外': 'external_torque', '属性': 'attribute', '延迟': 'latency', '惯量': 'inertia', '抖动毫秒': 'jitter_ms', '期望': 'target', '步进': 'step', '物理': 'physics', '现在': 'now', '设参考': 'set_reference', '键': 'key', '随机种子': 'random_seed', '_上次指令': '_last_command', '层': 'safety_layer', '步长秒': 'timestep', '目标': 'target', '历史': 'history', '设目标': 'set_target', '实际': 'actual', '误差': 'error', '指令': 'command', '时长秒': 'duration', '截止': 'deadline', '回路': 'loop', '峰': 'peak', '末': 'final', '实际延迟': 'actual_latency', '阶跃响应': 'step_response', '_下次发布': '_next_publish_time', '_包根': '_package_root', '_发布': '_publish', '_发送': '_send', '_导出审计': '_export_audit', '_建': '_build', '_打开': '_open', '_演练断线': '_simulate_disconnect', '_自由度': '_dof', '_设劣化': '_set_impairments', '动作': 'action', '包根': 'package_root', '发送函数': 'send', '墙钟': 'wall_clock', '实测平均延迟': 'measured_mean_latency', '实测最大延迟': 'measured_max_latency', '健': 'health', '打开次数': 'open_count', '拒绝数': 'rejected_count', '收命令': 'receive_command', '最近位置': 'latest_position', '间隔秒': 'interval_seconds'}
 
-from .契约 import 控制模式, 安全状态
-from .安全层 import 安全层
-from .模拟后端 import 模拟后端
+def __getattr__(name):
+    value = getattr(_implementation, _ALIASES.get(name, name))
+    if callable(value) and not isinstance(value, type) and _KEYWORDS:
+        @wraps(value)
+        def call(*args, **kwargs):
+            mapped = {}
+            for key, item in kwargs.items():
+                translated = _KEYWORDS.get(key, key)
+                if translated in mapped:
+                    raise TypeError(f"Multiple values for argument {translated!r}")
+                mapped[translated] = item
+            return value(*args, **mapped)
+        return call
+    return value
 
+def __dir__():
+    return sorted(set(globals()) | set(dir(_implementation)) | set(_ALIASES))
 
-# ---------------------------------------------------------------------------
-# 界面 → 仿真侧
-# ---------------------------------------------------------------------------
-@dataclasses.dataclass(frozen=True)
-class 连接命令(messages.Snapshot):
-    动作: str = "快照"     # 打开 / 使能 / 进运行 / 停止 / 急停 / 设劣化 / 演练断线 / 导出审计
-    延迟毫秒: float = -1.0        # <0 = 不改
-    抖动毫秒: float = -1.0
-    丢包率: float = -1.0
-    编码器分辨率: float = -1.0
-
-
-# ---------------------------------------------------------------------------
-# 仿真侧 → 界面
-# ---------------------------------------------------------------------------
-@dataclasses.dataclass(frozen=True)
-class 连接状态(messages.Snapshot):
-    后端: str = ""                  # ★ 永远带上后端名字，界面据此显示"模拟"而不是假装真机
-    已连接: bool = False
-    安全状态: str = "未连接"
-    模式: str = "空闲"
-    自由度: int = 0
-    # ---- 劣化参数（界面上可调，改完立即生效）----
-    延迟毫秒: float = 0.0
-    抖动毫秒: float = 0.0
-    丢包率: float = 0.0
-    编码器分辨率: float = 0.0
-    # ---- 实测遥测（全部来自真链路，不补零）----
-    实测平均延迟: float = 0.0
-    实测最大延迟: float = 0.0
-    丢包数: int = 0
-    错序数: int = 0
-    拒绝数: int = 0
-    最近位置: tuple = ()            # 空 = 还没有状态帧
-    # ---- 审计（最近若干条，给界面列表用）----
-    审计: tuple = ()                # 每项 {时刻, 类别, 内容, 错误码}
-    说明: str = ""
-
-
-class DeviceBridge:
-    名称 = "设备连接"
-    版本 = "0.1"
-
-    def __init__(self, 发送函数: Callable[[Any], None], 包根: str = "",
-                 自由度: int = 6):
-        self._发送 = 发送函数
-        self._包根 = 包根 or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self._自由度 = int(自由度)
-        self.层: 安全层 | None = None
-        self.后: 模拟后端 | None = None
-        self.打开次数 = 0
-        self.latest: 连接状态 | None = None
-
-    # ---- 懒建后端：界面不点"打开"就不占资源 ----
-    def _建(self) -> 安全层:
-        if self.层 is None:
-            self.后 = 模拟后端(self._自由度)
-            self.层 = 安全层(self.后, 看门狗毫秒=100.0,
-                             单周期最大位移=0.02, 位置限位=(-3.0, 3.0))
-        return self.层
-
-    @messages.handler
-    def 收命令(self, 命令: 连接命令) -> bool:
-        动作 = str(getattr(命令, "动作", ""))
-        try:
-            if 动作 == "打开":
-                self._打开()
-            elif 动作 == "使能":
-                self._建().使能(控制模式.位置)
-            elif 动作 == "进运行":
-                self._建().进运行()
-            elif 动作 == "停止":
-                self._建().stop_event("界面请求")
-            elif 动作 == "急停":
-                self._建().急停("界面请求")
-            elif 动作 == "设劣化":
-                self._设劣化(命令)
-            elif 动作 == "演练断线":
-                self._演练断线()
-            elif 动作 == "导出审计":
-                self._导出审计()
-        except Exception as exc:                                         # noqa: BLE001
-            print(f"⚠ 设备命令「{动作}」失败：{type(exc).__name__}: {exc}", flush=True)
-        self._发布()
-        return False
-
-    # ---- 各个动作 ----
-    def _打开(self) -> None:
-        层 = self._建()
-        层.打开()
-        self.打开次数 += 1
-        print(f"【设备】已打开模拟后端（自由度 {self._自由度}）—— 注意：**不是真机**",
-              flush=True)
-
-    def _设劣化(self, 命令: 连接命令) -> None:
-        层 = self._建()
-        后 = self.后
-        if 后 is None:
-            return
-        for name in ("延迟毫秒", "抖动毫秒", "丢包率", "编码器分辨率"):
-            value = float(getattr(命令, name, -1.0))
-            if value < 0:
-                continue
-            if name == "编码器分辨率":
-                # 能力表是不可变的，改量化要重建一份（如实反映"换了编码器"）
-                后.能力 = dataclasses.replace(后.能力, 编码器分辨率=value)
-            else:
-                setattr(后, name, value)
-        层.审计.记("模式切换",
-                    f"劣化参数：延迟 {后.延迟毫秒:.0f}ms、抖动 {后.抖动毫秒:.0f}ms、"
-                    f"丢包 {后.丢包率*100:.0f}%、量化 {后.能力.编码器分辨率:g}")
-
-    def _演练断线(self) -> None:
-        """把后端"拔线"：之后不再出状态帧，看门狗应当触发。
-
-        ★ 这是**演练**，不是故障注入接口 —— 它模拟的是"网线掉了"这一类事件。
-        """
-        层 = self._建()
-        if self.后 is not None:
-            self.后.关闭()
-        层.审计.记("安全动作", "演练：模拟断线（后端关闭，不再出状态帧）")
-        print("【设备】演练断线：后端已关闭，等看门狗触发", flush=True)
-
-    def _导出审计(self) -> None:
-        层 = self._建()
-        directory = os.path.join(self._包根, "输出", "06_部署审计")
-        os.makedirs(directory, exist_ok=True)
-        路径 = os.path.join(directory, f"审计_{time.strftime('%Y%m%d_%H%M%S')}.csv")
-        条数 = 层.审计.导出csv(路径)
-        层.审计.记("安全动作", f"导出审计 {条数} 条 → {os.path.basename(路径)}")
-        print(f"【设备】审计已导出 {条数} 条 → {路径}", flush=True)
-
-    # ---- 泵：由仿真循环周期调用 ----
-    def maybe_pump(self, 墙钟: float, 间隔秒: float = 0.02) -> None:
-        """驱动一次链路：读状态（喂看门狗）+ 按 50 Hz 发布。
-
-        ★ 为什么必须有人泵：`读状态()` 是**拉式**接口 ——
-          没人调用它，就不会有遥测，**看门狗也不会触发**（它只在读取时检查）。
-          这也是真机上"控制循环必须活着"的同一件事：循环停了，安全逻辑就停了。
-        """
-        if self.层 is None:
-            return
-        try:
-            self.层.读状态()
-        except Exception:                                             # noqa: BLE001
-            pass
-        if 墙钟 >= getattr(self, "_下次发布", 0.0):
-            self._下次发布 = 墙钟 + float(间隔秒)
-            self._发布()
-
-    # ---- 发布 ----
-    def maybe_publish(self, 墙钟: float) -> None:
-        self._发布()
-
-    def _发布(self) -> None:
-        层 = self.层
-        后 = self.后
-        if 层 is None or 后 is None:
-            状态 = 连接状态(后端="（未打开）", 说明="点「打开」才会创建模拟后端")
-        else:
-            健 = 层.health()
-            最近位置: tuple = ()
-            if 层._最近状态 is not None and 层._最近状态.位置:      # noqa: SLF001
-                最近位置 = tuple(float(x) for x in 层._最近状态.位置)  # noqa: SLF001
-            审计 = tuple({
-                "时刻": round(条.时刻, 3), "类别": 条.类别,
-                "内容": 条.内容, "错误码": 条.错误码.value,
-            } for 条 in 层.审计.latest(30))
-            状态 = 连接状态(
-                后端=后.名称,
-                已连接=bool(健.已连接),
-                安全状态=层.状态.value,
-                模式=健.模式.value,
-                自由度=int(后.自由度),
-                延迟毫秒=float(后.延迟毫秒),
-                抖动毫秒=float(后.抖动毫秒),
-                丢包率=float(后.丢包率),
-                编码器分辨率=float(后.能力.编码器分辨率),
-                实测平均延迟=float(健.平均延迟毫秒 if 健.平均延迟毫秒 == 健.平均延迟毫秒 else 0.0),
-                实测最大延迟=float(健.最大延迟毫秒 if 健.最大延迟毫秒 == 健.最大延迟毫秒 else 0.0),
-                丢包数=int(健.丢包数),
-                错序数=int(健.错序数),
-                拒绝数=int(getattr(层, "_拒绝数", 0)),
-                最近位置=最近位置,
-                审计=审计,
-                说明=健.说明,
-            )
-        self.latest = 状态
-        try:
-            self._发送(状态)
-        except Exception:                                             # noqa: BLE001
-            pass
+if __name__ == "__main__":
+    import runpy
+    runpy.run_module("devices.connection_bridge", run_name="__main__")

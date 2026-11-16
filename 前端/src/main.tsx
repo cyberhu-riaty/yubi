@@ -19,11 +19,11 @@ import "./生成/主题.css";
 import "./index.css";
 import { App } from "./外壳/App";
 import { 取风格, 应用到文档 } from "./生成/外观";
-import { 取语言 } from "./视图/文案";
+import { getLanguage } from "./视图/文案";
 
 // ① 首帧之前定皮肤与语言（localStorage 里没有就用默认值）
 应用到文档(取风格());
-document.documentElement.setAttribute("lang", 取语言() === "zh" ? "zh-CN" : "en");
+document.documentElement.setAttribute("lang", getLanguage() === "zh" ? "zh-CN" : "en");
 
 // ② 挂载
 const 根 = document.getElementById("root");

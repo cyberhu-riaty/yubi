@@ -1,117 +1,30 @@
-"""
-设备/跟踪回路.py —— 把控制器接到设备链路上，让"延迟"真的咬人
-
-═══ 为什么需要这一层 ═══════════════════════════════════════════════════════
-    上一版做完设备抽象后，延迟注入只影响**观测**：模拟后端自带"伺服跟参考"，
-    延迟再大动力学也稳。这不是 bug，是**闭环里没有控制器**。
-
-    真机上的失稳链条是这样的：
-        控制器用**收到的（旧的）状态**算指令 → 指令迟到 → 实际状态更偏 → 指令更大 …
-    要把这条链在仿真里复现，就必须让"用延迟状态算指令"这一步真的存在于回路中。
-
-═══ 两个诚实声明 ═══════════════════════════════════════════════════════════
-    ① 这一层是**演示与控制律验证**用的最小闭环（位置 PD + 重力/无重力一视同仁），
-       不是"真机控制器"。真机还要考虑摩擦、柔性、电机环、限幅动力学。
-    ② 它的价值在于**能定量回答一个问题**：
-       "同一个增益，延迟从 0 增到多少毫秒会开始振荡？" —— 这个数在真机上试是撞机，
-       在这里试是改一行参数。
-"""
+"""Legacy naming compatibility; new code imports devices.tracking_loop."""
 from __future__ import annotations
 
-import time
+from functools import wraps
+import devices.tracking_loop as _implementation
 
-import numpy as np
+_ALIASES = {'设备': 'devices', '契约': 'contract', '安全层': 'SafetyLayer', '模拟后端': 'SimulatedBackend', '跟踪回路': 'TrackingLoop', '连接桥': 'connection_bridge', '控制模式': 'ControlMode', '安全状态': 'SafetyState', '错误码': 'ErrorCode', '设备能力': 'DeviceCapabilities', '命令帧': 'CommandFrame', '状态帧': 'StateFrame', '写结果': 'WriteResult', '健康报告': 'HealthReport', '设备后端': 'DeviceBackend', '审计条目': 'AuditEntry', '审计日志': 'AuditLog', '简单物理': 'SimplePhysics', '连接命令': 'ConnectionCommand', '连接状态': 'ConnectionState', '_上限': '_limit', '_条': '_entries', '上限': 'limit', '丢包数': 'dropped_packets', '位置': 'position', '使能中': 'enabling', '停止': 'stop', '健康': 'health', '全部': 'all_entries', '关闭': 'close', '内容': 'content', '内部错误': 'internal_error', '写命令': 'write_command', '力矩': 'torque', '协议错误': 'protocol_error', '可读位置': 'can_read_position', '可读力矩': 'can_read_torque', '可读温度': 'can_read_temperature', '可读速度': 'can_read_velocity', '名称': 'name', '命令': 'command', '增量超限': 'increment_exceeded', '导出csv': 'export_csv', '已连接': 'connected', '平均延迟毫秒': 'mean_latency_ms', '序号': 'sequence', '延迟毫秒': 'latency_ms', '心跳计数': 'heartbeat_count', '急停': 'emergency_stop', '成功': 'success', '打开': 'open', '接收时刻': 'received_at', '支持': 'supports', '支持位置模式': 'supports_position_mode', '支持力矩模式': 'supports_torque_mode', '支持速度模式': 'supports_velocity_mode', '故障': 'fault', '时刻': 'timestamp', '最大命令频率': 'max_command_frequency', '最大延迟毫秒': 'max_latency_ms', '最近': 'latest', '期望位置': 'target_position', '期望力矩': 'target_torque', '期望生效时刻': 'effective_at', '期望速度': 'target_velocity', '未使能': 'not_enabled', '未连接': 'disconnected', '条': 'entry', '条数': 'entry_count', '模式': 'mode', '正常': 'ok', '清空': 'clear', '温度': 'temperature', '版本': 'version', '空闲': 'idle', '类别': 'category', '编码器分辨率': 'encoder_resolution', '能力': 'capabilities', '能力不支持': 'unsupported_capability', '自由度': 'dof', '记': 'record', '设模式': 'set_mode', '说明': 'description', '读状态': 'read_state', '超时': 'timeout', '越限位': 'limit_exceeded', '路径': 'path', '运行': 'running', '速度': 'velocity', '配置': 'config', '采集时刻': 'sampled_at', '错序数': 'out_of_order_packets', '阻尼': 'damping', '_上次命令位置': '_last_command_position', '_上次状态时刻': '_last_state_time', '_序号': '_sequence', '_心跳': '_heartbeat', '_拒绝数': '_rejected_count', '_最近状态': '_latest_state', '_查看门狗': '_check_watchdog', '_限幅': '_clamp', '_首帧待发': '_first_frame_pending', '位置限位': 'position_limits', '低': 'lower', '使能': 'enable', '单周期最大位移': 'max_step_displacement', '原因': 'reason', '后': 'backend', '后端': 'backend', '增量': 'increment', '夹后': 'clamped', '审计': 'audit', '帧': 'frame', '异常': 'exc', '当前': 'current', '快照': 'snapshot', '改过': 'changed', '最大': 'maximum', '果': 'result', '状态': 'state', '看门狗毫秒': 'watchdog_ms', '经过': 'elapsed', '软件限速': 'speed_limit', '进运行': 'enter_running', '高': 'upper', '_丢包': '_dropped_packets', '_产生一帧': '_produce_frame', '_命令序号': '_command_sequence', '_已连接': '_connected', '_延迟们': '_latencies', '_待发': '_pending', '_最后出帧': '_last_frame_time', '_最新': '_latest', '_模式': '_mode', '_物理': '_physics', '_错序': '_out_of_order', '_错误': '_error', '_随机': '_random', 'τ': 'torque', '丢包率': 'packet_loss_rate', '出帧周期毫秒': 'frame_interval_ms', '刚度': 'stiffness', '加速度': 'acceleration', '参考': 'reference', '外': 'external_torque', '属性': 'attribute', '延迟': 'latency', '惯量': 'inertia', '抖动毫秒': 'jitter_ms', '期望': 'target', '步进': 'step', '物理': 'physics', '现在': 'now', '设参考': 'set_reference', '键': 'key', '随机种子': 'random_seed', '_上次指令': '_last_command', '层': 'safety_layer', '步长秒': 'timestep', '目标': 'target', '历史': 'history', '设目标': 'set_target', '实际': 'actual', '误差': 'error', '指令': 'command', '时长秒': 'duration', '截止': 'deadline', '回路': 'loop', '峰': 'peak', '末': 'final', '实际延迟': 'actual_latency', '阶跃响应': 'step_response', '_下次发布': '_next_publish_time', '_包根': '_package_root', '_发布': '_publish', '_发送': '_send', '_导出审计': '_export_audit', '_建': '_build', '_打开': '_open', '_演练断线': '_simulate_disconnect', '_自由度': '_dof', '_设劣化': '_set_impairments', '动作': 'action', '包根': 'package_root', '发送函数': 'send', '墙钟': 'wall_clock', '实测平均延迟': 'measured_mean_latency', '实测最大延迟': 'measured_max_latency', '健': 'health', '打开次数': 'open_count', '拒绝数': 'rejected_count', '收命令': 'receive_command', '最近位置': 'latest_position', '间隔秒': 'interval_seconds'}
+_KEYWORDS = {'设备': 'devices', '契约': 'contract', '安全层': 'SafetyLayer', '模拟后端': 'SimulatedBackend', '跟踪回路': 'TrackingLoop', '连接桥': 'connection_bridge', '控制模式': 'ControlMode', '安全状态': 'SafetyState', '错误码': 'ErrorCode', '设备能力': 'DeviceCapabilities', '命令帧': 'CommandFrame', '状态帧': 'StateFrame', '写结果': 'WriteResult', '健康报告': 'HealthReport', '设备后端': 'DeviceBackend', '审计条目': 'AuditEntry', '审计日志': 'AuditLog', '简单物理': 'SimplePhysics', '连接命令': 'ConnectionCommand', '连接状态': 'ConnectionState', '_上限': '_limit', '_条': '_entries', '上限': 'limit', '丢包数': 'dropped_packets', '位置': 'position', '使能中': 'enabling', '停止': 'stop', '健康': 'health', '全部': 'all_entries', '关闭': 'close', '内容': 'content', '内部错误': 'internal_error', '写命令': 'write_command', '力矩': 'torque', '协议错误': 'protocol_error', '可读位置': 'can_read_position', '可读力矩': 'can_read_torque', '可读温度': 'can_read_temperature', '可读速度': 'can_read_velocity', '名称': 'name', '命令': 'command', '增量超限': 'increment_exceeded', '导出csv': 'export_csv', '已连接': 'connected', '平均延迟毫秒': 'mean_latency_ms', '序号': 'sequence', '延迟毫秒': 'latency_ms', '心跳计数': 'heartbeat_count', '急停': 'emergency_stop', '成功': 'success', '打开': 'open', '接收时刻': 'received_at', '支持': 'supports', '支持位置模式': 'supports_position_mode', '支持力矩模式': 'supports_torque_mode', '支持速度模式': 'supports_velocity_mode', '故障': 'fault', '时刻': 'timestamp', '最大命令频率': 'max_command_frequency', '最大延迟毫秒': 'max_latency_ms', '最近': 'latest', '期望位置': 'target_position', '期望力矩': 'target_torque', '期望生效时刻': 'effective_at', '期望速度': 'target_velocity', '未使能': 'not_enabled', '未连接': 'disconnected', '条': 'entry', '条数': 'entry_count', '模式': 'mode', '正常': 'ok', '清空': 'clear', '温度': 'temperature', '版本': 'version', '空闲': 'idle', '类别': 'category', '编码器分辨率': 'encoder_resolution', '能力': 'capabilities', '能力不支持': 'unsupported_capability', '自由度': 'dof', '记': 'record', '设模式': 'set_mode', '说明': 'description', '读状态': 'read_state', '超时': 'timeout', '越限位': 'limit_exceeded', '路径': 'path', '运行': 'running', '速度': 'velocity', '配置': 'config', '采集时刻': 'sampled_at', '错序数': 'out_of_order_packets', '阻尼': 'damping', '_上次命令位置': '_last_command_position', '_上次状态时刻': '_last_state_time', '_序号': '_sequence', '_心跳': '_heartbeat', '_拒绝数': '_rejected_count', '_最近状态': '_latest_state', '_查看门狗': '_check_watchdog', '_限幅': '_clamp', '_首帧待发': '_first_frame_pending', '位置限位': 'position_limits', '低': 'lower', '使能': 'enable', '单周期最大位移': 'max_step_displacement', '原因': 'reason', '后': 'backend', '后端': 'backend', '增量': 'increment', '夹后': 'clamped', '审计': 'audit', '帧': 'frame', '异常': 'exc', '当前': 'current', '快照': 'snapshot', '改过': 'changed', '最大': 'maximum', '果': 'result', '状态': 'state', '看门狗毫秒': 'watchdog_ms', '经过': 'elapsed', '软件限速': 'speed_limit', '进运行': 'enter_running', '高': 'upper', '_丢包': '_dropped_packets', '_产生一帧': '_produce_frame', '_命令序号': '_command_sequence', '_已连接': '_connected', '_延迟们': '_latencies', '_待发': '_pending', '_最后出帧': '_last_frame_time', '_最新': '_latest', '_模式': '_mode', '_物理': '_physics', '_错序': '_out_of_order', '_错误': '_error', '_随机': '_random', 'τ': 'torque', '丢包率': 'packet_loss_rate', '出帧周期毫秒': 'frame_interval_ms', '刚度': 'stiffness', '加速度': 'acceleration', '参考': 'reference', '外': 'external_torque', '属性': 'attribute', '延迟': 'latency', '惯量': 'inertia', '抖动毫秒': 'jitter_ms', '期望': 'target', '步进': 'step', '物理': 'physics', '现在': 'now', '设参考': 'set_reference', '键': 'key', '随机种子': 'random_seed', '_上次指令': '_last_command', '层': 'safety_layer', '步长秒': 'timestep', '目标': 'target', '历史': 'history', '设目标': 'set_target', '实际': 'actual', '误差': 'error', '指令': 'command', '时长秒': 'duration', '截止': 'deadline', '回路': 'loop', '峰': 'peak', '末': 'final', '实际延迟': 'actual_latency', '阶跃响应': 'step_response', '_下次发布': '_next_publish_time', '_包根': '_package_root', '_发布': '_publish', '_发送': '_send', '_导出审计': '_export_audit', '_建': '_build', '_打开': '_open', '_演练断线': '_simulate_disconnect', '_自由度': '_dof', '_设劣化': '_set_impairments', '动作': 'action', '包根': 'package_root', '发送函数': 'send', '墙钟': 'wall_clock', '实测平均延迟': 'measured_mean_latency', '实测最大延迟': 'measured_max_latency', '健': 'health', '打开次数': 'open_count', '拒绝数': 'rejected_count', '收命令': 'receive_command', '最近位置': 'latest_position', '间隔秒': 'interval_seconds'}
 
+def __getattr__(name):
+    value = getattr(_implementation, _ALIASES.get(name, name))
+    if callable(value) and not isinstance(value, type) and _KEYWORDS:
+        @wraps(value)
+        def call(*args, **kwargs):
+            mapped = {}
+            for key, item in kwargs.items():
+                translated = _KEYWORDS.get(key, key)
+                if translated in mapped:
+                    raise TypeError(f"Multiple values for argument {translated!r}")
+                mapped[translated] = item
+            return value(*args, **mapped)
+        return call
+    return value
 
-class 跟踪回路:
-    """用**收到的状态**算位置 PD 指令，经安全层下发。
+def __dir__():
+    return sorted(set(globals()) | set(dir(_implementation)) | set(_ALIASES))
 
-    ★ 关键点：`步进()` 里读到的状态可能是**上一帧甚至更早**的 ——
-      这不是缺陷，正是要复现的现实。真机控制器永远拿不到"此刻"的真实状态。
-    """
-
-    def __init__(self, 层, *, kp: float = 60.0, kd: float = 8.0, 步长秒: float = 0.002):
-        self.层 = 层
-        self.kp = float(kp)
-        self.kd = float(kd)
-        self.步长秒 = float(步长秒)
-        self.目标: np.ndarray | None = None
-        self.历史: list[tuple[float, float, float]] = []   # (墙钟, 指令, 实际)
-        self._上次指令: np.ndarray | None = None
-
-    def 设目标(self, 目标) -> None:
-        self.目标 = np.asarray(目标, dtype=float).ravel()
-
-    def 步进(self) -> bool:
-        """走一步。返回是否真的下发了指令。
-
-        ★ 只读**一帧**：`读状态()` 是非阻塞的，可能拿到旧帧（单步保持）
-          或同一帧（没出新帧）—— 这两种都算"这一刻我只有这些信息"，
-          控制器就该基于它做决定。这正是延迟影响的来源。
-        """
-        状态 = self.层.读状态()
-        if 状态 is None or not 状态.位置:
-            return False
-        实际 = np.asarray(状态.位置, dtype=float)
-        速度 = np.asarray(状态.速度, dtype=float) if 状态.速度 else np.zeros_like(实际)
-        目标 = self.目标 if self.目标 is not None else 实际
-        if 目标.size != 实际.size:
-            return False
-        # 位置 PD：指令 = 目标 + Kp·误差 - Kd·速度（再用安全层的增量限幅管住突变）
-        误差 = 目标 - 实际
-        指令 = 目标 + self.kp * 误差 * self.步长秒 - self.kd * 速度 * self.步长秒
-        果 = self.层.写命令(期望位置=指令)
-        if 果.成功:
-            self._上次指令 = 指令
-            现在 = time.perf_counter()
-            self.历史.append((现在, float(np.max(np.abs(指令))), float(np.max(np.abs(实际)))))
-            del self.历史[:-4000]
-            return True
-        return False
-
-
-def 阶跃响应(延迟毫秒: float, kp: float = 60.0, kd: float = 8.0,
-             时长秒: float = 3.0) -> dict:
-    """跑一次"0 → 1"的位置阶跃，返回超调/稳态误差/是否发散等指标。
-
-    这是 L2 最该回答的问题：**同一个增益，延迟到多少会失控**。
-    """
-    from .契约 import 控制模式
-    from .模拟后端 import 模拟后端
-    from .安全层 import 安全层
-
-    后 = 模拟后端(1, 延迟毫秒=延迟毫秒, 出帧周期毫秒=2)
-    层 = 安全层(后, 看门狗毫秒=1000, 单周期最大位移=1.0, 位置限位=(-10, 10))
-    层.打开()
-    层.使能(控制模式.位置)
-
-    # 预热：等到真的收到状态帧（不能拍固定毫秒数 —— 延迟大于预热时长就收不到）
-    截止 = time.perf_counter() + 2.0
-    while 层._最近状态 is None and time.perf_counter() < 截止:
-        层.读状态()
-        time.sleep(0.001)
-    if 层._最近状态 is None:
-        return {"可达": False}
-
-    回路 = 跟踪回路(层, kp=kp, kd=kd)
-    回路.设目标([1.0])
-    回路.步进()                      # 首帧保护会把这条改成"保持"
-    层.进运行()
-
-    峰 = 0.0
-    末 = None
-    t0 = time.perf_counter()
-    while time.perf_counter() - t0 < 时长秒:
-        回路.步进()
-        time.sleep(0.001)
-        if 后._物理.q.size:
-            末 = float(后._物理.q[0])
-            峰 = max(峰, 末)
-    实际延迟 = 后.健康().平均延迟毫秒
-    return {
-        "可达": True, "峰值": 峰, "超调%": (峰 - 1.0) * 100.0,
-        "稳态误差": abs((末 if 末 is not None else 0.0) - 1.0),
-        "平均延迟毫秒": 实际延迟,
-        "发散": 峰 > 5.0 or (末 is not None and abs(末) > 5.0),
-        "安全状态": 层.状态.value,
-    }
+if __name__ == "__main__":
+    import runpy
+    runpy.run_module("devices.tracking_loop", run_name="__main__")

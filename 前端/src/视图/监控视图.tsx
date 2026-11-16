@@ -10,14 +10,14 @@
  *     所以整格删掉了。要做它，得先把视口统计算进契约（另开一步）。
  *   · 连接断开时明确写"连接已断开"，而不是让数字停在最后一个值上装作还在跑。
  */
-import { 可折叠区块 } from "../组件/可折叠区块";
-import { 标签 } from "../组件/标签";
-import { 数值表, 数值文本, type 数值行 } from "../组件/数值表";
+import { CollapsibleSection } from "../组件/可折叠区块";
+import { Tag } from "../组件/标签";
+import { ValueTable, NumericText, type ValueRow } from "../组件/数值表";
 import { 用仓库 } from "../数据/仓库";
-import { use取 } from "./文案";
+import { useTranslation } from "./文案";
 
 export function 监控视图() {
-  const t = use取();
+  const t = useTranslation();
   const 系统 = 用仓库((s) => s.系统.数据);
   const 仿真 = 用仓库((s) => s.仿真.数据);
   const 连接 = 用仓库((s) => s.连接);
@@ -28,31 +28,31 @@ export function 监控视图() {
   const 跑得动 = 系统?.RTF !== undefined && 系统.RTF >= 0.95;
 
   /** 冻结时 RTF=0 不是告警；只有推进中掉速才告警 */
-  const RTF语气 = !系统 ? "警示" as const : 已冻结 ? "中性" as const : 跑得动 ? "成功" as const : "警告" as const;
+  const RTF语气 = !系统 ? "notice" as const : 已冻结 ? "neutral" as const : 跑得动 ? "success" as const : "warning" as const;
 
-  const 行: 数值行[] = 系统
+  const 行: ValueRow[] = 系统
     ? [
         {
-          键: t("监控.实时率"),
-          值: (
+          key: t("监控.实时率"),
+          value: (
             <span className="等宽">
-              <数值文本 值={系统.RTF} 位={2} />
+              <NumericText value={系统.RTF} digits={2} />
               <span className="ml-1 text-dim">×</span>
             </span>
           ),
         },
         {
-          键: t("监控.步频"),
-          值: <span className="等宽">{系统.步频 === undefined ? "--" : `${系统.步频.toFixed(0)} Hz`}</span>,
+          key: t("监控.步频"),
+          value: <span className="等宽">{系统.步频 === undefined ? "--" : `${系统.步频.toFixed(0)} Hz`}</span>,
         },
-        { 键: t("监控.步长"), 值: <span className="等宽">{系统.仿真步长?.toFixed(4) ?? "--"} s</span> },
+        { key: t("监控.步长"), value: <span className="等宽">{系统.仿真步长?.toFixed(4) ?? "--"} s</span> },
         {
-          键: t("监控.内存"),
-          值: <span className="等宽">{系统.内存MB === undefined ? "--" : `${系统.内存MB.toFixed(0)} MB`}</span>,
+          key: t("监控.内存"),
+          value: <span className="等宽">{系统.内存MB === undefined ? "--" : `${系统.内存MB.toFixed(0)} MB`}</span>,
         },
-        { 键: t("监控.仿真时间"), 值: <span className="等宽">{系统.仿真时间?.toFixed(2) ?? "--"} s</span> },
-        { 键: t("监控.墙钟"), 值: <span className="等宽">{系统.墙钟?.toFixed(1) ?? "--"} s</span> },
-        { 键: t("监控.插件数"), 值: <span className="等宽">{系统.插件数 ?? "--"}</span> },
+        { key: t("监控.仿真时间"), value: <span className="等宽">{系统.仿真时间?.toFixed(2) ?? "--"} s</span> },
+        { key: t("监控.墙钟"), value: <span className="等宽">{系统.墙钟?.toFixed(1) ?? "--"} s</span> },
+        { key: t("监控.插件数"), value: <span className="等宽">{系统.插件数 ?? "--"}</span> },
       ]
     : [];
 
@@ -60,12 +60,12 @@ export function 监控视图() {
     <div className="space-y-2">
       {/* 病态告警：放在最前面 —— 它是"结论"，比后面的数更有用 */}
       {活动告警.length ? (
-        <可折叠区块
-          标题={t("监控.告警")}
-          徽标={
-            <标签 语气={严重数 ? "警示" : "强调"}>
+        <CollapsibleSection
+          title={t("监控.告警")}
+          badge={
+            <Tag tone={严重数 ? "notice" : "emphasis"}>
               {t("监控.告警.计数", { 活动: 活动告警.length, 严重: 严重数 })}
-            </标签>
+            </Tag>
           }
         >
           <p className="text-dim">{t("监控.告警.说明")}</p>
@@ -79,7 +79,7 @@ export function 监控视图() {
                 }}
               >
                 <div className="flex flex-wrap items-baseline gap-1.5">
-                  <标签 语气={a.严重度 === "严重" ? "警示" : "强调"}>{a.类型}</标签>
+                  <Tag tone={a.严重度 === "严重" ? "notice" : "emphasis"}>{a.类型}</Tag>
                   <span className="min-w-0 flex-1 break-words text-[0.85em] 等宽" title={a.信号}>
                     {String(a.信号 ?? "")}
                   </span>
@@ -103,16 +103,16 @@ export function 监控视图() {
           <p className="mt-2 text-[0.78em]" style={{ color: "var(--warn)" }}>
             {t("监控.告警.经验")}
           </p>
-        </可折叠区块>
+        </CollapsibleSection>
       ) : null}
 
-      <可折叠区块
-        标题={t("步骤.监控")}
-        徽标={
+      <CollapsibleSection
+        title={t("步骤.监控")}
+        badge={
           系统 ? (
-            <标签 语气={RTF语气}>{已冻结 ? "已冻结" : `RTF ${系统.RTF?.toFixed(2) ?? "--"}`}</标签>
+            <Tag tone={RTF语气}>{已冻结 ? "已冻结" : `RTF ${系统.RTF?.toFixed(2) ?? "--"}`}</Tag>
           ) : (
-            <标签 语气="警示">{t("监控.等待")}</标签>
+            <Tag tone="notice">{t("监控.等待")}</Tag>
           )
         }
       >
@@ -121,7 +121,7 @@ export function 监控视图() {
         ) : null}
         {系统 ? (
           <div className="mt-2">
-            <数值表 行={行} />
+            <ValueTable rows={行} />
           </div>
         ) : (
           <div className="mt-2 text-dim">
@@ -133,7 +133,7 @@ export function 监控视图() {
             {系统.出错}
           </div>
         ) : null}
-      </可折叠区块>
+      </CollapsibleSection>
     </div>
   );
 }

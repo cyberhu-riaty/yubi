@@ -14,16 +14,16 @@
  *   包里**不含模型本体**（单个资产解包可达 30 MB+），只给校验和。
  */
 import { useState } from "react";
-import { 可折叠区块 } from "../组件/可折叠区块";
-import { 标签 } from "../组件/标签";
-import { 按钮 } from "../组件/按钮";
+import { CollapsibleSection } from "../组件/可折叠区块";
+import { Tag } from "../组件/标签";
+import { Button } from "../组件/按钮";
 import { 命令, 用仓库 } from "../数据/仓库";
 import { 命令收尾, 记命令发出 } from "../数据/日志";
-import { 数值表, type 数值行 } from "../组件/数值表";
-import { 连接键, use取 } from "./文案";
+import { ValueTable, type ValueRow } from "../组件/数值表";
+import { connectionTranslationKeys, useTranslation } from "./文案";
 
 export function 部署视图() {
-  const t = use取();
+  const t = useTranslation();
   const 状态 = 用仓库((s) => s.部署.数据);
   const 项目 = 用仓库((s) => s.项目.数据);
   const 连接 = 用仓库((s) => s.连接);
@@ -53,24 +53,24 @@ export function 部署视图() {
     <div className="space-y-2">
       <设备控制台 />
 
-      <可折叠区块
-        标题={t("部署.标题")}
-        徽标={
-          成功 ? <标签 语气="强调">{`${状态?.文件数 ?? 0} 文件`}</标签>
-          : 失败 ? <标签 语气="警示">{t("部署.失败")}</标签>
-          : 导出中 ? <标签 语气="强调">{t("部署.导出中")}</标签>
-          : <标签>{t("部署.未导出")}</标签>
+      <CollapsibleSection
+        title={t("部署.标题")}
+        badge={
+          成功 ? <Tag tone="emphasis">{`${状态?.文件数 ?? 0} 文件`}</Tag>
+          : 失败 ? <Tag tone="notice">{t("部署.失败")}</Tag>
+          : 导出中 ? <Tag tone="emphasis">{t("部署.导出中")}</Tag>
+          : <Tag>{t("部署.未导出")}</Tag>
         }
       >
         {/* 第一屏分清"后端已连接"与"真机未接入"：两个"已连接"不是一回事 */}
         <div className="部署状态" role="status">
           <span className="部署状态项">
             <span className="text-dim">{t("部署.后端连接")}</span>
-            <标签 语气={可发 ? "成功" : "错误"}>{t(连接键[连接])}</标签>
+            <Tag tone={可发 ? "success" : "error"}>{t(connectionTranslationKeys[连接])}</Tag>
           </span>
           <span className="部署状态项">
             <span className="text-dim">{t("部署.真机状态")}</span>
-            <标签 语气="警告">{t("部署.真机未接入")}</标签>
+            <Tag tone="warning">{t("部署.真机未接入")}</Tag>
           </span>
         </div>
         <p className="mt-1 text-[0.85em]" style={{ color: "var(--warn)" }}>
@@ -78,9 +78,9 @@ export function 部署视图() {
         </p>
 
         <div className="mt-2 flex items-center gap-2">
-          <按钮 种类="主" disabled={忙 || 导出中 || !可发} title={t("部署.说明")} on按下={() => void 导出()}>
+          <Button variant="primary" disabled={忙 || 导出中 || !可发} title={t("部署.说明")} onPress={() => void 导出()}>
             {导出中 ? t("部署.导出中") : t("部署.导出")}
-          </按钮>
+          </Button>
           <span className="text-[0.85em] text-dim">
             {`${t("部署.项目")}: ${项目?.project || t("通用.无")}`}
           </span>
@@ -119,7 +119,7 @@ export function 部署视图() {
             </ul>
           </div>
         ) : null}
-      </可折叠区块>
+      </CollapsibleSection>
     </div>
   );
 }
@@ -133,7 +133,7 @@ export function 部署视图() {
  *   · 状态机画出来，"在哪一格"一眼可见；进「运行」必须人点，没有任何自动流程
  */
 function 设备控制台() {
-  const t = use取();
+  const t = useTranslation();
   const 设备 = 用仓库((s) => s.设备.数据);
   const 连接 = 用仓库((s) => s.连接);
   const [忙, 设忙] = useState(false);
@@ -167,17 +167,17 @@ function 设备控制台() {
   const 是运行 = 态 === "运行";
   const 异常 = 态 === "故障" || 态 === "急停";
 
-  const 遥测: 数值行[] = 设备
+  const 遥测: ValueRow[] = 设备
     ? [
-        { 键: t("部署.后端"), 值: <span className="等宽">{设备.后端 || "--"}</span> },
-        { 键: t("部署.模式"), 值: <span className="等宽">{设备.模式 || "--"}</span> },
-        { 键: t("部署.实测平均延迟"), 值: <span className="等宽">{设备.实测平均延迟 ? `${设备.实测平均延迟.toFixed(1)} ms` : t("部署.还没收到")}</span> },
-        { 键: t("部署.实测最大延迟"), 值: <span className="等宽">{设备.实测最大延迟 ? `${设备.实测最大延迟.toFixed(1)} ms` : "--"}</span> },
-        { 键: t("部署.丢包错序"), 值: <span className="等宽">{`${设备.丢包数 ?? 0} / ${设备.错序数 ?? 0}`}</span> },
-        { 键: t("部署.拒绝数"), 值: <span className="等宽">{设备.拒绝数 ?? 0}</span> },
+        { key: t("部署.后端"), value: <span className="等宽">{设备.后端 || "--"}</span> },
+        { key: t("部署.模式"), value: <span className="等宽">{设备.模式 || "--"}</span> },
+        { key: t("部署.实测平均延迟"), value: <span className="等宽">{设备.实测平均延迟 ? `${设备.实测平均延迟.toFixed(1)} ms` : t("部署.还没收到")}</span> },
+        { key: t("部署.实测最大延迟"), value: <span className="等宽">{设备.实测最大延迟 ? `${设备.实测最大延迟.toFixed(1)} ms` : "--"}</span> },
+        { key: t("部署.丢包错序"), value: <span className="等宽">{`${设备.丢包数 ?? 0} / ${设备.错序数 ?? 0}`}</span> },
+        { key: t("部署.拒绝数"), value: <span className="等宽">{设备.拒绝数 ?? 0}</span> },
         {
-          键: t("部署.最近位置"),
-          值: (
+          key: t("部署.最近位置"),
+          value: (
             <span className="等宽">
               {设备.最近位置?.length
                 ? `${设备.最近位置.slice(0, 3).map((x) => x.toFixed(3)).join(", ")}…`
@@ -189,12 +189,12 @@ function 设备控制台() {
     : [];
 
   return (
-    <可折叠区块
-      标题={t("部署.设备")}
-      徽标={
-        <标签 语气={异常 ? "警示" : 是运行 ? "强调" : 已连接 ? "成功" : "警示"}>
+    <CollapsibleSection
+      title={t("部署.设备")}
+      badge={
+        <Tag tone={异常 ? "notice" : 是运行 ? "emphasis" : 已连接 ? "success" : "notice"}>
           {态名(态)}
-        </标签>
+        </Tag>
       }
     >
       <p className="mt-1 text-[0.85em]" style={{ color: "var(--warn)" }}>
@@ -232,38 +232,38 @@ function 设备控制台() {
       </ol>
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <按钮 种类="次" 尺寸="小" disabled={忙 || !可发} on按下={() => void 动("打开")}>
+        <Button variant="secondary" size="small" disabled={忙 || !可发} onPress={() => void 动("打开")}>
           {t("部署.打开")}
-        </按钮>
-        <按钮 种类="主" 尺寸="小" disabled={忙 || !可发 || 态 !== "已连接（未使能）"}
-              on按下={() => void 动("使能")}>
+        </Button>
+        <Button variant="primary" size="small" disabled={忙 || !可发 || 态 !== "已连接（未使能）"}
+              onPress={() => void 动("使能")}>
           {t("部署.使能")}
-        </按钮>
-        <按钮 种类="主" 尺寸="小" disabled={忙 || !可发 || 态 !== "使能中"}
-              on按下={() => void 动("进运行")}>
+        </Button>
+        <Button variant="primary" size="small" disabled={忙 || !可发 || 态 !== "使能中"}
+              onPress={() => void 动("进运行")}>
           {t("部署.进运行")}
-        </按钮>
-        <按钮 种类="次" 尺寸="小" disabled={忙 || !可发 || !已连接}
-              on按下={() => void 动("停止")}>
+        </Button>
+        <Button variant="secondary" size="small" disabled={忙 || !可发 || !已连接}
+              onPress={() => void 动("停止")}>
           {t("部署.停止")}
-        </按钮>
-        <按钮 种类="次" 尺寸="小" disabled={忙 || !可发 || !已连接}
-              on按下={() => void 动("急停")}>
+        </Button>
+        <Button variant="secondary" size="small" disabled={忙 || !可发 || !已连接}
+              onPress={() => void 动("急停")}>
           {t("部署.急停")}
-        </按钮>
-        <按钮 种类="次" 尺寸="小" disabled={忙 || !可发 || !已连接}
-              on按下={() => void 动("演练断线")}>
+        </Button>
+        <Button variant="secondary" size="small" disabled={忙 || !可发 || !已连接}
+              onPress={() => void 动("演练断线")}>
           {t("部署.演练")}
-        </按钮>
-        <按钮 种类="次" 尺寸="小" disabled={忙 || !可发}
-              on按下={() => void 动("导出审计")}>
+        </Button>
+        <Button variant="secondary" size="small" disabled={忙 || !可发}
+              onPress={() => void 动("导出审计")}>
           {t("部署.导出审计")}
-        </按钮>
+        </Button>
       </div>
 
       {设备 && 遥测.length ? (
         <div className="mt-2">
-          <数值表 行={遥测} />
+          <ValueTable rows={遥测} />
         </div>
       ) : null}
 
@@ -295,7 +295,7 @@ function 设备控制台() {
           </ul>
         </div>
       ) : null}
-    </可折叠区块>
+    </CollapsibleSection>
   );
 }
 

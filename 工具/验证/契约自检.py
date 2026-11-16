@@ -2,11 +2,11 @@
 契约自检.py —— P1 的 L0 层"可机检的不变量"
 
 它检查什么（三类，都是"会静默出错"的地方）：
-    ① **契约 vs 真实 dataclass**：`契约.py` 是手写的，手写就会漂移。
+    ① **契约 vs 真实 dataclass**：`contract.py` 是手写的，手写就会漂移。
        字段名/顺序/数量不一致时，前端的类型定义会与后端实际发出的东西对不上，
        而**运行期不会报错** —— 只是某个字段永远显示不出来。
     ② **生成物是否过期**：`前端/src/生成/契约.ts`、`主题.css`、`风格.ts`
-       是从 `契约.py` 与 `风格表.json` 生成的。来源改了没重新生成 = 前端拿旧契约解析新数据。
+       是从 `contract.py` 与 `风格表.json` 生成的。来源改了没重新生成 = 前端拿旧契约解析新数据。
     ③ **上行命令是否真的能落地**：每条登记的上行命令都要能构造出对应的消息类，
        否则"契约里有、实际发不出去"。
 
@@ -45,11 +45,11 @@ def 判(条件: bool, 说明: str) -> bool:
 
 
 def 检查契约与代码一致() -> None:
-    import 契约
+    import contract
     明细.append("\n【① 契约 vs 真实 dataclass】")
-    问题 = 契约.查漂移()
-    判(not 问题, f"登记了 {len(契约.所有主题)} 个主题（下行 {len(契约.下行主题)} / "
-                f"上行 {len(契约.上行主题)}），字段与 dataclass 逐项一致")
+    问题 = contract.find_drift()
+    判(not 问题, f'登记了 {len(contract.ALL_TOPICS)} 个主题（下行 {len(contract.OUTBOUND_TOPICS)} / '
+                f'上行 {len(contract.INBOUND_TOPICS)}），字段与 dataclass 逐项一致')
     for p in 问题:
         明细.append(f"      · {p}")
 
@@ -70,36 +70,36 @@ def 检查生成物() -> None:
 def 检查上行命令能落地() -> None:
     明细.append("\n【③ 上行命令能否真的构造出消息】")
     import importlib
-    import 契约
-    import 命令桥
-    for t in 契约.上行主题:
-        类 = 命令桥._取消息类(t.类名)                                    # noqa: SLF001
+    import contract
+    import command_bridge
+    for t in contract.INBOUND_TOPICS:
+        类 = command_bridge.get_message_class(t.class_name)                                    # noqa: SLF001
         if 类 is None:
-            判(False, f"{t.名} → {t.类名}：拿不到消息类")
+            判(False, f'{t.name} → {t.class_name}：拿不到消息类')
             continue
         # 用契约字段名构造一次（值按类型给最小合法值），确认字段名真的对得上
         试 = {}
-        for f in t.字段:
-            if f.类型 == "boolean":
-                试[f.名] = False
-            elif f.类型 == "number":
-                试[f.名] = 1.0
-            elif f.类型 == "string":
-                试[f.名] = "测试"
-            elif f.类型.endswith("[]"):
-                试[f.名] = []
+        for f in t.fields:
+            if f.type == "boolean":
+                试[f.name] = False
+            elif f.type == "number":
+                试[f.name] = 1.0
+            elif f.type == "string":
+                试[f.name] = "测试"
+            elif f.type.endswith("[]"):
+                试[f.name] = []
             else:
-                试[f.名] = {}
+                试[f.name] = {}
         try:
             类(**试)
-            判(True, f"{t.名:12} → {t.类名}（字段名与顺序都对得上）")
+            判(True, f'{t.name:12} → {t.class_name}（字段名与顺序都对得上）')
         except Exception as 异常:                                     # noqa: BLE001
-            判(False, f"{t.名} → {t.类名}：构造失败 {type(异常).__name__}: {异常}")
+            判(False, f'{t.name} → {t.class_name}：构造失败 {type(异常).__name__}: {异常}')
 
 
 def 检查校验器() -> None:
     明细.append("\n【④ 校验器：坏命令必须被挡、好命令必须放行】")
-    import 契约
+    import contract
     用例 = [
         # (主题, 负载, 期望通过, 说明)
         ("command.gravity", {"gravity_enabled": True}, True, "合法布尔"),
@@ -121,17 +121,17 @@ def 检查校验器() -> None:
         ("command.gravity", "不是对象", False, "负载不是对象"),
     ]
     for 主题, 负载, 期望, 说明 in 用例:
-        通过否, _ = 契约.校验(主题, 负载)
+        通过否, _ = contract.validate(主题, 负载)
         判(通过否 == 期望, f"{'放行' if 期望 else '拦住'}：{说明}")
 
 
 def 检查主题白名单与契约同源() -> None:
     明细.append("\n【⑤ 通道白名单必须从契约派生（不许有幽灵条目）】")
     import importlib
-    import 契约
-    桥 = importlib.import_module("Web桥")
-    契约类名 = {t.类名 for t in 契约.下行主题}
-    白名单 = set(桥.主题白名单)
+    import contract
+    桥 = importlib.import_module("web_bridge")
+    契约类名 = {t.class_name for t in contract.OUTBOUND_TOPICS}
+    白名单 = set(桥.TOPIC_ALLOWLIST)
     幽灵 = 白名单 - 契约类名
     漏掉 = 契约类名 - 白名单
     判(not 幽灵, f"白名单没有契约外的幽灵条目" + (f"（多出：{幽灵}）" if 幽灵 else ""))
@@ -144,13 +144,13 @@ def 检查桥模块的消息都已登记() -> None:
     import glob
     import os
 
-    import 契约
+    import contract
 
-    已登记类名 = {t.类名 for t in (契约.下行主题 + 契约.上行主题)}
+    已登记类名 = {t.class_name for t in (contract.OUTBOUND_TOPICS + contract.INBOUND_TOPICS)}
     # 明确**不参与** Web 契约的内部消息（每条都要写清为什么不参与，
     # 否则这个白名单迟早变成"什么都往里塞"的垃圾桶）。
     内部消息 = {
-        "面板目标消息":
+        "PanelTargetMessage":
             "viewer→sim 的滑杆目标（官方窗口内部用）。"
             "Web 界面改参数走 `command.parameters`，不走这条，所以它不该进契约。",
     }
@@ -206,16 +206,16 @@ def 检查版本号与变更记录一致() -> None:
     明细.append("\n【⑦ 契约版本号与变更记录】")
     import re
 
-    import 契约
+    import contract
 
-    源 = open(契约.__file__, encoding="utf-8").read()
-    声明 = re.search(r"^版本 = (\d+)$", 源, re.M)
+    源 = open(contract.__file__, encoding="utf-8").read()
+    声明 = re.search(r"^VERSION = (\d+)$", 源, re.M)
     if 声明 is None:
-        判(False, "契约.py 里找不到 `版本 = N`")
+        判(False, "contract.py 里找不到 `VERSION = N`")
         return
     声明版本 = int(声明.group(1))
-    判(声明版本 == 契约.版本, f"契约.版本 = {契约.版本}（与文件里的声明一致）"
-       if 声明版本 == 契约.版本 else f"契约.py 里写 {声明版本}，运行时是 {契约.版本}")
+    判(声明版本 == contract.VERSION, f'contract.VERSION = {contract.VERSION}（与文件里的声明一致）'
+       if 声明版本 == contract.VERSION else f'contract.py 里写 {声明版本}，运行时是 {contract.VERSION}')
 
     # 版本注释清单的最后一条，必须等于当前版本。
     # ★ 为什么查这个：`版本` 是前端判断"要不要提示刷新"的唯一依据。
@@ -224,13 +224,13 @@ def 检查版本号与变更记录一致() -> None:
     #   这两种都**不会报错**，只会悄悄漂移（我真踩过：加了两条主题、版本还停在 4）。
     号们 = [int(x) for x in re.findall(r"^#\s+(\d+)（", 源, re.M)]
     if not 号们:
-        判(False, "契约.py 的版本注释里一条编号都没有")
+        判(False, "contract.py 的版本注释里一条编号都没有")
         return
     最大 = max(号们)
-    判(最大 == 契约.版本,
-       f"变更记录到第 {最大} 条，与版本 {契约.版本} 一致"
-       if 最大 == 契约.版本
-       else f"变更记录最后一条是 {最大}，但版本是 {契约.版本} —— 加了主题没升版本，或升了没记录")
+    判(最大 == contract.VERSION,
+       f'变更记录到第 {最大} 条，与版本 {contract.VERSION} 一致'
+       if 最大 == contract.VERSION
+       else f'变更记录最后一条是 {最大}，但版本是 {contract.VERSION} —— 加了主题没升版本，或升了没记录')
 
 
 def main() -> int:

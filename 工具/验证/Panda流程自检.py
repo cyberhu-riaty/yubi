@@ -49,7 +49,7 @@ def 加载插件类():
         raise RuntimeError(f"无法加载插件：{插件路径}")
     模块 = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(模块)
-    类 = getattr(模块, "Panda官方MPC插件", None)
+    类 = getattr(模块, "PandaMPCController", None)
     if 类 is None:
         raise RuntimeError("插件文件里没有 Panda官方MPC插件")
     return 类

@@ -48,17 +48,17 @@ class MyController(ControlPlugin):
     author = "我"
 
     # ---- 如果你要调参，写在类属性里（改这里 → 重启就生效）----
-    参数A = 1.0
+    parameter_a = 1.0
 
     def __init__(self):
-        self.步数 = 0
+        self.step_count = 0
         # 需要跨步保存的东西（积分项、上一拍的目标…）都写在这里
 
     # ------------------------------------------------------------------
     # 可选：模型加载后调一次。只有需要缓存 model/data（比如做逆运动学）时才写
     # ------------------------------------------------------------------
     def receive_model(self, event) -> None:
-        self.模型, self.数据 = event.model, event.data
+        self.model, self.data = event.model, event.data
 
     # ------------------------------------------------------------------
     # ★ 必写：每转一圈仿真调用一次
@@ -69,20 +69,20 @@ class MyController(ControlPlugin):
         #   event.model      模型：关节数 nq、力矩上限 actuator_ctrlrange、关节限位 jnt_range…
         #   event.data       状态：qpos 关节角、qvel 角速度、qfrc_bias 重力项、时间 time、site(...) 末端位置
         #   要输出：把 6 个关节力矩写进 event.data.ctrl[:]
-        数据 = event.data
+        data = event.data
 
         # ↓↓↓ 在这里写你的算法 ↓↓↓
-        数据.ctrl[:] = 数据.qfrc_bias          # 先只做重力补偿（机器人会"漂浮"，不会掉下来）
+        data.ctrl[:] = data.qfrc_bias          # 先只做重力补偿（机器人会"漂浮"，不会掉下来）
         # ↑↑↑ 在这里写你的算法 ↑↑↑
 
-        self.步数 += 1
+        self.step_count += 1
         return False        # False = 不拦截（推荐）；True = 吃掉这条消息，后面的插件收不到
 
     # ------------------------------------------------------------------
     # 可选：终端里定期显示的状态
     # ------------------------------------------------------------------
     def status(self) -> dict:
-        return {"步数": self.步数}
+        return {"步数": self.step_count}
 
 
 plugin_class = MyController

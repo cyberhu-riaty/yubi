@@ -278,9 +278,9 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
     返回：0 正常 / 1 出错
     """
     import mujoco
-    # 全部走适配层（`软件/官方层.py`）：本文件是唯一允许"间接"碰 Studio 的地方，
-    # 直接 import mujoco.experimental.* 已被断言禁止（见 工具/验证/官方层自检.py）。
-    from 官方层 import launch_native, launch_thread, messages, viewer_handle
+    # 全部走适配层（`软件/official_api.py`），消息类仍使用官方原始对象。
+    # 直接 import mujoco.experimental.* 已被断言禁止（见 工具/验证/official_api_selfcheck.py）。
+    from official_api import launch_native, launch_thread, messages, viewer_handle
 
     # 同一进程内再次启动（主要用于自检）时，不能把上一次残留消息带进新模型。
     _drain_local_queue()
@@ -507,7 +507,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
             #   共同点都是"赋值/import 写在使用点之后"。所以这里的规矩是：
             #   **凡是被嵌套函数用到的模块级/闭包名，都放到最前面统一备好。**
             try:
-                import 插件桥 as _plugin_bridge
+                import plugin_bridge as _plugin_bridge
             except Exception as _exc:                                    # noqa: BLE001
                 print(f"⚠ 插件目录不可用（插件视图将没有数据）：{_exc}")
                 _plugin_bridge = None
@@ -528,7 +528,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
             # 振荡/发散需逐关节有符号信号，不能拿最大绝对值硬猜。
             #   ★ 必须在循环之前建好（循环里每步都要喂它）。
             try:
-                import 观测核心 as _observation_core
+                import observation_core as _observation_core
                 _observation = _observation_core.ObservationCore(_publish_outlet)
                 print("【观测】病态检出已就绪（跟踪超差 / 饱和；振荡与发散等待逐关节有符号指标）",
                       flush=True)
@@ -539,7 +539,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
             # 设备连接桥：部署页的控制端（模拟后端 + 安全层 + 审计）
             #   ★ 界面只"请求"，进「运行」必须由人显式点按（规格 B3-8）。
             try:
-                import 设备.连接桥 as _connection_bridge
+                import devices.connection_bridge as _connection_bridge
                 _device_bridge = _connection_bridge.DeviceBridge(
                     _publish_outlet,
                     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -553,7 +553,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
 
             # 部署器：导出可带走的包（**不连真机** —— 这个软件没有传输层）
             try:
-                import 部署桥 as _deployment_bridge
+                import deployment_bridge as _deployment_bridge
                 _deployer = _deployment_bridge.Deployer(_publish_outlet,
                                         os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
                 registry.add_plugin(_deployer)
@@ -1133,7 +1133,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
             #   ★ 用子进程跑 `工具/验证/*.py`（就是终端里那批脚本），不另写一份检查 ——
             #     两套检查迟早不一致，不一致的那套一定会在关键时刻骗人。
             try:
-                import 诊断桥 as _diagnostics_bridge
+                import diagnostics_bridge as _diagnostics_bridge
                 _diagnostics_runner = _diagnostics_bridge.DiagnosticsRunner(_publish_outlet, os.path.dirname(os.path.dirname(
                     os.path.abspath(__file__))))
                 registry.add_plugin(_diagnostics_runner)
@@ -1144,7 +1144,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
             # 关节高亮应用器：日志里的 J4 点击后，把"亮 J4"写到进程内共享状态。
             #   ★ 纯视觉；宿主主线程读它，不参与物理/控制。
             try:
-                import 高亮桥 as _highlight_bridge
+                import highlight_bridge as _highlight_bridge
                 registry.add_plugin(_highlight_bridge.HighlightApplier())
                 print("【高亮】关节定位通道已注册", flush=True)
             except Exception as exc:                                     # noqa: BLE001

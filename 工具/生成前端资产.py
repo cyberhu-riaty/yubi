@@ -73,16 +73,16 @@ _TS类型 = {
 
 
 def 生成契约ts() -> str:
-    import 契约
+    import contract
 
-    数据 = 契约.转字典()
+    数据 = contract.to_dict()
     行: list[str] = [
         "// ⚠️ 本文件由 `工具/生成前端资产.py` 生成，**不要手改**。",
-        "// 来源：`软件/契约.py`（后端与前端之间唯一的通信契约）。",
+        "// 来源：`软件/contract.py`（后端与前端之间唯一的通信契约）。",
         "// 改了契约就跑一次生成；`工具/验证/契约自检.py` 会检查它有没有过期。",
         "",
         f"export const 契约版本 = {数据['版本']};",
-        f"export const 协议版本 = {契约.版本};",
+        f'export const 协议版本 = {contract.VERSION};',
         "",
     ]
 

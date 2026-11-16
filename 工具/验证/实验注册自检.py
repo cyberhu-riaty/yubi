@@ -182,14 +182,14 @@ def main() -> int:
         target[1] += step * 0.001
         tracking_pid.on_panel_target(PanelTargetMessage(ctrl_target=target))
         tracking_pid.step(messages.StepEvent(model=model, data=data))
-    assert float(tracking_pid.积分[1]) > 1e-5, "连续目标更新不应逐拍清空积分"
+    assert float(tracking_pid.integral[1]) > 1e-5, "连续目标更新不应逐拍清空积分"
     jumped = target.copy()
     jumped[1] += 0.3
     tracking_pid.on_panel_target(PanelTargetMessage(ctrl_target=jumped))
-    assert np.max(np.abs(tracking_pid.积分)) < 1e-12, "大幅目标跳变应清空旧积分"
+    assert np.max(np.abs(tracking_pid.integral)) < 1e-12, "大幅目标跳变应清空旧积分"
     tracking_pid.KP = 5000.0
     tracking_pid.step(messages.StepEvent(model=model, data=data))
-    assert abs(float(tracking_pid.积分[1])) < 1e-12, "力矩饱和且误差同向时不应继续积分"
+    assert abs(float(tracking_pid.integral[1])) < 1e-12, "力矩饱和且误差同向时不应继续积分"
     print("[PASS] PID 连续轨迹保留积分，大幅跳变清零，饱和时停止同向积分")
     passed += 1
 

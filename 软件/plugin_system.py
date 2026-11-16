@@ -31,9 +31,9 @@ KNOWN_GOOD_VERSIONS = ("3.13.0",)          # 我们实测跑通过的 mujoco 版
 def _import_official():
     """取官方 Studio 的各子模块。
 
-    ★ 现在**不在本文件碰 `mujoco.experimental`** —— 全部经由 `软件/官方层.py`
+    ★ 现在**不在本文件碰 `mujoco.experimental`** —— 全部经由 `软件/official_api.py`
       （全工程唯一一处 import 官方实验层的地方）。
-      好处：MuJoCo 升级改了 API，只需改那一个文件，`官方层.自检()` 会逐条指出缺什么。
+      好处：MuJoCo 升级改了 API，只需改那一个文件，`official_api.self_check()` 会逐条指出缺什么。
       失败时抛人话版异常（附解决办法）。
     """
     try:
@@ -152,6 +152,8 @@ class ControlPlugin:
     #   · 像"数据录制"这种**平时不写、回放时才写**的，仍算 False
     #     —— 回放是用户主动点的，不是它的默认行为。
     takes_control = True
+    # Persisted parameter labels may outlive an internal attribute rename.
+    parameter_aliases: dict[str, str] = {}
 
     # ---- 插件自己的状态（比如"跑了多少步"），由外壳负责收集 ----
     def status(self) -> dict:
@@ -189,7 +191,8 @@ class ControlPlugin:
           校验点放在基类而不是各插件里：`adjustable_parameters()` 声明的范围就是契约，
           基类照着执行一次，所有插件自动受益，也让"范围"这个字段真的有意义。
         """
-        if not hasattr(self, name):
+        attribute_name = self.parameter_aliases.get(name, name)
+        if not hasattr(self, attribute_name):
             return f"插件 {type(self).__name__} 没有参数「{name}」"
         numeric_value = float(value)
         value_range = None
@@ -209,7 +212,7 @@ class ControlPlugin:
             except (TypeError, ValueError, IndexError):
                 pass                       # 范围写得不规范就跳过校验，不因它拦住改参数
         try:
-            setattr(self, name, numeric_value)
+            setattr(self, attribute_name, numeric_value)
             return ""
         except Exception as exc:                                        # noqa: BLE001
             return f"设置 {name} 失败：{exc}"

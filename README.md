@@ -145,14 +145,19 @@ Windows 启动方式：
 
 ```text
 yubi/
+├── run_yubi.py            桌面入口（ASCII 路径，供启动器/终端/打包用）
+├── run_yubi_web.py        浏览器入口
+├── 实验/                  无界面实验定义与运行入口（run_experiment_cli.py）
+├── scripts/               命名审计等仓库维护脚本
 ├── 软件/                  runtime/plugin/project/model 核心、宿主及各消息桥
 ├── 前端/                  React 19 + Vite 7 + Tailwind 4 源码（构建产物在 软件/web/）
 ├── 算法库/通用/           控制、录制、辨识插件与算法模板
 ├── 模型/                  MuJoCo 模型与网格资产（6 台机械臂 + Robotiq 2F85 + Panda MPC 任务）
 ├── 项目/                  项目配置：一个项目 = 模型 + 算法列表 + 参数
 ├── 工具/                  环境重建、模型导入、URDF→MJCF、打包、前端资产生成
-│   └── 验证/              18 个可独立运行的检查脚本（诊断页跑其中 11 个）
+│   └── 验证/              19 个可独立运行的检查脚本（诊断页跑其中 11 个）
 ├── docs/                  使用手册与界面截图
+├── .github/workflows/     命名审计 CI
 ├── CHANGELOG.md           版本变更记录
 ├── CONTRIBUTING.md        协作约定
 └── requirements.lock      依赖版本基线

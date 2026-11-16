@@ -39,24 +39,24 @@ class JointPDController(ControlPlugin):
     # ---- 调参入口（改这里就能调"性格"）----
     KP = 200.0            # 弹簧刚度：越大越硬、追得越快；太大 → 抖
     KD = 30.0             # 阻尼：越大越稳；太小 → 到位后来回晃
-    启动时动作 = "抬臂"    # "保持不动"＝停在 home 姿势；"抬臂"＝抬 20° 演示一下
-    听界面滑杆 = True      # True：界面 Controls 面板的滑杆说了算（拖了立刻跟过去）
+    startup_action = "抬臂"    # "保持不动"＝停在 home 姿势；"抬臂"＝抬 20° 演示一下
+    follow_panel_target = True      # True：界面 Controls 面板的滑杆说了算（拖了立刻跟过去）
 
     def __init__(self):
-        self.目标 = None          # 第一次调用时才知道 home 姿势，所以先留空
-        self.步数 = 0
-        self.当前误差 = float("nan")
-        self.最大误差 = 0.0
-        self.界面目标 = None      # 来自界面滑杆（由 界面桥.py 每帧发过来）
-        self.最后一次力矩 = np.zeros(6)
+        self.target = None          # 第一次调用时才知道 home 姿势，所以先留空
+        self.step_count = 0
+        self.current_error = float("nan")
+        self.max_error = 0.0
+        self.panel_target = None      # 来自界面滑杆（由 界面桥.py 每帧发过来）
+        self.last_torque = np.zeros(6)
         # 每个执行器的力矩上限（首步从模型读一次），供「饱和关节数」指标用
-        self._力矩上限 = None
+        self._torque_limits = None
 
     # ------------------------------------------------------------------
     # 兼容性预检：外壳换模型时会先问一句"这个模型你能跑吗"
     #   （契约见 软件/plugin_system.py 的 `ControlPlugin`）
     # ------------------------------------------------------------------
-    def check_model_compatibility(self, 模型) -> str:
+    def check_model_compatibility(self, model) -> str:
         """要求"每个关节都有自己的力矩执行器"，也就是 nu == nq（扭矩模型）。
 
         为什么必须有这一条：本算法的核心就是
@@ -67,8 +67,8 @@ class JointPDController(ControlPlugin):
         以前只能靠"跑起来抛异常 → 出错隔离停用"发现，代价是**不可恢复**，
         而且界面上照样显示它挂着。现在装配时就挡掉，并把原因写给界面。
         """
-        nq = int(getattr(模型, "nq", 0))
-        nu = int(getattr(模型, "nu", 0))
+        nq = int(getattr(model, "nq", 0))
+        nu = int(getattr(model, "nu", 0))
         if nq == 0 or nu == 0:
             return "模型没有关节或执行器（空场景 / 纯展示模型）"
         if nu != nq:
@@ -79,9 +79,9 @@ class JointPDController(ControlPlugin):
     # 可选：界面滑杆的值（界面桥.py 每帧发一条快照过来）
     # ------------------------------------------------------------------
     @step_handler
-    def on_panel_target(self, 消息: PanelTargetMessage) -> bool:
+    def on_panel_target(self, message: PanelTargetMessage) -> bool:
         try:
-            self.界面目标 = 消息.ctrl_target.copy()
+            self.panel_target = message.ctrl_target.copy()
         except Exception:                                     # noqa: BLE001
             pass
         return False
@@ -91,44 +91,44 @@ class JointPDController(ControlPlugin):
     # ------------------------------------------------------------------
     @step_handler
     def step(self, event: studio.messages.StepEvent) -> bool:
-        模型, 数据 = event.model, event.data
+        model, data = event.model, event.data
 
         # 首步记下执行器力矩上限（给「饱和关节数」指标用）。
         # 只读一次即可：换模型时外壳会重建插件实例，不会读到过期值。
-        if self._力矩上限 is None:
+        if self._torque_limits is None:
             try:
-                _范围 = np.asarray(getattr(模型, "actuator_ctrlrange", []), dtype=float)
-                if int(模型.nu) > 0 and _范围.size == 2 * int(模型.nu):
-                    self._力矩上限 = np.abs(_范围).reshape(-1, 2).max(axis=1)
+                _control_ranges = np.asarray(getattr(model, "actuator_ctrlrange", []), dtype=float)
+                if int(model.nu) > 0 and _control_ranges.size == 2 * int(model.nu):
+                    self._torque_limits = np.abs(_control_ranges).reshape(-1, 2).max(axis=1)
             except Exception:                                 # noqa: BLE001
-                self._力矩上限 = None
+                self._torque_limits = None
 
         # ★ 空场景（模型/空场景.xml）里 nq = nv = nu = 0，没有关节可控制。
         #   不判断的话下面 目标[1] 会越界 —— 实测会抛 IndexError，插件被"出错隔离"
         #   停用，之后即使换了真模型也不会被控制，只能重启。所以先挡一道。
-        if 数据.qpos.size < 3 or 数据.ctrl.size == 0:
-            self.目标 = None            # 换成真模型后，重新以新模型的姿势为基准
+        if data.qpos.size < 3 or data.ctrl.size == 0:
+            self.target = None            # 换成真模型后，重新以新模型的姿势为基准
             return False
 
-        if self.目标 is None:                       # 第一次：用 home 姿势当基准
-            self.目标 = 数据.qpos.copy()
-            if self.启动时动作 == "抬臂":
-                self.目标[1] += 0.35            # shoulder_lift 抬一点
-                self.目标[2] -= 0.35            # elbow 收一点
+        if self.target is None:                       # 第一次：用 home 姿势当基准
+            self.target = data.qpos.copy()
+            if self.startup_action == "抬臂":
+                self.target[1] += 0.35            # shoulder_lift 抬一点
+                self.target[2] -= 0.35            # elbow 收一点
 
         # 目标优先级：界面滑杆（拖过就听它的）> 本文件里写的目标
-        目标 = self.目标
-        if (self.听界面滑杆 and self.界面目标 is not None
-                and len(self.界面目标) == len(数据.qpos)):
-            目标 = self.界面目标
+        target = self.target
+        if (self.follow_panel_target and self.panel_target is not None
+                and len(self.panel_target) == len(data.qpos)):
+            target = self.panel_target
 
-        误差 = 目标 - 数据.qpos
-        数据.ctrl[:] = self.KP * 误差 - self.KD * 数据.qvel + 数据.qfrc_bias
-        self.最后一次力矩 = 数据.ctrl.copy()
+        error = target - data.qpos
+        data.ctrl[:] = self.KP * error - self.KD * data.qvel + data.qfrc_bias
+        self.last_torque = data.ctrl.copy()
 
-        self.步数 += 1
-        self.当前误差 = float(np.abs(误差).max())
-        self.最大误差 = max(self.最大误差, self.当前误差)
+        self.step_count += 1
+        self.current_error = float(np.abs(error).max())
+        self.max_error = max(self.max_error, self.current_error)
         return False            # 返回 False = 不拦截（让别的插件也能看到这一步）
 
     # ------------------------------------------------------------------
@@ -146,35 +146,35 @@ class JointPDController(ControlPlugin):
     #   写在这里的数会自动出现在界面的 Monitor 窗口里 —— 不用改外壳、不用改面板。
     # ------------------------------------------------------------------
     def metrics(self) -> dict:
-        if self.目标 is None:
+        if self.target is None:
             return {}
         # ★ 「饱和关节数」是给**病态检出**用的（见 软件/观测核心.py）：
         #   力矩顶在执行器上限时，再加增益不会有任何改善 —— 这是最容易被
         #   误读成"还不够用力"的状态。数出来比看曲线可靠。
         #   口径：|ctrl| ≥ 98% 的上限算饱和；模型没声明 ctrlrange 就报 0
         #   （报 0 而不是猜：没有限位信息时我们无从判断是否饱和）。
-        饱和关节数 = 0.0
-        if self._力矩上限 is not None:
+        saturated_joints = 0.0
+        if self._torque_limits is not None:
             try:
-                比 = np.abs(self.最后一次力矩) / np.maximum(self._力矩上限, 1e-12)
-                饱和关节数 = float(np.sum(比 >= 0.98))
+                ratio = np.abs(self.last_torque) / np.maximum(self._torque_limits, 1e-12)
+                saturated_joints = float(np.sum(ratio >= 0.98))
             except Exception:                                 # noqa: BLE001
                 pass
         return {
-            "最大误差(deg)": float(np.degrees(self.当前误差)),
-            "力矩峰值(Nm)" : float(np.abs(self.最后一次力矩).max()),
-            "饱和关节数"   : 饱和关节数,
+            "最大误差(deg)": float(np.degrees(self.current_error)),
+            "力矩峰值(Nm)" : float(np.abs(self.last_torque).max()),
+            "饱和关节数"   : saturated_joints,
         }
 
     # ------------------------------------------------------------------
     def status(self) -> dict:
-        if self.目标 is None:
+        if self.target is None:
             return {"状态": "等待第一步"}
-        来源 = "界面滑杆" if (self.听界面滑杆 and self.界面目标 is not None) else "文件里的目标"
-        return {"步数": self.步数,
-                "当前误差": f"{np.degrees(self.当前误差):.3f}°",
-                "历史最大": f"{np.degrees(self.最大误差):.3f}°",
-                "目标来源": 来源}
+        source = "界面滑杆" if (self.follow_panel_target and self.panel_target is not None) else "文件里的目标"
+        return {"步数": self.step_count,
+                "当前误差": f'{np.degrees(self.current_error):.3f}°',
+                "历史最大": f'{np.degrees(self.max_error):.3f}°',
+                "目标来源": source}
 
 
 plugin_class = JointPDController

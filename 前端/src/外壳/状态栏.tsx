@@ -16,10 +16,10 @@
  * 只会把它撑成两行（实测 576px 宽时旧版就换行了）。语言开关放在「外观」页。
  */
 import { 用仓库 } from "../数据/仓库";
-import { 连接键, use取, 数, 时长 } from "../视图/文案";
+import { connectionTranslationKeys, useTranslation, formatNumber, formatDuration } from "../视图/文案";
 
 export function 状态栏() {
-  const t = use取();
+  const t = useTranslation();
   const 连接 = 用仓库((s) => s.连接);
   const 仿真 = 用仓库((s) => s.仿真.数据);
   const 系统 = 用仓库((s) => s.系统.数据);
@@ -48,13 +48,13 @@ export function 状态栏() {
       <格
         标签={t("状态栏.仿真时间")}
         提示={t("状态栏.提示.仿真时间")}
-        值={仿真秒 === undefined ? "--" : 时长(仿真秒)}
+        值={仿真秒 === undefined ? "--" : formatDuration(仿真秒)}
         宽="13ch"
       />
       <格
         标签={t("状态栏.实时率")}
         提示={t("状态栏.提示.实时率")}
-        值={RTF === undefined ? "--" : `${数(RTF, 2)}×`}
+        值={RTF === undefined ? "--" : `${formatNumber(RTF, 2)}×`}
         宽="9ch"
         警示={RTF警示}
       />
@@ -70,7 +70,7 @@ export function 状态栏() {
       <span className="状态栏项" role="status" title={t("状态栏.提示.连接")}>
         <span className="状态栏标签">{t("状态栏.连接")}</span>
         <span className="状态点" aria-hidden="true" style={{ background: 连接色 }} />
-        <span className="等宽">{t(连接键[连接])}</span>
+        <span className="等宽">{t(connectionTranslationKeys[连接])}</span>
       </span>
     </footer>
   );

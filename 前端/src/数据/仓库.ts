@@ -16,7 +16,7 @@
  *   （用墙钟而不是仿真时间：物理暂停时仿真时间不动，曲线会挤成一坨）。
  */
 import { useSyncExternalStore } from "react";
-import { 连接, 猜地址, type 回执, type 帧, type 握手, type 连接状态, type 采样点 } from "./连接";
+import { 连接, 猜地址, type 回执, type 帧, type 握手, type 连接状态, type SamplePoint } from "./连接";
 
 export interface ProjectState {
   project?: string;
@@ -328,7 +328,7 @@ export interface 界面状态 {
   参数: 快照域<{ parameters?: Record<string, ParameterItem> }>;
   辨识: 快照域<辨识状态>;
   /** {曲线名: 采样点[]} —— 只留最近 N 个点 */
-  曲线: Record<string, 采样点[]>;
+  曲线: Record<string, SamplePoint[]>;
   曲线总帧: number;
   回执: 回执 | null;
 }
@@ -527,7 +527,7 @@ function 收帧(帧: 帧): void {
   }
 }
 
-function 淘汰(点: 采样点[], 现在: number): 采样点[] {
+function 淘汰(点: SamplePoint[], 现在: number): SamplePoint[] {
   let 出 = 点;
   if (出.length > 曲线容量) 出 = 出.slice(出.length - 曲线容量);
   const 最早 = 现在 - 曲线窗口;

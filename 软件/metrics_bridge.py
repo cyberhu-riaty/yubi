@@ -24,16 +24,18 @@ Collect controller metrics and publish them to the workbench.
 from __future__ import annotations
 
 import dataclasses
+from wire_compatibility import legacy_wire
 import time
 from typing import Any, Callable
 
-from 官方层 import messages          # 全部走适配层，见 软件/官方层.py
+from official_api import messages          # 全部走适配层，见 软件/official_api.py
 
 # 发布频率上限：物理是 500 Hz，但曲线不需要那么密（30 Hz 足够顺滑），
 # 而且能避免把通道塞满、避免面板画图成为瓶颈。想改就改这个数。
 PUBLISH_RATE = 30.0
 
 
+@legacy_wire('MetricsSnapshot', {'simulation_time': '时间', 'wall_clock': '墙钟', 'values': '数值'})
 @dataclasses.dataclass(frozen=True)
 class MetricsSnapshot(messages.Snapshot):
     """一帧指标快照。Snapshot = 只保留最新一条（旧的不排队，天然适合实时曲线）。
@@ -41,9 +43,9 @@ class MetricsSnapshot(messages.Snapshot):
     ★ 必须加 @dataclasses.dataclass，否则 pybind 侧取不到字段（实测踩过）。
     """
 
-    时间: float            # 仿真时间（秒）
-    墙钟: float            # 真实时间（秒），面板用它做横轴更平稳
-    数值: dict             # {指标名: 数字}
+    simulation_time: float            # 仿真时间（秒）
+    wall_clock: float            # 真实时间（秒），面板用它做横轴更平稳
+    values: dict             # {指标名: 数字}
 
 
 def collect_metrics(registry) -> dict[str, float]:
@@ -91,7 +93,7 @@ class Publisher:
         metrics = collect_metrics(registry)
         self.latest = metrics
         try:
-            self._send(MetricsSnapshot(时间=simulation_time, 墙钟=time.time(), 数值=metrics))
+            self._send(MetricsSnapshot(simulation_time=simulation_time, wall_clock=time.time(), values=metrics))
             self.published_count += 1
             return True
         except Exception as exc:                                       # noqa: BLE001

@@ -13,7 +13,7 @@
  */
 import type { ReactNode } from "react";
 import { 底部步骤, 任务步骤, 运行步骤, type 步骤id } from "./任务流";
-import { use取 } from "../视图/文案";
+import { useTranslation } from "../视图/文案";
 
 export interface 活动栏参数 {
   当前: 步骤id;
@@ -185,7 +185,7 @@ function 组标题({ 文字 }: { 文字: string }) {
 }
 
 export function 活动栏({ 当前, 侧栏开, on选步 }: 活动栏参数) {
-  const t = use取();
+  const t = useTranslation();
 
   const 画组 = (组: typeof 任务步骤, 快捷键起?: number): ReactNode =>
     组.map((s, i) => (

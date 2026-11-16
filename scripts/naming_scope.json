@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "source_roots": [
+    "软件", "算法库", "工具", "前端", "项目", "实验", "scripts",
+    "src", "frontend", "controllers", "tools", "projects", "experiments", "tests"
+  ],
+  "exclude_directories": [
+    "node_modules", ".venv", "__pycache__", ".git", ".pnpm-store", "dist"
+  ],
+  "exclude_paths": ["软件/web"],
+  "source_extensions": [".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".sh", ".css"],
+  "config_extensions": [".json"],
+  "exclude_files": ["package-lock.json"],
+  "advisory_categories": ["string_key"],
+  "notes": {
+    "scope": "Application-owned source, tests, tools, configuration, and root launchers; both current and planned English directories are covered.",
+    "assets": "Models, fonts, archives, reports, ur10 upstream code, and compiled web bundles are excluded. Frontend generated source is included and must be fixed through its generator.",
+    "string_keys": "Non-ASCII literal object/dictionary keys need human classification: some are machine fields, others are user-visible labels. They are reported separately and do not fail the incremental gate."
+  }
+}

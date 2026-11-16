@@ -24,12 +24,12 @@ import sys
 if 软件目录 not in sys.path:
     sys.path.insert(0, 软件目录)
 
-from 官方层 import dear_imgui as imgui            # noqa: E402
-from 官方层 import implot                            # noqa: E402
+from official_api import dear_imgui as imgui            # noqa: E402
+from official_api import implot                            # noqa: E402
 
 if 软件目录 not in sys.path:
     sys.path.insert(0, 软件目录)
-import 界面文字                                                        # noqa: E402
+import ascii_text                                                        # noqa: E402
 
 
 def 枚举名(类) -> set[str]:
@@ -85,8 +85,8 @@ def 检查未定义的css变量() -> None:
     允许 = {"--tw-ring-offset-shadow", "--tw-ring-shadow", "--tw-shadow"}
     漏 = []
     用了 = 0
-    for 文件 in glob.glob(str(包根 / "前端/src/**/*.tsx"), recursive=True) + \
-            glob.glob(str(包根 / "前端/src/**/*.ts"), recursive=True) + \
+    for 文件 in glob.glob(str(包根 / "前端/src/**/*.tsx"), recursive=True) +\
+            glob.glob(str(包根 / "前端/src/**/*.ts"), recursive=True) +\
             glob.glob(str(包根 / "前端/src/**/*.css"), recursive=True):
         源 = open(文件, encoding="utf-8").read()
         for 名 in re.findall(r"var\((--[a-zA-Z0-9_-]+)", 源):
@@ -153,9 +153,9 @@ def main() -> int:
             值 = str(风格.get(字段) or "")
             if not 值:
                 错误.append(f"{名}.{字段} 缺失 —— 面板上要显示它（中文会画成 ?）")
-            elif not 界面文字.可用(值):
+            elif not ascii_text.is_supported(值):
                 错误.append(f"{名}.{字段} 含字体画不出来的字符：{值!r}")
-        if not 界面文字.可用(str(风格.get("基底主题") or "")):
+        if not ascii_text.is_supported(str(风格.get("基底主题") or "")):
             错误.append(f"{名}.基底主题 含画不出来的字符")
 
     # 基底主题必须是官方认得的

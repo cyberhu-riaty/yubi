@@ -34,29 +34,29 @@ sys.path.insert(0, str(包根 / "软件"))
 禁词 = ("宿主窗口", "AppKit", "WebKit", "PyObjC", "import objc", "NSWindow", "NSOpenGLView")
 
 
-def 查入口(路径: Path) -> list[str]:
+def 查入口(path: Path) -> list[str]:
     问题: list[str] = []
     try:
-        源 = 路径.read_text(encoding="utf-8")
+        源 = path.read_text(encoding="utf-8")
         树 = ast.parse(源)
     except (SyntaxError, UnicodeDecodeError):
-        return [f"{路径.name}: 解析失败"]
+        return [f'{path.name}: 解析失败']
 
     # 只查**代码**里出现（import 语句 + 名字），注释与说明文字允许提到
     for 节点 in ast.walk(树):
         if isinstance(节点, ast.Import):
             for a in 节点.names:
                 根 = a.name.split(".")[0]
-                if 根 in ("宿主窗口", "objc"):
+                if 根 in ("native_host", "objc"):
                     问题.append(
-                        f"{路径.name}:{节点.lineno} — 入口直接 import 了 {a.name}，"
+                        f'{path.name}:{节点.lineno} — 入口直接 import 了 {a.name}，'
                         f"应改为经 平台适配层")
         elif isinstance(节点, ast.ImportFrom):
             模块 = 节点.module or ""
             根 = 模块.split(".")[0]
-            if 根 in ("宿主窗口", "AppKit", "WebKit", "objc", "Quartz"):
+            if 根 in ("native_host", "AppKit", "WebKit", "objc", "Quartz"):
                 问题.append(
-                    f"{路径.name}:{节点.lineno} — 入口直接 from-import 了 {模块}，"
+                    f'{path.name}:{节点.lineno} — 入口直接 from-import 了 {模块}，'
                     f"应改为经 平台适配层")
     return 问题
 
@@ -72,46 +72,46 @@ def main() -> int:
 
     # ②③ 契约 vs 实现
     try:
-        import 平台适配层
-        from 平台适配层.契约 import 平台能力
-    except Exception as 异常:                                          # noqa: BLE001
-        print(f"  ✗ 平台适配层导入失败：{type(异常).__name__}: {异常}")
+        import platform_adapters
+        from platform_adapters.interface import PlatformCapabilities
+    except Exception as exc:                                          # noqa: BLE001
+        print(f'  ✗ 平台适配层导入失败：{type(exc).__name__}: {exc}')
         return 1
 
-    抽象 = 平台能力.__abstractmethods__
-    期望 = {"可用", "起", "视口矩形", "统计"}
-    if set(抽象) != 期望:
-        问题.append(f"契约的抽象方法变了：现在 {sorted(抽象)}，期望 {sorted(期望)}")
+    抽象 = PlatformCapabilities.__abstractmethods__
+    desired = {"is_available", "run", "viewport_rectangle", "statistics"}
+    if set(抽象) != desired:
+        问题.append(f'契约的抽象方法变了：现在 {sorted(抽象)}，期望 {sorted(desired)}')
 
     # `起` 的参数里必须有 视口槽（这是平台层与入口之间唯一的状态通道）
     import inspect
-    签名 = inspect.signature(平台能力.起)
-    if "视口槽" not in 签名.parameters:
+    signature = inspect.signature(PlatformCapabilities.run)
+    if "viewport_slot" not in signature.parameters:
         问题.append("契约的 `起()` 缺少 `视口槽` 参数（平台层与入口的状态通道）")
 
     try:
-        平台 = 平台适配层.取实现()
-    except Exception as 异常:                                          # noqa: BLE001
-        print(f"  ✗ 取实现失败：{type(异常).__name__}: {异常}")
+        platform = platform_adapters.get_implementation()
+    except Exception as exc:                                          # noqa: BLE001
+        print(f'  ✗ 取实现失败：{type(exc).__name__}: {exc}')
         return 1
 
-    for 名 in 抽象:
-        if not hasattr(平台, 名):
-            问题.append(f"实现 {type(平台).__name__} 缺少方法 {名}")
-        elif getattr(type(平台), 名, None) is getattr(平台能力, 名, None):
-            问题.append(f"实现 {type(平台).__name__} 没有覆写抽象方法 {名}")
+    for name in 抽象:
+        if not hasattr(platform, name):
+            问题.append(f'实现 {type(platform).__name__} 缺少方法 {name}')
+        elif getattr(type(platform), name, None) is getattr(PlatformCapabilities, name, None):
+            问题.append(f'实现 {type(platform).__name__} 没有覆写抽象方法 {name}')
 
     # ④ 可用() 可调用且返回二元组
     try:
-        结果 = 平台.可用()
-        if not (isinstance(结果, tuple) and len(结果) == 2):
-            问题.append(f"`可用()` 应返回 (bool, str)，实际 {结果!r}")
-    except Exception as 异常:                                          # noqa: BLE001
-        问题.append(f"`可用()` 抛异常：{type(异常).__name__}: {异常}")
+        result = platform.is_available()
+        if not (isinstance(result, tuple) and len(result) == 2):
+            问题.append(f'`可用()` 应返回 (bool, str)，实际 {result!r}')
+    except Exception as exc:                                          # noqa: BLE001
+        问题.append(f'`可用()` 抛异常：{type(exc).__name__}: {exc}')
 
     if not args.简:
         print("=" * 78)
-        print(f"  平台层自检：入口 {len(入口文件)} 个，实现 {type(平台).__name__}")
+        print(f'  平台层自检：入口 {len(入口文件)} 个，实现 {type(platform).__name__}')
         print("=" * 78)
     if 问题:
         for 条 in 问题:
@@ -120,14 +120,14 @@ def main() -> int:
         return 1
 
     if args.简:
-        print(f"  结果：✓ 边界干净，契约 {len(抽象)}/4 方法齐备（{type(平台).__name__}）")
+        print(f'  结果：✓ 边界干净，契约 {len(抽象)}/4 方法齐备（{type(platform).__name__}）')
     else:
         print("  ✓ 入口不直接 import 任何平台模块（只经 平台适配层）")
         print(f"  ✓ 契约抽象方法 {len(抽象)}/4 齐备：{', '.join(sorted(抽象))}")
         print(f"  ✓ `起()` 含 视口槽 参数（平台层与入口唯一状态通道）")
-        可用, 原因 = 平台.可用()
-        print(f"  {'✓' if 可用 else '✗'} 当前平台可用：{平台.名称}"
-              + (f"（{原因}）" if 原因 else ""))
+        is_available, reason = platform.is_available()
+        print(f"  {('✓' if is_available else '✗')} 当前平台可用：{platform.name}"
+              + (f'（{reason}）' if reason else ""))
         print(f"\n  结果：✓ 通过")
     return 0
 

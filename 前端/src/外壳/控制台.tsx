@@ -26,11 +26,11 @@ import {
   type 日志行,
   type 速率行,
 } from "../数据/日志";
-import { 标签 } from "../组件/标签";
+import { Tag } from "../组件/标签";
 import { 命令, 用仓库, type ProjectState, type 诊断报告 } from "../数据/仓库";
 import { 请求跳步 } from "./跳步";
 import { 用节拍 } from "../数据/时钟";
-import { 连接键, use取, 时刻 } from "../视图/文案";
+import { connectionTranslationKeys, useTranslation, formatTime } from "../视图/文案";
 
 export type 控制台页签 = "输出" | "事件" | "问题" | "诊断";
 
@@ -103,12 +103,12 @@ function 行文本(l: 日志行): string {
     l.插件 ? `插件=${l.插件}` : "",
     l.关节 !== undefined ? `J${l.关节}` : "",
   ].filter(Boolean).join(" ");
-  const 头 = `${时刻(l.墙钟)}\t${l.等级}\t${l.来源}${l.主题 ? `\t${l.主题}` : ""}${结构 ? `\t${结构}` : ""}`;
+  const 头 = `${formatTime(l.墙钟)}\t${l.等级}\t${l.来源}${l.主题 ? `\t${l.主题}` : ""}${结构 ? `\t${结构}` : ""}`;
   return `${头}\n${l.文本}${l.细节 ? `\n${l.细节}` : ""}`;
 }
 
 export function 控制台({ 页签, on换页签, on收起 }: 控制台参数) {
-  const t = use取();
+  const t = useTranslation();
   const 快照 = 用日志();
   const 连接 = 用仓库((s) => s.连接);
   const 错误 = 用仓库((s) => s.错误);
@@ -479,7 +479,7 @@ export function 控制台({ 页签, on换页签, on收起 }: 控制台参数) {
               <div className="速率区">
                 <div className="flex flex-wrap items-baseline gap-1.5">
                   <span className="text-dim">{t("控制台.速率.标题")}</span>
-                  <标签>{t("控制台.速率.说明")}</标签>
+                  <Tag>{t("控制台.速率.说明")}</Tag>
                 </div>
                 {快照.速率.length ? (
                   <速率表 行={快照.速率} />
@@ -502,7 +502,7 @@ export function 控制台({ 页签, on换页签, on收起 }: 控制台参数) {
 }
 
 function 速率表({ 行 }: { 行: 速率行[] }) {
-  const t = use取();
+  const t = useTranslation();
   const 节拍 = 用节拍();
   void 节拍; // 每秒重画一次：年龄列要跟着走
   return (
@@ -538,7 +538,7 @@ function 速率表({ 行 }: { 行: 速率行[] }) {
 }
 
 function 日志列表({ 行, 筛选空 = false }: { 行: 日志行[]; 筛选空?: boolean }) {
-  const t = use取();
+  const t = useTranslation();
   const [展开, 设展开] = useState<number | null>(null);
 
   const 高亮 = async (关节: number) => {
@@ -568,7 +568,7 @@ function 日志列表({ 行, 筛选空 = false }: { 行: 日志行[]; 筛选空?
               onClick={有细节 ? () => 设展开(展开 === l.序号 ? null : l.序号) : undefined}
             >
               <span className="日志行首">
-                <span className="日志时间 等宽">{时刻(l.墙钟)}</span>
+                <span className="日志时间 等宽">{formatTime(l.墙钟)}</span>
                 <span className="日志等级" style={{ color: 等级色[l.等级] }}>
                   <span aria-hidden="true">{等级符号[l.等级]}</span> {t(等级键[l.等级])}
                 </span>
@@ -632,7 +632,7 @@ function 用问题(
   行: 日志行[],
   项目: ProjectState | null,
 ): 问题项[] {
-  const t = use取();
+  const t = useTranslation();
   const 出: 问题项[] = [];
 
   if (连接 !== "已连接") {
@@ -643,7 +643,7 @@ function 用问题(
       依据: (
         <span>
           {t("问题.未连接.说明", {
-            状态: t(连接键[连接 as keyof typeof 连接键] ?? "连接.连接中"),
+            状态: t(connectionTranslationKeys[连接 as keyof typeof connectionTranslationKeys] ?? "连接.连接中"),
           })}
         </span>
       ),
@@ -712,7 +712,7 @@ function 用问题(
         <ul className="space-y-0.5">
           {失败.slice(-5).map((l) => (
             <li key={l.序号} className="break-all">
-              {时刻(l.墙钟)} {l.文本}
+              {formatTime(l.墙钟)} {l.文本}
             </li>
           ))}
         </ul>
@@ -730,7 +730,7 @@ function 用问题(
         <ul className="space-y-0.5">
           {前端错.slice(-3).map((l) => (
             <li key={l.序号} className="break-all">
-              {时刻(l.墙钟)} {l.文本}
+              {formatTime(l.墙钟)} {l.文本}
             </li>
           ))}
         </ul>
@@ -742,7 +742,7 @@ function 用问题(
 }
 
 function 问题页({ 问题 }: { 问题: 问题项[] }) {
-  const t = use取();
+  const t = useTranslation();
   if (!问题.length) {
     return (
       <div className="p-3 text-dim">
@@ -756,14 +756,14 @@ function 问题页({ 问题 }: { 问题: 问题项[] }) {
       <div className="mb-1 text-dim">{t("控制台.问题.标题")}</div>
       <ul className="space-y-2">
         {问题.map((p) => {
-          const 语气 = p.等级 === "错误" ? "错误" : p.等级 === "注意" ? "警告" : "中性";
+          const 语气 = p.等级 === "错误" ? "error" : p.等级 === "注意" ? "warning" : "neutral";
           const 符号 = p.等级 === "错误" ? "✗" : p.等级 === "注意" ? "!" : "·";
           return (
             <li key={p.键} className="问题项">
               <div className="flex items-start gap-1.5">
-                <标签 语气={语气}>
+                <Tag tone={语气}>
                   <span aria-hidden="true">{符号}</span> {t(等级键[p.等级])}
-                </标签>
+                </Tag>
                 <span>{p.说明}</span>
               </div>
               <div className="mt-1 text-[0.85em] text-dim">{p.依据}</div>
@@ -777,7 +777,7 @@ function 问题页({ 问题 }: { 问题: 问题项[] }) {
 
 /** 诊断页签：底部工程面板里的"轻量诊断"，完整视图仍走侧栏「诊断」。 */
 function 诊断页({ 报告 }: { 报告: 诊断报告 | null }) {
-  const t = use取();
+  const t = useTranslation();
   const 连接 = 用仓库((s) => s.连接);
   const [忙, 设忙] = useState(false);
   const 运行中 = !!报告?.运行中;
@@ -801,15 +801,15 @@ function 诊断页({ 报告 }: { 报告: 诊断报告 | null }) {
       <div className="flex flex-wrap items-center gap-1.5">
         {报告 ? (
           <>
-            <标签 语气={运行中 ? "强调" : 全过 ? "成功" : "错误"}>
+            <Tag tone={运行中 ? "emphasis" : 全过 ? "success" : "error"}>
               {运行中 ? t("控制台.诊断.运行中") : t("控制台.诊断.通过", { 通过, 总数 })}
-            </标签>
+            </Tag>
             <span className="等宽 text-[0.78em] text-dim">
               {`${报告.时间 ?? ""} · ${报告.耗时秒 ?? "--"}s`}
             </span>
           </>
         ) : (
-          <标签>{t("控制台.诊断.未运行")}</标签>
+          <Tag>{t("控制台.诊断.未运行")}</Tag>
         )}
         <span className="flex-1" />
         <button
@@ -860,7 +860,7 @@ function 诊断页({ 报告 }: { 报告: 诊断报告 | null }) {
  * 有错误变红、只有警告变黄；点一下重新展开。收起不能变成"找不到"。
  */
 export function 控制台召回({ on展开 }: { on展开: () => void }) {
-  const t = use取();
+  const t = useTranslation();
   const 快照 = 用日志();
   const 连接 = 用仓库((s) => s.连接);
   const 错误 = 用仓库((s) => s.错误);

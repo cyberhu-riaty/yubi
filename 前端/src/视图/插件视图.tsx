@@ -14,15 +14,15 @@
  * 想做真正的市场，至少得先有：远端清单 + 校验和 + 安装到本地 + 版本冲突处理。
  * 那是另一件事，界面上已如实写明"未实现"。
  */
-import { 可折叠区块 } from "../组件/可折叠区块";
-import { 标签 } from "../组件/标签";
-import { 按钮 } from "../组件/按钮";
+import { CollapsibleSection } from "../组件/可折叠区块";
+import { Tag } from "../组件/标签";
+import { Button } from "../组件/按钮";
 import { 用仓库 } from "../数据/仓库";
 import { 请求跳步 } from "../外壳/跳步";
-import { use取 } from "./文案";
+import { useTranslation } from "./文案";
 
 export function 插件视图() {
-  const t = use取();
+  const t = useTranslation();
   const 目录 = 用仓库((s) => s.插件.数据);
   const 项目 = 用仓库((s) => s.项目.数据);
   const 不兼容报告 = (项目?.report ?? []).filter((行) => 行.includes("不兼容"));
@@ -31,18 +31,18 @@ export function 插件视图() {
 
   return (
     <div className="space-y-2">
-      <可折叠区块
-        标题={t("步骤.插件")}
-        徽标={项们.length ? <标签>{项们.length}</标签> : <标签 语气="警示">{t("通用.待接入")}</标签>}
+      <CollapsibleSection
+        title={t("步骤.插件")}
+        badge={项们.length ? <Tag>{项们.length}</Tag> : <Tag tone="notice">{t("通用.待接入")}</Tag>}
       >
         <p className="text-[0.85em]" style={{ color: "var(--warn)" }}>
           {t("插件.没有远端")}
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[0.82em] text-dim">
           <span>{t("插件.只读说明")}</span>
-          <按钮 尺寸="小" 种类="幽灵" on按下={() => 请求跳步("定义")}>
+          <Button size="small" variant="ghost" onPress={() => 请求跳步("定义")}>
             {t("插件.去定义")}
-          </按钮>
+          </Button>
         </div>
 
         {项们.length ? (
@@ -63,9 +63,9 @@ export function 插件视图() {
                     </span>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    <标签>{t("插件.状态.已安装")}</标签>
-                    <标签 语气={已启用 ? "成功" : "中性"}>{已启用 ? t("插件.状态.当前项目已启用") : t("插件.状态.当前项目未启用")}</标签>
-                    {不兼容 ? <标签 语气="错误">! {t("定义.算法状态.不兼容")}</标签> : null}
+                    <Tag>{t("插件.状态.已安装")}</Tag>
+                    <Tag tone={已启用 ? "success" : "neutral"}>{已启用 ? t("插件.状态.当前项目已启用") : t("插件.状态.当前项目未启用")}</Tag>
+                    {不兼容 ? <Tag tone="error">! {t("定义.算法状态.不兼容")}</Tag> : null}
                   </div>
                   <div className="mt-1 text-[0.85em] text-dim">
                     {x.说明 || t("插件.无说明")}
@@ -90,7 +90,7 @@ export function 插件视图() {
         ) : (
           <div className="mt-2 text-dim">{目录?.说明 || t("插件.空")}</div>
         )}
-      </可折叠区块>
+      </CollapsibleSection>
     </div>
   );
 }

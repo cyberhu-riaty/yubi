@@ -11,17 +11,17 @@
  *     所以这里是只读的真值，而不是一个按了没反应的滑块。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { 曲线, 取配色 } from "../组件/曲线";
-import { 可折叠区块 } from "../组件/可折叠区块";
-import { 按钮 } from "../组件/按钮";
-import { 标签 } from "../组件/标签";
-import { 小表格, 数值文本, 文本, type 列 } from "../组件/数值表";
+import { LineChart, seriesColor } from "../组件/曲线";
+import { CollapsibleSection } from "../组件/可折叠区块";
+import { Button } from "../组件/按钮";
+import { Tag } from "../组件/标签";
+import { DataTable, NumericText, formatValue, type TableColumn } from "../组件/数值表";
 import { 命令, 用仓库 } from "../数据/仓库";
 import { 用节拍 } from "../数据/时钟";
 import { 请求跳步 } from "../外壳/跳步";
 import type { ParameterItem } from "../数据/仓库";
 import { 提示错误 } from "../数据/提示";
-import { use取 } from "./文案";
+import { useTranslation } from "./文案";
 
 /** `s.曲线` 的环形缓冲窗口（`数据/仓库.ts` 里就是 120 秒） */
 const 窗口秒 = 120;
@@ -41,7 +41,7 @@ function 参数值编辑({
   保存中: boolean;
   提交: (全名: string, 新值: number) => Promise<boolean>;
 }) {
-  const t = use取();
+  const t = useTranslation();
   const [草稿, 设草稿] = useState(() => 数字文本(值));
   const [焦点, 设焦点] = useState(false);
   const [脏, 设脏] = useState(false);
@@ -157,7 +157,7 @@ function 参数值编辑({
 }
 
 export function 验证视图() {
-  const t = use取();
+  const t = useTranslation();
   const 曲线数 = 用仓库((s) => s.曲线);
   const 参数 = 用仓库((s) => s.参数.数据);
   const 参数帧号 = 用仓库((s) => s.参数.帧号);
@@ -211,11 +211,11 @@ export function 验证视图() {
     return { 名, 值: 末?.v, 峰: Number.isFinite(峰) ? 峰 : undefined, 点: 点?.length ?? 0 };
   });
 
-  const 图例列: 列[] = [
+  const 图例列: TableColumn[] = [
     {
-      标题: t("验证.选中"),
-      宽度: "w-[3.4em]",
-      格: (行) => {
+      title: t("验证.选中"),
+      width: "w-[3.4em]",
+      render: (行) => {
         const 名 = String(行.名);
         return (
           <input
@@ -224,16 +224,16 @@ export function 验证视图() {
             onChange={() => 切换(名)}
             aria-label={`${t("验证.选中")} ${名}`}
             // 复选框、图例短线和画布曲线使用同一个稳定颜色，便于快速核对。
-            style={{ accentColor: 取配色(名们.indexOf(名)) }}
+            style={{ accentColor: seriesColor(名们.indexOf(名)) }}
           />
         );
       },
     },
     {
-      标题: t("验证.曲线名"),
+      title: t("验证.曲线名"),
       // 给足宽度，否则长名字会被压成一竖条；配合下面的 `truncate` 用省略号收尾
-      宽度: "w-[22ch] max-w-[22ch]",
-      格: (行) => {
+      width: "w-[22ch] max-w-[22ch]",
+      render: (行) => {
         const 名 = String(行.名);
         const 序 = 名们.indexOf(名);
         return (
@@ -241,7 +241,7 @@ export function 验证视图() {
             <span
               aria-hidden="true"
               className="inline-block h-[3px] w-3 flex-none"
-              style={{ background: 取配色(序) }}
+              style={{ background: seriesColor(序) }}
             />
             {/* ★ 曲线名要 `whitespace-nowrap`：它是「插件名·指标名」，本来就很长。
                 之前用 `break-all` 在窄列里会**逐字换行**成一竖条（一行一个字），
@@ -255,12 +255,12 @@ export function 验证视图() {
       },
     },
     {
-      标题: t("验证.当前值"),
-      数字: true,
-      格: (行) => <数值文本 值={行.值 as number | undefined} 位={4} />,
+      title: t("验证.当前值"),
+      numeric: true,
+      render: (行) => <NumericText value={行.值 as number | undefined} digits={4} />,
     },
-    { 标题: t("验证.峰"), 数字: true, 格: (行) => <数值文本 值={行.峰 as number | undefined} 位={4} /> },
-    { 标题: t("验证.点数"), 数字: true, 格: (行) => <span className="等宽">{String(行.点 ?? "")}</span> },
+    { title: t("验证.峰"), numeric: true, render: (行) => <NumericText value={行.峰 as number | undefined} digits={4} /> },
+    { title: t("验证.点数"), numeric: true, render: (行) => <span className="等宽">{String(行.点 ?? "")}</span> },
   ];
 
   // ★ `parameter.table` 的负载形状是 `{parameters: {full_name: item}}`。
@@ -304,20 +304,20 @@ export function 验证视图() {
     }
   }
 
-  const 参数列: 列[] = [
+  const 参数列: TableColumn[] = [
     {
-      标题: t("验证.参数.名"),
-      宽度: "w-[20ch] max-w-[20ch]",
-      格: (行) => (
+      title: t("验证.参数.名"),
+      width: "w-[20ch] max-w-[20ch]",
+      render: (行) => (
         <span className="block truncate" title={String(行.全名)}>
           {String(行.全名)}
         </span>
       ),
     },
     {
-      标题: t("验证.参数.值"),
-      数字: true,
-      格: (行) => {
+      title: t("验证.参数.值"),
+      numeric: true,
+      render: (行) => {
         // ★ 必须用 `行.全名`（「插件名·参数名」），**不是** `行.名`（短名）。
         //   后端 `parameter_bridge` 按完整名称中的分隔符拆出插件名并查找实例：
         //   发短名（KD）会拆不出插件 → 实例找不到 → 命令被静默忽略，
@@ -342,18 +342,18 @@ export function 验证视图() {
       },
     },
     {
-      标题: t("验证.参数.最小"),
-      数字: true,
-      格: (行) => <数值文本 值={范围边(行 as unknown as ParameterItem, 0)} 位={6} />,
+      title: t("验证.参数.最小"),
+      numeric: true,
+      render: (行) => <NumericText value={范围边(行 as unknown as ParameterItem, 0)} digits={6} />,
     },
     {
-      标题: t("验证.参数.最大"),
-      数字: true,
-      格: (行) => <数值文本 值={范围边(行 as unknown as ParameterItem, 1)} 位={6} />,
+      title: t("验证.参数.最大"),
+      numeric: true,
+      render: (行) => <NumericText value={范围边(行 as unknown as ParameterItem, 1)} digits={6} />,
     },
     {
-      标题: t("验证.参数.单位"),
-      格: (行) => <span className="等宽 text-dim">{String(行.单位 ?? "") || "—"}</span>,
+      title: t("验证.参数.单位"),
+      render: (行) => <span className="等宽 text-dim">{String(行.单位 ?? "") || "—"}</span>,
     },
   ];
 
@@ -379,22 +379,22 @@ export function 验证视图() {
       单位: 项.unit,
       步长: 项.step,
       范围,
-      说明: 额外.length ? 额外.map((k) => `${k}=${文本(项[k])}`).join(" ") : undefined,
+      说明: 额外.length ? 额外.map((k) => `${k}=${formatValue(项[k])}`).join(" ") : undefined,
     };
   }
 
   return (
     <div>
-      <可折叠区块
-        标题={t("验证.曲线")}
-        徽标={
+      <CollapsibleSection
+        title={t("验证.曲线")}
+        badge={
           <span className="等宽">
             {名们.length ? `${名们.length} · ${窗口秒}s` : ""}
           </span>
         }
       >
         <div className="面板" title={t("验证.曲线.说明")} style={{ background: "var(--plot-bg)", borderRadius: "var(--radius)" }}>
-          <曲线 数据={曲线数} 显示={显示} 窗口={窗口秒} 高={190} on暂停={设暂停} />
+          <LineChart data={曲线数} visible={显示} windowSeconds={窗口秒} height={190} onPausedChange={设暂停} />
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1 text-[0.85em] text-dim">
           <span className="flex-none">{t("验证.窗口.标签")}</span>
@@ -409,35 +409,35 @@ export function 验证视图() {
                 ? t("验证.采集已暂停")
                 : t("验证.最近更新", { 秒: 最近年龄.toFixed(0) })}
           </span>
-          {暂停 ? <标签 语气="强调">{t("验证.暂停中")}</标签> : null}
-          {窗口外 > 0 ? <标签 语气="警示">{t("验证.超出窗口", { 条: 窗口外 })}</标签> : null}
+          {暂停 ? <Tag tone="emphasis">{t("验证.暂停中")}</Tag> : null}
+          {窗口外 > 0 ? <Tag tone="notice">{t("验证.超出窗口", { 条: 窗口外 })}</Tag> : null}
         </div>
 
         {名们.length ? (
           <>
             <div className="mt-2 flex items-center gap-1.5">
-              <按钮 尺寸="小" 种类="幽灵" on按下={() => 只显示((名) => 名.includes("目标位置") || 名.includes("实际位置"))}>
+              <Button size="small" variant="ghost" onPress={() => 只显示((名) => 名.includes("目标位置") || 名.includes("实际位置"))}>
                 {t("验证.只看轨迹")}
-              </按钮>
-              <按钮 尺寸="小" 种类="幽灵" on按下={() => 只显示((名) => 名.includes("误差"))}>
+              </Button>
+              <Button size="small" variant="ghost" onPress={() => 只显示((名) => 名.includes("误差"))}>
                 {t("验证.只看误差")}
-              </按钮>
-              <按钮 尺寸="小" 种类="幽灵" on按下={() => 只显示((名) => 名.includes("力矩") || 名.includes("控制输入"))}>
+              </Button>
+              <Button size="small" variant="ghost" onPress={() => 只显示((名) => 名.includes("力矩") || 名.includes("控制输入"))}>
                 {t("验证.只看控制")}
-              </按钮>
-              <按钮 尺寸="小" 种类="幽灵" on按下={() => 设隐藏(new Set())}>
+              </Button>
+              <Button size="small" variant="ghost" onPress={() => 设隐藏(new Set())}>
                 {t("验证.全选")}
-              </按钮>
-              <按钮 尺寸="小" 种类="幽灵" on按下={() => 设隐藏(new Set(名们))}>
+              </Button>
+              <Button size="small" variant="ghost" onPress={() => 设隐藏(new Set(名们))}>
                 {t("验证.全不选")}
-              </按钮>
+              </Button>
             </div>
             <div className="mt-1">
-              <小表格
-                列={图例列}
-                行={图例行}
-                行键={(r) => String(r.全名)}
-                空={t("验证.没有指标")}
+              <DataTable
+                columns={图例列}
+                rows={图例行}
+                rowKey={(r) => String(r.全名)}
+                emptyText={t("验证.没有指标")}
               />
             </div>
           </>
@@ -445,17 +445,17 @@ export function 验证视图() {
           <div className="mt-2 未接入 space-y-1">
             <div>{t("验证.没有指标")}</div>
             <div className="text-[0.85em]">{t("验证.空原因")}</div>
-            <按钮 尺寸="小" 种类="幽灵" on按下={() => 请求跳步("插件")}>
+            <Button size="small" variant="ghost" onPress={() => 请求跳步("插件")}>
               {t("验证.去插件")}
-            </按钮>
+            </Button>
           </div>
         )}
 
-      </可折叠区块>
+      </CollapsibleSection>
 
-      <可折叠区块
-        标题={t("验证.参数")}
-        徽标={
+      <CollapsibleSection
+        title={t("验证.参数")}
+        badge={
           <>
             <span className="等宽"> {参数 ? `#${参数帧号}` : ""}</span>
           </>
@@ -465,10 +465,10 @@ export function 验证视图() {
         {参数项们.length ? (
           <>
             <div className="mt-2">
-              <小表格
-                列={参数列}
-                行={参数项们.map(([全名, 项]) => 摊开(全名, 项))}
-                行键={(r) => String(r.名)}
+              <DataTable
+                columns={参数列}
+                rows={参数项们.map(([全名, 项]) => 摊开(全名, 项))}
+                rowKey={(r) => String(r.名)}
               />
             </div>
             <div className="mt-1 text-[0.8em] text-dim">{t("验证.参数.编辑说明")}</div>
@@ -476,7 +476,7 @@ export function 验证视图() {
         ) : (
           <div className="mt-2 text-dim">{t("验证.参数.空")}</div>
         )}
-      </可折叠区块>
+      </CollapsibleSection>
     </div>
   );
 }

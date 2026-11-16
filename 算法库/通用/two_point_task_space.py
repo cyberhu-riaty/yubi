@@ -35,7 +35,7 @@ from plugin_system import (
     step_handler,
 )
 
-末端站点 = "attachment_site"       # UR5e 法兰往外 0.1 m 的工具中心点（TCP）
+END_EFFECTOR_SITE = "attachment_site"       # UR5e 法兰往外 0.1 m 的工具中心点（TCP）
 
 
 class TwoPointTaskSpaceController(ControlPlugin):
@@ -48,29 +48,29 @@ class TwoPointTaskSpaceController(ControlPlugin):
     # ---- 调参入口 ----
     KP = 2500.0                       # 末端位置刚度（N/m）：越大跟得越紧
     KD = 90.0                         # 末端阻尼：临界阻尼 ≈ 2√KP
-    起点 = np.array([0.45, 0.10, 0.50])   # 世界坐标（m）；机器人会先被摆到这里
-    终点 = np.array([0.30, -0.20, 0.35])
-    单程时长 = 2.0                    # 从一点走到另一点用几秒
-    要往返 = True                     # True=来回走；False=走到终点就停住
+    START_POSITION = np.array([0.45, 0.10, 0.50])   # 世界坐标（m）；机器人会先被摆到这里
+    END_POSITION = np.array([0.30, -0.20, 0.35])
+    leg_duration = 2.0                    # 从一点走到另一点用几秒
+    round_trip = True                     # True=来回走；False=走到终点就停住
 
     # 工具姿态：让法兰面朝下（末端竖直下探），这也是工业上最常用的姿势
-    R_工具朝下 = np.array([[1.0, 0.0, 0.0],
+    TOOL_DOWN_ROTATION = np.array([[1.0, 0.0, 0.0],
                            [0.0, 0.0, 1.0],
                            [0.0, -1.0, 0.0]])
 
     def __init__(self):
-        self.模型 = None
-        self.已摆位 = False
-        self.起始时刻 = 0.0
-        self.步数 = 0
-        self.最大跟踪误差 = 0.0
-        self.摆位残差 = None
+        self.model = None
+        self.positioned = False
+        self.start_time = 0.0
+        self.step_count = 0
+        self.max_tracking_error = 0.0
+        self.positioning_residual = None
 
     # ------------------------------------------------------------------
     # 兼容性预检：外壳换模型时会先问一句"这个模型你能跑吗"
     #   （契约见 软件/plugin_system.py 的 `ControlPlugin`）
     # ------------------------------------------------------------------
-    def check_model_compatibility(self, 模型) -> str:
+    def check_model_compatibility(self, model) -> str:
         """要求 6 自由度 + 有 `attachment_site` 这个末端站点。
 
         ★ 为什么是 6：下面的 `_逆运动学()` 解的是 **6 维任务**（3 位置 + 3 姿态），
@@ -88,19 +88,19 @@ class TwoPointTaskSpaceController(ControlPlugin):
         """
         import mujoco
 
-        nq = int(getattr(模型, "nq", 0))
+        nq = int(getattr(model, "nq", 0))
         if nq != 6:
             return (f"需要 6 轴手臂（本模型 {nq} 轴；本算法按 6 维任务做了逆运动学，"
                     f"且起止点是照 UR5e 工作空间标定的）")
-        if mujoco.mj_name2id(模型, mujoco.mjtObj.mjOBJ_SITE, 末端站点) < 0:
-            return f"模型里没有末端站点「{末端站点}」（逆运动学要拿它当控制点）"
+        if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, END_EFFECTOR_SITE) < 0:
+            return f'模型里没有末端站点「{END_EFFECTOR_SITE}」（逆运动学要拿它当控制点）'
         return ""
 
     # ------------------------------------------------------------------
     # 可选：模型加载后调一次（拿到 model/data 引用，用于做逆运动学）
     # ------------------------------------------------------------------
     def receive_model(self, event) -> None:
-        self.模型, self.数据 = event.model, event.data
+        self.model, self.data = event.model, event.data
 
     # ------------------------------------------------------------------
     # ★ 每转一圈仿真调用一次
@@ -108,112 +108,112 @@ class TwoPointTaskSpaceController(ControlPlugin):
     @step_handler(priority=Priority.USER - 1) # priority 在本外壳里不起作用（见文件头说明）
                                               #   谁说了算由装配顺序决定：排最后的赢
     def step(self, event: studio.messages.StepEvent) -> bool:
-        模型, 数据 = event.model, event.data
+        model, data = event.model, event.data
 
         # ★ 空场景（模型/空场景.xml）里没有任何关节与站点。
         #   直接往下走会在 `数据.site(末端站点)` 抛异常 → 插件被"出错隔离"停用
         #   → 换了真模型也不会被控制。所以先挡一道。
-        if 数据.qpos.size == 0 or 数据.ctrl.size == 0 or 数据.site(末端站点) is None:
-            self.已摆位 = False
+        if data.qpos.size == 0 or data.ctrl.size == 0 or data.site(END_EFFECTOR_SITE) is None:
+            self.positioned = False
             return False
 
         # ---- 第一次：用逆运动学把机器人摆到「起点」，并记下时间基准 ----
-        if not self.已摆位:
-            解, 位置残差, 姿态残差 = self._逆运动学(模型, 数据, self.起点)
-            数据.qpos[:] = 解
-            数据.qvel[:] = 0.0
+        if not self.positioned:
+            solution, position_residual, orientation_residual = self._inverse_kinematics(model, data, self.START_POSITION)
+            data.qpos[:] = solution
+            data.qvel[:] = 0.0
             import mujoco
-            mujoco.mj_forward(模型, 数据)
-            self.已摆位 = True
-            self.起始时刻 = float(数据.time)
-            self.摆位残差 = 位置残差
-            if 位置残差 > 1e-3:
-                print(f"⚠ 【{self.name}】起点解不出来（残差 {位置残差*1000:.1f} mm）："
+            mujoco.mj_forward(model, data)
+            self.positioned = True
+            self.start_time = float(data.time)
+            self.positioning_residual = position_residual
+            if position_residual > 1e-3:
+                print(f'⚠ 【{self.name}】起点解不出来（残差 {position_residual * 1000:.1f} mm）：'
                       f"机器人会被摆到最接近的位形，实际起点与设定不同。")
 
         # ---- 算这一刻的期望点（轨迹插值）----
-        经过 = float(数据.time) - self.起始时刻
-        段 = int(经过 / self.单程时长)
-        段 = min(段, 1) if not self.要往返 else 段
-        去 = (段 % 2 == 0)
-        a, b = (self.起点, self.终点) if 去 else (self.终点, self.起点)
-        p_des, v_des = self._插值(经过 - 段 * self.单程时长, self.单程时长, a, b)
+        elapsed = float(data.time) - self.start_time
+        segment = int(elapsed / self.leg_duration)
+        segment = min(segment, 1) if not self.round_trip else segment
+        outbound = (segment % 2 == 0)
+        a, b = (self.START_POSITION, self.END_POSITION) if outbound else (self.END_POSITION, self.START_POSITION)
+        p_des, v_des = self._interpolate(elapsed - segment * self.leg_duration, self.leg_duration, a, b)
 
         # ---- 控制律：任务空间 PD + 重力补偿 ----
-        位置 = 数据.site(末端站点).xpos
-        Jp = np.zeros((3, 模型.nv))
+        position = data.site(END_EFFECTOR_SITE).xpos
+        Jp = np.zeros((3, model.nv))
         import mujoco
-        mujoco.mj_jacSite(模型, 数据, Jp, None, 数据.site(末端站点).id)
-        末端速度 = Jp @ 数据.qvel
-        虚拟力 = self.KP * (p_des - 位置) + self.KD * (v_des - 末端速度)
-        数据.ctrl[:] = np.clip(Jp.T @ 虚拟力 + 数据.qfrc_bias,
-                               -模型.actuator_ctrlrange[:, 1], 模型.actuator_ctrlrange[:, 1])
+        mujoco.mj_jacSite(model, data, Jp, None, data.site(END_EFFECTOR_SITE).id)
+        end_effector_velocity = Jp @ data.qvel
+        virtual_force = self.KP * (p_des - position) + self.KD * (v_des - end_effector_velocity)
+        data.ctrl[:] = np.clip(Jp.T @ virtual_force + data.qfrc_bias,
+                               -model.actuator_ctrlrange[:, 1], model.actuator_ctrlrange[:, 1])
 
-        self.步数 += 1
-        self.最大跟踪误差 = max(self.最大跟踪误差, float(np.linalg.norm(p_des - 位置)))
+        self.step_count += 1
+        self.max_tracking_error = max(self.max_tracking_error, float(np.linalg.norm(p_des - position)))
         return False
 
     # ------------------------------------------------------------------
     # 工具：smootherstep 插值（两端速度、加速度都为 0）
     # ------------------------------------------------------------------
     @staticmethod
-    def _插值(t, 时长, p0, p1):
-        s = float(np.clip(t / 时长, 0.0, 1.0))
+    def _interpolate(t, duration, p0, p1):
+        s = float(np.clip(t / duration, 0.0, 1.0))
         u = s * s * s * (s * (6.0 * s - 15.0) + 10.0)
-        du = 30.0 * s * s * (1.0 - s) ** 2 / 时长
+        du = 30.0 * s * s * (1.0 - s) ** 2 / duration
         return p0 + (p1 - p0) * u, (p1 - p0) * du
 
     # ------------------------------------------------------------------
     # 工具：数值逆运动学（6 自由度 DLS，位置 + 姿态一起管）
     #   只用来"摆到起点"，不参与控制回路 —— 所以慢一点没关系
     # ------------------------------------------------------------------
-    def _逆运动学(self, 模型, 数据, 目标位置, 迭代上限=300, 阻尼=0.03, 容差=1e-4):
+    def _inverse_kinematics(self, model, data, target_position, iteration_limit=300, damping=0.03, tolerance=1e-4):
         import mujoco
-        站点 = 数据.site(末端站点)
-        q = 数据.qpos.copy()
+        site = data.site(END_EFFECTOR_SITE)
+        q = data.qpos.copy()
 
-        def 正运动学(q_):
-            数据.qpos[:] = q_
-            mujoco.mj_kinematics(模型, 数据)
-            return 数据.site(末端站点).xpos.copy(), 数据.site(末端站点).xmat.reshape(3, 3).copy()
+        def forward_kinematics(q_):
+            data.qpos[:] = q_
+            mujoco.mj_kinematics(model, data)
+            return data.site(END_EFFECTOR_SITE).xpos.copy(), data.site(END_EFFECTOR_SITE).xmat.reshape(3, 3).copy()
 
-        def 姿态误差(R当前, R期望):
-            R差 = R期望 @ R当前.T
-            角 = float(np.arccos(np.clip((np.trace(R差) - 1.0) / 2.0, -1.0, 1.0)))
-            if 角 < 1e-9:
+        def orientation_error(current_rotation, desired_rotation):
+            rotation_delta = desired_rotation @ current_rotation.T
+            angle = float(np.arccos(np.clip((np.trace(rotation_delta) - 1.0) / 2.0, -1.0, 1.0)))
+            if angle < 1e-9:
                 return np.zeros(3)
-            轴 = np.array([R差[2, 1] - R差[1, 2], R差[0, 2] - R差[2, 0], R差[1, 0] - R差[0, 1]])
-            return 轴 / (2.0 * np.sin(角)) * 角
+            axis = np.array([rotation_delta[2, 1] - rotation_delta[1, 2], rotation_delta[0, 2] - rotation_delta[2, 0], rotation_delta[1, 0] - rotation_delta[0, 1]])
+            return axis / (2.0 * np.sin(angle)) * angle
 
-        位置残差 = 姿态残差 = np.inf
-        for _ in range(迭代上限):
-            p, R当前 = 正运动学(q)
-            e_p = 目标位置 - p
-            e_R = 姿态误差(R当前, self.R_工具朝下)
-            位置残差, 姿态残差 = float(np.linalg.norm(e_p)), float(np.linalg.norm(e_R))
-            if 位置残差 < 容差 and 姿态残差 < 容差:
+        position_residual = orientation_residual = np.inf
+        for _ in range(iteration_limit):
+            p, current_rotation = forward_kinematics(q)
+            e_p = target_position - p
+            e_R = orientation_error(current_rotation, self.TOOL_DOWN_ROTATION)
+            position_residual, orientation_residual = float(np.linalg.norm(e_p)), float(np.linalg.norm(e_R))
+            if position_residual < tolerance and orientation_residual < tolerance:
                 break
             e = np.concatenate([e_p, e_R])
-            J = np.zeros((6, 模型.nq))
+            J = np.zeros((6, model.nq))
             h = 1e-6
-            for j in range(模型.nq):
+            for j in range(model.nq):
                 qp = q.copy()
                 qp[j] += h
-                pp, Rp = 正运动学(qp)
+                pp, Rp = forward_kinematics(qp)
                 J[:3, j] = (pp - p) / h
-                J[3:, j] = 姿态误差(R当前, Rp) / h
-            q = np.clip(q + J.T @ np.linalg.solve(J @ J.T + 阻尼 ** 2 * np.eye(6), e),
-                        模型.jnt_range[:, 0], 模型.jnt_range[:, 1])
-        return q, 位置残差, 姿态残差
+                J[3:, j] = orientation_error(current_rotation, Rp) / h
+            q = np.clip(q + J.T @ np.linalg.solve(J @ J.T + damping ** 2 * np.eye(6), e),
+                        model.jnt_range[:, 0], model.jnt_range[:, 1])
+        return q, position_residual, orientation_residual
 
     # ------------------------------------------------------------------
     def status(self) -> dict:
-        if not self.已摆位:
+        if not self.positioned:
             return {"状态": "等待第一步"}
-        行 = {"步数": self.步数, "最大跟踪误差": f"{self.最大跟踪误差*1000:.2f} mm"}
-        if self.摆位残差 is not None and self.摆位残差 > 1e-3:
-            行["⚠起点残差"] = f"{self.摆位残差*1000:.1f} mm"
-        return 行
+        row = {"步数": self.step_count, "最大跟踪误差": f'{self.max_tracking_error * 1000:.2f} mm'}
+        if self.positioning_residual is not None and self.positioning_residual > 1e-3:
+            row["⚠起点残差"] = f'{self.positioning_residual * 1000:.1f} mm'
+        return row
 
 
 plugin_class = TwoPointTaskSpaceController

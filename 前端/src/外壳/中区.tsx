@@ -17,15 +17,15 @@
  *     而不是画一排看起来像关节角的数字
  */
 import { useEffect, useMemo, useState } from "react";
-import { 标签 } from "../组件/标签";
-import { 按钮 } from "../组件/按钮";
-import { 数值表, 数值文本, type 数值行 } from "../组件/数值表";
+import { Tag } from "../组件/标签";
+import { Button } from "../组件/按钮";
+import { ValueTable, NumericText, type ValueRow } from "../组件/数值表";
 import { 命令, 用仓库 } from "../数据/仓库";
 import { 命令收尾, 记命令发出 } from "../数据/日志";
-import type { 采样点 } from "../数据/连接";
+import type { SamplePoint } from "../数据/连接";
 import { 契约版本, 协议版本 } from "@生成/契约";
 import { 用风格 } from "../生成/外观";
-import { 连接键, use取 } from "../视图/文案";
+import { connectionTranslationKeys, useTranslation } from "../视图/文案";
 
 export interface 中区参数 {
   /** 迷你走势条最多显示多少条（再多就只报总数） */
@@ -33,7 +33,7 @@ export interface 中区参数 {
 }
 
 export function 中区({ 条数上限 = 12 }: 中区参数) {
-  const t = use取();
+  const t = useTranslation();
   const 模型 = 用仓库((s) => s.模型.数据);
   const 连接 = 用仓库((s) => s.连接);
   const 曲线数 = 用仓库((s) => s.曲线);
@@ -42,23 +42,23 @@ export function 中区({ 条数上限 = 12 }: 中区参数) {
   const 名们 = useMemo(() => Object.keys(曲线数).sort(), [曲线数]);
   const 显示条 = 名们.slice(0, 条数上限);
 
-  const 模型行: 数值行[] = 模型
+  const 模型行: ValueRow[] = 模型
     ? [
-        { 键: t("定义.模型显示名"), 值: 模型.current_display_name || t("通用.无") },
-        { 键: t("定义.自由度"), 值: <span className="等宽">{模型.dof ?? "--"}</span> },
-        { 键: t("定义.执行器数"), 值: <span className="等宽">{模型.actuator_count ?? "--"}</span> },
-        { 键: t("定义.模型状态"), 值: 模型.status || "--" },
+        { key: t("定义.模型显示名"), value: 模型.current_display_name || t("通用.无") },
+        { key: t("定义.自由度"), value: <span className="等宽">{模型.dof ?? "--"}</span> },
+        { key: t("定义.执行器数"), value: <span className="等宽">{模型.actuator_count ?? "--"}</span> },
+        { key: t("定义.模型状态"), value: 模型.status || "--" },
         {
-          键: t("定义.加载耗时"),
-          值: <span className="等宽">{模型.duration_s === undefined ? "--" : `${模型.duration_s.toFixed(3)} s`}</span>,
+          key: t("定义.加载耗时"),
+          value: <span className="等宽">{模型.duration_s === undefined ? "--" : `${模型.duration_s.toFixed(3)} s`}</span>,
         },
       ]
     : [];
 
-  const 引擎行: 数值行[] = [
-    { 键: t("状态栏.连接"), 值: <span className="等宽">{t(连接键[连接])}</span> },
-    { 键: t("状态栏.皮肤"), 值: <span className="等宽">{皮肤}</span> },
-    { 键: t("关于.契约版本"), 值: <span className="等宽">{`${契约版本} / ${协议版本}`}</span> },
+  const 引擎行: ValueRow[] = [
+    { key: t("状态栏.连接"), value: <span className="等宽">{t(connectionTranslationKeys[连接])}</span> },
+    { key: t("状态栏.皮肤"), value: <span className="等宽">{皮肤}</span> },
+    { key: t("关于.契约版本"), value: <span className="等宽">{`${契约版本} / ${协议版本}`}</span> },
   ];
 
   return (
@@ -87,11 +87,11 @@ export function 中区({ 条数上限 = 12 }: 中区参数) {
               <div className="mb-1 flex items-baseline gap-1.5">
                 <span style={{ fontWeight: 600 }}>{t("中区.浮层")}</span>
                 <span className="flex-1" />
-                {模型 ? <标签>{模型.current_display_name || "…"}</标签> : <标签 语气="警示">{t("通用.未接入")}</标签>}
+                {模型 ? <Tag>{模型.current_display_name || "…"}</Tag> : <Tag tone="notice">{t("通用.未接入")}</Tag>}
               </div>
-              {模型 ? <数值表 行={模型行} /> : <div className="text-dim">{t("定义.没模型")}</div>}
+              {模型 ? <ValueTable rows={模型行} /> : <div className="text-dim">{t("定义.没模型")}</div>}
               <div className="my-2" style={{ borderTop: "1px solid var(--border-light)" }} />
-              <数值表 行={引擎行} />
+              <ValueTable rows={引擎行} />
             </div>
 
             <div className="面板 min-w-0 overflow-y-auto p-2">
@@ -109,7 +109,7 @@ export function 中区({ 条数上限 = 12 }: 中区参数) {
                       </span>
                       <迷你走势 点={曲线数[名] ?? []} />
                       <span className="w-[68px] flex-none text-right text-[0.85em] 等宽">
-                        <数值文本 值={曲线数[名]?.[曲线数[名].length - 1]?.v} 位={3} />
+                        <NumericText value={曲线数[名]?.[曲线数[名].length - 1]?.v} digits={3} />
                       </span>
                     </li>
                   ))}
@@ -139,7 +139,7 @@ export function 中区({ 条数上限 = 12 }: 中区参数) {
 
 /** 常驻全局控制：按钮发命令，状态只认后端返回的 `simulation.state`。 */
 export function 仿真工具栏() {
-  const t = use取();
+  const t = useTranslation();
   const 状态 = 用仓库((s) => s.仿真.数据);
   const experiment = 用仓库((s) => s.experiment.数据);
   const 连接 = 用仓库((s) => s.连接);
@@ -236,20 +236,20 @@ export function 仿真工具栏() {
           </option>
         ))}
       </select>
-      <按钮
-        种类="次"
-        尺寸="小"
+      <Button
+        variant="secondary"
+        size="small"
         disabled={!可发 || experimentBusy || 已运行 || !selectedExperiment
           || selectedExperiment === experiment?.current}
         title={t("仿真控制.加载实验说明")}
-        on按下={() => void loadExperiment()}
+        onPress={() => void loadExperiment()}
       >
         {experimentBusy ? "…" : t("仿真控制.加载实验")}
-      </按钮>
-      <标签 语气={experiment?.status === "completed" ? "成功"
-        : experiment?.status === "running" ? "强调" : "中性"}>
+      </Button>
+      <Tag tone={experiment?.status === "completed" ? "success"
+        : experiment?.status === "running" ? "emphasis" : "neutral"}>
         {experimentStatusText}
-      </标签>
+      </Tag>
       {experiment?.current ? (
         <span className="等宽 text-[0.78em] text-dim"
           title={experiment.result_directory || experiment.description}>
@@ -258,47 +258,47 @@ export function 仿真工具栏() {
       ) : null}
       <span className="mx-0.5 h-4 w-px" style={{ background: "var(--border)" }} aria-hidden="true" />
       <span className="mr-0.5 font-semibold">{t("仿真控制.标题")}</span>
-      <标签 语气={已运行 ? "成功" : 已暂停 ? "强调" : "警示"}>
+      <Tag tone={已运行 ? "success" : 已暂停 ? "emphasis" : "notice"}>
         {状态 ? t(已运行 ? "仿真控制.运行中" : "仿真控制.已暂停") : t("仿真控制.等待")}
-      </标签>
-      <按钮
-        种类="主"
-        尺寸="小"
+      </Tag>
+      <Button
+        variant="primary"
+        size="small"
         disabled={!可发 || !!忙 || 已运行 || experimentCompleted}
         title={experimentCompleted ? t("仿真控制.实验完成说明") : t("仿真控制.运行说明")}
-        on按下={() => void 执行("run")}
+        onPress={() => void 执行("run")}
       >
         {忙 === "run" ? "…" : t("仿真控制.运行")}
-      </按钮>
-      <按钮
-        种类="次"
-        尺寸="小"
+      </Button>
+      <Button
+        variant="secondary"
+        size="small"
         disabled={!可发 || !!忙 || 已暂停}
         title={t("仿真控制.暂停说明")}
-        on按下={() => void 执行("pause")}
+        onPress={() => void 执行("pause")}
       >
         {忙 === "pause" ? "…" : t("仿真控制.暂停")}
-      </按钮>
-      <按钮
-        种类="次"
-        尺寸="小"
+      </Button>
+      <Button
+        variant="secondary"
+        size="small"
         disabled={!可发 || !!忙}
         title={t("仿真控制.复位说明")}
-        on按下={() => void 执行("reset")}
+        onPress={() => void 执行("reset")}
       >
         {忙 === "reset" ? "…" : t("仿真控制.复位")}
-      </按钮>
+      </Button>
       <span className="mx-0.5 h-4 w-px" style={{ background: "var(--border)" }} aria-hidden="true" />
-      <按钮
-        种类="次"
-        尺寸="小"
-        已按下={重力开}
+      <Button
+        variant="secondary"
+        size="small"
+        pressed={重力开}
         disabled={!可发 || 重力忙}
         title={t("仿真控制.重力说明")}
-        on按下={() => void 切重力()}
+        onPress={() => void 切重力()}
       >
         {重力忙 ? "…" : t(重力开 ? "仿真控制.重力开" : "仿真控制.重力关")}
-      </按钮>
+      </Button>
       <label className="flex items-center gap-1 text-[0.82em] text-dim">
         <span>{t("仿真控制.速度")}</span>
         <select
@@ -324,7 +324,7 @@ export function 仿真工具栏() {
  * 迷你走势 —— 用真数据画的小折线（按窗口缩放）。
  * 少于两个点就画一个空槽，**不画一条平线**：平线会被读成"值恒定"。
  */
-function 迷你走势({ 点 }: { 点: 采样点[] }) {
+function 迷你走势({ 点 }: { 点: SamplePoint[] }) {
   const 宽 = 46;
   const 高 = 14;
   if (点.length < 2) {

@@ -12,35 +12,35 @@
  *
  * ⚠️ 这里**不做**平滑、不做外推、不做滤波：图上的每一个像素都必须能追到一个真实采样点。
  */
-import { useEffect, useMemo, useRef, useState, type PointerEvent as 指针事件 } from "react";
-import type { 采样点 } from "../数据/连接";
-import { 数, use取 } from "../视图/文案";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import type { SamplePoint } from "../数据/连接";
+import { formatNumber, useTranslation } from "../视图/文案";
 
-export interface 曲线参数 {
+export interface LineChartProps {
   /** `{名称: 点[]}`；空对象 = 还没收到任何指标帧 */
-  数据: Record<string, 采样点[]>;
+  data: Record<string, SamplePoint[]>;
   /** 只画这些（未给出 = 全画） */
-  显示?: Set<string>;
+  visible?: Set<string>;
   /** 时间窗（秒） */
-  窗口?: number;
-  高?: number;
+  windowSeconds?: number;
+  height?: number;
   /** 悬停暂停状态变化时通知外面（图例上要写"暂停中"） */
-  on暂停?: (暂停: boolean) => void;
+  onPausedChange?: (paused: boolean) => void;
 }
 
 /** 从皮肤变量里算配色（**不缓存** CSS 变量值：换肤时必须跟着变） */
-export function 取配色(名序: number): string {
-  return `var(--palette-${(名序 % 8) + 1})`;
+export function seriesColor(seriesIndex: number): string {
+  return `var(--palette-${(seriesIndex % 8) + 1})`;
 }
 
-interface 悬停 {
-  时间: number;
+interface HoverState {
+  time: number;
 }
 
-interface 时间范围 {
-  最早: number;
-  最晚: number;
-  跨度: number;
+interface TimeRange {
+  earliest: number;
+  latest: number;
+  span: number;
 }
 
 /**
@@ -48,141 +48,141 @@ interface 时间范围 {
  * 旧实现绘图会把刚起步的 120 s 窗口收缩成 10 s，鼠标却仍按 120 s 换算，
  * 因此十字线在右边、标点却跑到中间。
  */
-function 取时间范围(数据: Record<string, 采样点[]>, 曲线名: string[], 窗口: number): 时间范围 | null {
-  let 最晚 = 0;
-  for (const 名 of 曲线名) {
-    const 点 = 数据[名];
-    if (点?.length) 最晚 = Math.max(最晚, 点[点.length - 1].t);
+function getTimeRange(data: Record<string, SamplePoint[]>, seriesNames: string[], windowSeconds: number): TimeRange | null {
+  let latest = 0;
+  for (const name of seriesNames) {
+    const points = data[name];
+    if (points?.length) latest = Math.max(latest, points[points.length - 1].t);
   }
-  if (!最晚) return null;
+  if (!latest) return null;
 
-  let 跨度 = 窗口;
-  for (const 名 of 曲线名) {
-    const 点 = 数据[名];
-    if (点?.length) 跨度 = Math.min(跨度, Math.max(10, 最晚 - 点[0].t));
+  let span = windowSeconds;
+  for (const name of seriesNames) {
+    const points = data[name];
+    if (points?.length) span = Math.min(span, Math.max(10, latest - points[0].t));
   }
-  return { 最早: 最晚 - 跨度, 最晚, 跨度 };
+  return { earliest: latest - span, latest: latest, span: span };
 }
 
 /** 二分查找距离指定时刻最近的真实采样点。 */
-function 最近真实点(点: 采样点[], 时间: number): 采样点 | null {
-  if (!点.length) return null;
-  let 左 = 0;
-  let 右 = 点.length - 1;
-  while (左 < 右) {
-    const 中 = Math.floor((左 + 右) / 2);
-    if (点[中].t < 时间) 左 = 中 + 1;
-    else 右 = 中;
+function nearestSample(points: SamplePoint[], time: number): SamplePoint | null {
+  if (!points.length) return null;
+  let left = 0;
+  let right = points.length - 1;
+  while (left < right) {
+    const middle = Math.floor((left + right) / 2);
+    if (points[middle].t < time) left = middle + 1;
+    else right = middle;
   }
-  const 后 = 点[左];
-  const 前 = 左 > 0 ? 点[左 - 1] : null;
-  return 前 && Math.abs(前.t - 时间) <= Math.abs(后.t - 时间) ? 前 : 后;
+  const after = points[left];
+  const before = left > 0 ? points[left - 1] : null;
+  return before && Math.abs(before.t - time) <= Math.abs(after.t - time) ? before : after;
 }
 
-export function 曲线({ 数据, 显示, 窗口 = 120, 高 = 200, on暂停 }: 曲线参数) {
-  const t = use取();
-  const 画布 = useRef<HTMLCanvasElement | null>(null);
-  const 盒 = useRef<HTMLDivElement | null>(null);
-  const [宽, 设宽] = useState(600);
-  const [悬, 设悬] = useState<悬停 | null>(null);
+export function LineChart({ data: data, visible: visible, windowSeconds: windowSeconds = 120, height: height = 200, onPausedChange: onPausedChange }: LineChartProps) {
+  const t = useTranslation();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(600);
+  const [hover, setHover] = useState<HoverState | null>(null);
   // 每帧最多重画一次（30 Hz 数据 + 悬停事件都会来敲门）
-  const 排队 = useRef(false);
+  const framePending = useRef(false);
 
   // 颜色必须按“稳定的曲线名称顺序”分配。
   // 验证页下方的勾选列表也是按名称排序；这里如果直接使用后端对象的插入顺序，
   // 同一条曲线在画布和列表里就可能拿到不同颜色，看起来像勾选错了曲线。
-  const 名们 = useMemo(() => Object.keys(数据).sort(), [数据]);
-  const 要画的 = useMemo(() => {
-    const 集 = 名们.filter((n) => (显示 ? 显示.has(n) : true));
+  const names = useMemo(() => Object.keys(data).sort(), [data]);
+  const visibleNames = useMemo(() => {
+    const selected = names.filter((n) => (visible ? visible.has(n) : true));
     // 有真实点的排前面，全空的排在后面（不让空曲线挤掉有数据的）
-    return 集.sort((a, b) => (数据[b]?.length ?? 0) - (数据[a]?.length ?? 0));
-  }, [名们, 显示, 数据]);
+    return selected.sort((a, b) => (data[b]?.length ?? 0) - (data[a]?.length ?? 0));
+  }, [names, visible, data]);
 
   // 容器宽度跟随（ResizeObserver：拖分隔条时图要跟着变宽，不能留白边）
   useEffect(() => {
-    const 元素 = 盒.current;
-    if (!元素) return;
-    const 观 = new ResizeObserver(() => 设宽(Math.max(160, 元素.clientWidth)));
-    观.observe(元素);
-    设宽(Math.max(160, 元素.clientWidth));
-    return () => 观.disconnect();
+    const element = containerRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => setWidth(Math.max(160, element.clientWidth)));
+    observer.observe(element);
+    setWidth(Math.max(160, element.clientWidth));
+    return () => observer.disconnect();
   }, []);
 
   // 悬停状态要通知外面（图例上写"暂停中"）
   useEffect(() => {
-    on暂停?.(悬 !== null);
-  }, [悬, on暂停]);
+    onPausedChange?.(hover !== null);
+  }, [hover, onPausedChange]);
 
   useEffect(() => {
-    if (排队.current) return;
-    排队.current = true;
-    const 句柄 = requestAnimationFrame(() => {
-      排队.current = false;
-      画();
+    if (framePending.current) return;
+    framePending.current = true;
+    const frameHandle = requestAnimationFrame(() => {
+      framePending.current = false;
+      draw();
     });
     return () => {
-      cancelAnimationFrame(句柄);
-      排队.current = false;
+      cancelAnimationFrame(frameHandle);
+      framePending.current = false;
     };
 
-    function 画() {
-      const 元素 = 画布.current;
-      if (!元素) return;
-      const 比 = window.devicePixelRatio || 1;
-      const 图高 = 高;
-      if (元素.width !== Math.round(宽 * 比) || 元素.height !== Math.round(图高 * 比)) {
-        元素.width = Math.round(宽 * 比);
-        元素.height = Math.round(图高 * 比);
+    function draw() {
+      const element = canvasRef.current;
+      if (!element) return;
+      const pixelRatio = window.devicePixelRatio || 1;
+      const canvasHeight = height;
+      if (element.width !== Math.round(width * pixelRatio) || element.height !== Math.round(canvasHeight * pixelRatio)) {
+        element.width = Math.round(width * pixelRatio);
+        element.height = Math.round(canvasHeight * pixelRatio);
       }
-      const 笔 = 元素.getContext("2d");
-      if (!笔) return;
-      const 样 = getComputedStyle(document.documentElement);
-      const 取v = (名: string, 兜底: string) => 样.getPropertyValue(名).trim() || 兜底;
+      const context = element.getContext("2d");
+      if (!context) return;
+      const computedStyle = getComputedStyle(document.documentElement);
+      const cssValue = (name: string, fallback: string) => computedStyle.getPropertyValue(name).trim() || fallback;
 
-      笔.setTransform(比, 0, 0, 比, 0, 0);
-      笔.clearRect(0, 0, 宽, 图高);
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      context.clearRect(0, 0, width, canvasHeight);
 
-      const 左 = 52;
-      const 右 = 8;
-      const 上 = 8;
-      const 下 = 20;
-      const 图宽 = Math.max(10, 宽 - 左 - 右);
-      const 图高2 = Math.max(10, 图高 - 上 - 下);
+      const left = 52;
+      const right = 8;
+      const top = 8;
+      const bottom = 20;
+      const plotWidth = Math.max(10, width - left - right);
+      const plotHeight = Math.max(10, canvasHeight - top - bottom);
 
-      笔.fillStyle = 取v("--plot-bg", "#000");
-      笔.fillRect(0, 0, 宽, 图高);
+      context.fillStyle = cssValue("--plot-bg", "#000");
+      context.fillRect(0, 0, width, canvasHeight);
 
       // ---- 时间范围：绘图与鼠标换算共用同一个结果 ----
-      const 时间范围 = 取时间范围(数据, 要画的, 窗口);
-      if (!时间范围) {
+      const timeRange = getTimeRange(data, visibleNames, windowSeconds);
+      if (!timeRange) {
         // 一个点都没有：坐标轴照画，但用文案明确写"尚无指标帧"。
         // 工程师反馈"图表空白，用户只能从旁边文字推断"——坐标系本身是信息，
         // 关键是别让它看起来像"有数据只是没画出来"。
-        笔.strokeStyle = 取v("--plot-grid", "#333");
-        笔.lineWidth = 1;
-        笔.strokeRect(左, 上, 图宽, 图高2);
+        context.strokeStyle = cssValue("--plot-grid", "#333");
+        context.lineWidth = 1;
+        context.strokeRect(left, top, plotWidth, plotHeight);
         for (let i = 1; i < 4; i += 1) {
-          const y = 上 + (i / 4) * 图高2;
-          笔.beginPath();
-          笔.moveTo(左, y);
-          笔.lineTo(左 + 图宽, y);
-          笔.stroke();
+          const y = top + (i / 4) * plotHeight;
+          context.beginPath();
+          context.moveTo(left, y);
+          context.lineTo(left + plotWidth, y);
+          context.stroke();
         }
-        笔.fillStyle = 取v("--plot-tick", "#888");
-        笔.font = "10px " + 取v("--font-mono", "monospace");
-        笔.textAlign = "center";
-        笔.fillText(t("曲线.轴时间"), 左 + 图宽 / 2, 图高 - 4);
-        笔.save();
-        笔.translate(12, 上 + 图高2 / 2);
-        笔.rotate(-Math.PI / 2);
-        笔.fillText(t("曲线.轴值"), 0, 0);
-        笔.restore();
-        笔.fillStyle = 取v("--plot-text", "#888");
-        笔.font = "12px " + 取v("--font-ui", "sans-serif");
-        笔.fillText(t("曲线.空"), 左 + 图宽 / 2, 上 + 图高2 / 2 - 4);
-        笔.font = "10px " + 取v("--font-ui", "sans-serif");
-        笔.fillStyle = 取v("--plot-tick", "#888");
-        笔.fillText(t("曲线.空提示"), 左 + 图宽 / 2, 上 + 图高2 / 2 + 14);
+        context.fillStyle = cssValue("--plot-tick", "#888");
+        context.font = "10px " + cssValue("--font-mono", "monospace");
+        context.textAlign = "center";
+        context.fillText(t("曲线.轴时间"), left + plotWidth / 2, canvasHeight - 4);
+        context.save();
+        context.translate(12, top + plotHeight / 2);
+        context.rotate(-Math.PI / 2);
+        context.fillText(t("曲线.轴值"), 0, 0);
+        context.restore();
+        context.fillStyle = cssValue("--plot-text", "#888");
+        context.font = "12px " + cssValue("--font-ui", "sans-serif");
+        context.fillText(t("曲线.空"), left + plotWidth / 2, top + plotHeight / 2 - 4);
+        context.font = "10px " + cssValue("--font-ui", "sans-serif");
+        context.fillStyle = cssValue("--plot-tick", "#888");
+        context.fillText(t("曲线.空提示"), left + plotWidth / 2, top + plotHeight / 2 + 14);
         return;
       }
       /*
@@ -191,174 +191,174 @@ export function 曲线({ 数据, 显示, 窗口 = 120, 高 = 200, on暂停 }: �
        * 看着像"信号是脉冲"，其实是"窗口开太大"。所以取 min(窗口, 真实跨度)，
        * 但留一个 10 秒下限，免得刚收到两个点就横轴抖成一条线。
        */
-      const { 最早, 最晚, 跨度 } = 时间范围;
+      const { earliest: earliest, latest: latest, span: span } = timeRange;
 
       // ---- Y 范围：只看窗口内的真实点 ----
-      let 大 = -Infinity;
-      let 小 = Infinity;
-      for (const n of 要画的) {
-        const 点 = 数据[n];
-        if (!点) continue;
-        for (let i = 点.length - 1; i >= 0; i -= 1) {
-          const p = 点[i];
-          if (p.t < 最早) break;
-          if (p.v > 大) 大 = p.v;
-          if (p.v < 小) 小 = p.v;
+      let maximum = -Infinity;
+      let minimum = Infinity;
+      for (const n of visibleNames) {
+        const points = data[n];
+        if (!points) continue;
+        for (let i = points.length - 1; i >= 0; i -= 1) {
+          const p = points[i];
+          if (p.t < earliest) break;
+          if (p.v > maximum) maximum = p.v;
+          if (p.v < minimum) minimum = p.v;
         }
       }
-      const 有范围 = Number.isFinite(大) && Number.isFinite(小);
-      if (!有范围) {
-        大 = 1;
-        小 = -1;
-      } else if (大 - 小 < 1e-12) {
+      const hasRange = Number.isFinite(maximum) && Number.isFinite(minimum);
+      if (!hasRange) {
+        maximum = 1;
+        minimum = -1;
+      } else if (maximum - minimum < 1e-12) {
         // 全平的一条线：给它一点可视厚度，但**不改数据**
-        const 中 = (大 + 小) / 2;
-        const 幅 = Math.max(Math.abs(中) * 0.05, 0.5);
-        大 = 中 + 幅;
-        小 = 中 - 幅;
+        const middle = (maximum + minimum) / 2;
+        const amplitude = Math.max(Math.abs(middle) * 0.05, 0.5);
+        maximum = middle + amplitude;
+        minimum = middle - amplitude;
       } else {
-        const 边 = (大 - 小) * 0.08;
-        大 += 边;
-        小 -= 边;
+        const padding = (maximum - minimum) * 0.08;
+        maximum += padding;
+        minimum -= padding;
       }
 
-      const X = (时间: number) => 左 + ((时间 - 最早) / (最晚 - 最早)) * 图宽;
-      const Y = (值: number) => 上 + (1 - (值 - 小) / (大 - 小)) * 图高2;
+      const X = (time: number) => left + ((time - earliest) / (latest - earliest)) * plotWidth;
+      const Y = (value: number) => top + (1 - (value - minimum) / (maximum - minimum)) * plotHeight;
 
       // ---- 网格 + 刻度 ----
-      笔.strokeStyle = 取v("--plot-grid", "#333");
-      笔.lineWidth = 1;
-      笔.fillStyle = 取v("--plot-tick", "#888");
-      笔.font = "10px " + 取v("--font-mono", "monospace");
-      笔.textAlign = "right";
-      笔.textBaseline = "middle";
+      context.strokeStyle = cssValue("--plot-grid", "#333");
+      context.lineWidth = 1;
+      context.fillStyle = cssValue("--plot-tick", "#888");
+      context.font = "10px " + cssValue("--font-mono", "monospace");
+      context.textAlign = "right";
+      context.textBaseline = "middle";
       for (let i = 0; i <= 4; i += 1) {
-        const 值 = 小 + ((大 - 小) * i) / 4;
-        const y = Y(值);
-        笔.beginPath();
-        笔.moveTo(左, y);
-        笔.lineTo(左 + 图宽, y);
-        笔.stroke();
-        笔.fillText(数(值, 3), 左 - 4, y);
+        const value = minimum + ((maximum - minimum) * i) / 4;
+        const y = Y(value);
+        context.beginPath();
+        context.moveTo(left, y);
+        context.lineTo(left + plotWidth, y);
+        context.stroke();
+        context.fillText(formatNumber(value, 3), left - 4, y);
       }
-      笔.textAlign = "center";
-      笔.textBaseline = "top";
-      const 档 = 跨度 <= 30 ? 5 : 15;
-      for (let 秒 = 0; 秒 <= 跨度 + 0.001; 秒 += 档) {
-        const 时间 = 最晚 - 秒;
-        if (时间 < 最早) break;
-        const x = X(时间);
-        笔.beginPath();
-        笔.moveTo(x, 上);
-        笔.lineTo(x, 上 + 图高2);
-        笔.stroke();
-        笔.fillText(秒 === 0 ? "0" : `-${秒}s`, x, 上 + 图高2 + 3);
+      context.textAlign = "center";
+      context.textBaseline = "top";
+      const tickInterval = span <= 30 ? 5 : 15;
+      for (let seconds = 0; seconds <= span + 0.001; seconds += tickInterval) {
+        const time = latest - seconds;
+        if (time < earliest) break;
+        const x = X(time);
+        context.beginPath();
+        context.moveTo(x, top);
+        context.lineTo(x, top + plotHeight);
+        context.stroke();
+        context.fillText(seconds === 0 ? "0" : `-${seconds}s`, x, top + plotHeight + 3);
       }
-      笔.strokeStyle = 取v("--plot-border", "#444");
-      笔.strokeRect(左, 上, 图宽, 图高2);
+      context.strokeStyle = cssValue("--plot-border", "#444");
+      context.strokeRect(left, top, plotWidth, plotHeight);
 
       // ---- 折线（每条曲线一段路径；分段的断点由"时间跳变"决定，不外推） ----
-      let 序 = 0;
-      for (const n of 名们) {
-        const 画不画 = 要画的.includes(n);
-        const 颜色序 = 序;
-        序 += 1;
-        if (!画不画) continue;
-        const 点 = 数据[n];
-        if (!点 || 点.length < 1) continue;
-        笔.strokeStyle = 取v(`--palette-${(颜色序 % 8) + 1}`, "#888");
-        笔.lineWidth = 1.5;
-        笔.beginPath();
-        let 起 = false;
-        for (let i = 点.length - 1; i >= 0; i -= 1) {
-          const p = 点[i];
-          if (p.t < 最早) break;
+      let seriesIndex = 0;
+      for (const n of names) {
+        const isVisible = visibleNames.includes(n);
+        const colorIndex = seriesIndex;
+        seriesIndex += 1;
+        if (!isVisible) continue;
+        const points = data[n];
+        if (!points || points.length < 1) continue;
+        context.strokeStyle = cssValue(`--palette-${(colorIndex % 8) + 1}`, "#888");
+        context.lineWidth = 1.5;
+        context.beginPath();
+        let pathStarted = false;
+        for (let i = points.length - 1; i >= 0; i -= 1) {
+          const p = points[i];
+          if (p.t < earliest) break;
           const x = X(p.t);
           const y = Y(p.v);
-          if (!起) {
-            笔.moveTo(x, y);
-            起 = true;
+          if (!pathStarted) {
+            context.moveTo(x, y);
+            pathStarted = true;
           } else {
-            笔.lineTo(x, y);
+            context.lineTo(x, y);
           }
         }
-        笔.stroke();
+        context.stroke();
       }
 
       // ---- 十字线 + 最近真实点 ----
-      if (悬) {
+      if (hover) {
         // 十字线吸附到真实采样时刻，不再画在原始鼠标 x 上却读取另一个时刻。
-        const 悬x = X(悬.时间);
-        笔.strokeStyle = 取v("--plot-cross", "#888");
-        笔.setLineDash([3, 3]);
-        笔.beginPath();
-        笔.moveTo(悬x, 上);
-        笔.lineTo(悬x, 上 + 图高2);
-        笔.stroke();
-        笔.setLineDash([]);
-        笔.font = "10px " + 取v("--font-mono", "monospace");
-        笔.textAlign = "left";
-        笔.textBaseline = "top";
-        let 行 = 0;
-        let 序2 = 0;
-        for (const n of 名们) {
-          const 颜色序 = 序2;
-          序2 += 1;
-          if (!要画的.includes(n)) continue;
-          const 点 = 数据[n];
-          if (!点 || !点.length) continue;
+        const hoverX = X(hover.time);
+        context.strokeStyle = cssValue("--plot-cross", "#888");
+        context.setLineDash([3, 3]);
+        context.beginPath();
+        context.moveTo(hoverX, top);
+        context.lineTo(hoverX, top + plotHeight);
+        context.stroke();
+        context.setLineDash([]);
+        context.font = "10px " + cssValue("--font-mono", "monospace");
+        context.textAlign = "left";
+        context.textBaseline = "top";
+        let legendRow = 0;
+        let legendSeriesIndex = 0;
+        for (const n of names) {
+          const colorIndex = legendSeriesIndex;
+          legendSeriesIndex += 1;
+          if (!visibleNames.includes(n)) continue;
+          const points = data[n];
+          if (!points || !points.length) continue;
           // 找离 悬.时间 最近的**真实**点（不插值）。
-          const 最 = 最近真实点(点, 悬.时间);
-          if (!最) continue;
-          const y = Y(最.v);
-          笔.fillStyle = 取v(`--palette-${(颜色序 % 8) + 1}`, "#888");
-          笔.beginPath();
-          笔.arc(X(最.t), y, 2.5, 0, Math.PI * 2);
-          笔.fill();
-          笔.fillRect(左 + 6, 上 + 6 + 行 * 12, 8, 2);
-          笔.fillStyle = 取v("--plot-text", "#ccc");
-          笔.fillText(`${n} = ${数(最.v, 4)}`, 左 + 18, 上 + 2 + 行 * 12);
-          行 += 1;
+          const nearest = nearestSample(points, hover.time);
+          if (!nearest) continue;
+          const y = Y(nearest.v);
+          context.fillStyle = cssValue(`--palette-${(colorIndex % 8) + 1}`, "#888");
+          context.beginPath();
+          context.arc(X(nearest.t), y, 2.5, 0, Math.PI * 2);
+          context.fill();
+          context.fillRect(left + 6, top + 6 + legendRow * 12, 8, 2);
+          context.fillStyle = cssValue("--plot-text", "#ccc");
+          context.fillText(`${n} = ${formatNumber(nearest.v, 4)}`, left + 18, top + 2 + legendRow * 12);
+          legendRow += 1;
         }
       }
     }
-  }, [数据, 要画的, 名们, 宽, 高, 窗口, 悬, t]);
+  }, [data, visibleNames, names, width, height, windowSeconds, hover, t]);
 
-  const 动 = (e: 指针事件<HTMLCanvasElement>) => {
-    const 元素 = 画布.current;
-    if (!元素) return;
-    const r = 元素.getBoundingClientRect();
+  const handlePointerMove = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+    const element = canvasRef.current;
+    if (!element) return;
+    const r = element.getBoundingClientRect();
     const x = e.clientX - r.left;
-    const 左 = 52;
-    const 图宽 = Math.max(10, r.width - 左 - 8);
-    const 比例 = Math.min(1, Math.max(0, (x - 左) / 图宽));
-    const 时间范围 = 取时间范围(数据, 要画的, 窗口);
-    if (!时间范围) return;
-    const 目标时间 = 时间范围.最早 + 比例 * 时间范围.跨度;
+    const left = 52;
+    const plotWidth = Math.max(10, r.width - left - 8);
+    const ratio = Math.min(1, Math.max(0, (x - left) / plotWidth));
+    const timeRange = getTimeRange(data, visibleNames, windowSeconds);
+    if (!timeRange) return;
+    const targetTime = timeRange.earliest + ratio * timeRange.span;
 
     // 在所有可见曲线中选距离鼠标最近的真实采样时刻。
     // 当前指标是同一帧同时发布的，因此各曲线标点会与十字线共线。
-    let 吸附时间 = 目标时间;
-    let 最小距离 = Infinity;
-    for (const n of 要画的) {
-      const 最近 = 最近真实点(数据[n] ?? [], 目标时间);
-      if (!最近) continue;
-      const 距离 = Math.abs(最近.t - 目标时间);
-      if (距离 < 最小距离) {
-        最小距离 = 距离;
-        吸附时间 = 最近.t;
+    let snappedTime = targetTime;
+    let nearestDistance = Infinity;
+    for (const n of visibleNames) {
+      const nearest = nearestSample(data[n] ?? [], targetTime);
+      if (!nearest) continue;
+      const distance = Math.abs(nearest.t - targetTime);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        snappedTime = nearest.t;
       }
     }
-    设悬({ 时间: 吸附时间 });
+    setHover({ time: snappedTime });
   };
 
   return (
-    <div ref={盒} className="w-full">
+    <div ref={containerRef} className="w-full">
       <canvas
-        ref={画布}
-        style={{ width: "100%", height: 高, display: "block", cursor: "crosshair" }}
-        onPointerMove={动}
-        onPointerLeave={() => 设悬(null)}
+        ref={canvasRef}
+        style={{ width: "100%", height: height, display: "block", cursor: "crosshair" }}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => setHover(null)}
         role="img"
         aria-label={t("验证.曲线")}
       />

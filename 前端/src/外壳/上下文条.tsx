@@ -7,10 +7,10 @@
  *   两个名字都截断并带完整 title，长路径不会把这一行撑成两行。
  */
 import { 用仓库 } from "../数据/仓库";
-import { use取 } from "../视图/文案";
+import { useTranslation } from "../视图/文案";
 
 export function 上下文条() {
-  const t = use取();
+  const t = useTranslation();
   const 项目 = 用仓库((s) => s.项目.数据);
   const 模型 = 用仓库((s) => s.模型.数据);
   const experiment = 用仓库((s) => s.experiment.数据);

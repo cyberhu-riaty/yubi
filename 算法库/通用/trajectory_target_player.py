@@ -20,6 +20,7 @@ from trajectory_runtime import (
 
 
 class ExperimentTrajectoryPlayer(ControlPlugin):
+    parameter_aliases = {'监看关节': 'monitored_joint'}
     name = "实验轨迹目标执行"
     english_name = "Experiment trajectory target player"
     version = "1.0"
@@ -27,7 +28,7 @@ class ExperimentTrajectoryPlayer(ControlPlugin):
     description = "根据 data.time 采样多航点轨迹，只发布关节目标，不直接写 data.ctrl。"
     takes_control = False
     # 默认监看受重力影响明显的肩关节，验证页能直观看到目标与实际是否重合。
-    监看关节 = 1.0
+    monitored_joint = 1.0
 
     def __init__(self) -> None:
         self._experiment_key = ""
@@ -153,7 +154,7 @@ class ExperimentTrajectoryPlayer(ControlPlugin):
 
     def _watch_index(self) -> int:
         size = int(self._last_target.size or len(self._joint_names) or 1)
-        return min(max(int(round(float(self.监看关节))), 0), size - 1)
+        return min(max(int(round(float(self.monitored_joint))), 0), size - 1)
 
     def metrics(self) -> dict:
         """目标/实际使用同一单位，适合验证页直接叠加观察。"""
@@ -171,7 +172,7 @@ class ExperimentTrajectoryPlayer(ControlPlugin):
     def adjustable_parameters(self) -> dict:
         upper = max(0, int(self._last_target.size or len(self._joint_names) or 1) - 1)
         return {
-            "监看关节": {"value": self.监看关节, "range": (0.0, float(upper)),
+            "监看关节": {"value": self.monitored_joint, "range": (0.0, float(upper)),
                        "step": 1.0, "unit": "关节索引"},
         }
 

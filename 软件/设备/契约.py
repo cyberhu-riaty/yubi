@@ -1,222 +1,30 @@
-"""
-设备/契约.py —— 设备抽象层的**唯一**类型与协议定义
-
-═══ 这一层解决什么 ════════════════════════════════════════════════════════
-    现在算出来的轨迹只能看，不能交给任何硬件 —— 因为没有"往哪写"这回事。
-    每接一台新机器人就从头写一遍"连接 + 限位 + 超时 + 状态机"，既慢又危险。
-
-    这一层把**与协议无关**的部分固定下来：
-        算法只产出「期望位置/速度/力矩」→ 设备抽象 → 传输层（Sim/UDP/CAN/…）
-
-═══ 三条不可让步的设计（都是有理由的，不是风格）════════════════════════════
-    ① **时间戳是接口的一部分**，不是可选项。
-       没有它就没法回答"这条状态是几毫秒前的"，于是既做不了实时性诊断，
-       也做不了安全检查（拿 200 ms 前的状态算力矩是危险的）。
-    ② **读写都非阻塞**。`读状态()` 不该等网络；`写命令()` 不该等到对方确认。
-       真机链路上任何一次阻塞都会把控制周期拖垮。
-    ③ **能力声明必须被真正使用**。声明"只支持位置模式"的硬件，
-       控制器就得走另一条代码路径。声明了却不读 = 假抽象。
-
-═══ 这一层**不**负责什么 ═══════════════════════════════════════════════════
-    · 不做安全决策（看门狗/限幅/状态机在 `安全层.py`，对所有后端生效）
-    · 不做单位换算以外的语义（协议细节各自后端负责）
-    · **不承担人身安全职责** —— 真机必须有独立的物理急停回路，
-      软件里的急停只是"请求"。这句话写在规格里，也写在这里。
-"""
+"""Legacy naming compatibility; new code imports devices.contract."""
 from __future__ import annotations
 
-import dataclasses
-import enum
-from typing import Protocol, runtime_checkable
+from functools import wraps
+import devices.contract as _implementation
 
+_ALIASES = {'设备': 'devices', '契约': 'contract', '安全层': 'SafetyLayer', '模拟后端': 'SimulatedBackend', '跟踪回路': 'TrackingLoop', '连接桥': 'connection_bridge', '控制模式': 'ControlMode', '安全状态': 'SafetyState', '错误码': 'ErrorCode', '设备能力': 'DeviceCapabilities', '命令帧': 'CommandFrame', '状态帧': 'StateFrame', '写结果': 'WriteResult', '健康报告': 'HealthReport', '设备后端': 'DeviceBackend', '审计条目': 'AuditEntry', '审计日志': 'AuditLog', '简单物理': 'SimplePhysics', '连接命令': 'ConnectionCommand', '连接状态': 'ConnectionState', '_上限': '_limit', '_条': '_entries', '上限': 'limit', '丢包数': 'dropped_packets', '位置': 'position', '使能中': 'enabling', '停止': 'stop', '健康': 'health', '全部': 'all_entries', '关闭': 'close', '内容': 'content', '内部错误': 'internal_error', '写命令': 'write_command', '力矩': 'torque', '协议错误': 'protocol_error', '可读位置': 'can_read_position', '可读力矩': 'can_read_torque', '可读温度': 'can_read_temperature', '可读速度': 'can_read_velocity', '名称': 'name', '命令': 'command', '增量超限': 'increment_exceeded', '导出csv': 'export_csv', '已连接': 'connected', '平均延迟毫秒': 'mean_latency_ms', '序号': 'sequence', '延迟毫秒': 'latency_ms', '心跳计数': 'heartbeat_count', '急停': 'emergency_stop', '成功': 'success', '打开': 'open', '接收时刻': 'received_at', '支持': 'supports', '支持位置模式': 'supports_position_mode', '支持力矩模式': 'supports_torque_mode', '支持速度模式': 'supports_velocity_mode', '故障': 'fault', '时刻': 'timestamp', '最大命令频率': 'max_command_frequency', '最大延迟毫秒': 'max_latency_ms', '最近': 'latest', '期望位置': 'target_position', '期望力矩': 'target_torque', '期望生效时刻': 'effective_at', '期望速度': 'target_velocity', '未使能': 'not_enabled', '未连接': 'disconnected', '条': 'entry', '条数': 'entry_count', '模式': 'mode', '正常': 'ok', '清空': 'clear', '温度': 'temperature', '版本': 'version', '空闲': 'idle', '类别': 'category', '编码器分辨率': 'encoder_resolution', '能力': 'capabilities', '能力不支持': 'unsupported_capability', '自由度': 'dof', '记': 'record', '设模式': 'set_mode', '说明': 'description', '读状态': 'read_state', '超时': 'timeout', '越限位': 'limit_exceeded', '路径': 'path', '运行': 'running', '速度': 'velocity', '配置': 'config', '采集时刻': 'sampled_at', '错序数': 'out_of_order_packets', '阻尼': 'damping', '_上次命令位置': '_last_command_position', '_上次状态时刻': '_last_state_time', '_序号': '_sequence', '_心跳': '_heartbeat', '_拒绝数': '_rejected_count', '_最近状态': '_latest_state', '_查看门狗': '_check_watchdog', '_限幅': '_clamp', '_首帧待发': '_first_frame_pending', '位置限位': 'position_limits', '低': 'lower', '使能': 'enable', '单周期最大位移': 'max_step_displacement', '原因': 'reason', '后': 'backend', '后端': 'backend', '增量': 'increment', '夹后': 'clamped', '审计': 'audit', '帧': 'frame', '异常': 'exc', '当前': 'current', '快照': 'snapshot', '改过': 'changed', '最大': 'maximum', '果': 'result', '状态': 'state', '看门狗毫秒': 'watchdog_ms', '经过': 'elapsed', '软件限速': 'speed_limit', '进运行': 'enter_running', '高': 'upper', '_丢包': '_dropped_packets', '_产生一帧': '_produce_frame', '_命令序号': '_command_sequence', '_已连接': '_connected', '_延迟们': '_latencies', '_待发': '_pending', '_最后出帧': '_last_frame_time', '_最新': '_latest', '_模式': '_mode', '_物理': '_physics', '_错序': '_out_of_order', '_错误': '_error', '_随机': '_random', 'τ': 'torque', '丢包率': 'packet_loss_rate', '出帧周期毫秒': 'frame_interval_ms', '刚度': 'stiffness', '加速度': 'acceleration', '参考': 'reference', '外': 'external_torque', '属性': 'attribute', '延迟': 'latency', '惯量': 'inertia', '抖动毫秒': 'jitter_ms', '期望': 'target', '步进': 'step', '物理': 'physics', '现在': 'now', '设参考': 'set_reference', '键': 'key', '随机种子': 'random_seed', '_上次指令': '_last_command', '层': 'safety_layer', '步长秒': 'timestep', '目标': 'target', '历史': 'history', '设目标': 'set_target', '实际': 'actual', '误差': 'error', '指令': 'command', '时长秒': 'duration', '截止': 'deadline', '回路': 'loop', '峰': 'peak', '末': 'final', '实际延迟': 'actual_latency', '阶跃响应': 'step_response', '_下次发布': '_next_publish_time', '_包根': '_package_root', '_发布': '_publish', '_发送': '_send', '_导出审计': '_export_audit', '_建': '_build', '_打开': '_open', '_演练断线': '_simulate_disconnect', '_自由度': '_dof', '_设劣化': '_set_impairments', '动作': 'action', '包根': 'package_root', '发送函数': 'send', '墙钟': 'wall_clock', '实测平均延迟': 'measured_mean_latency', '实测最大延迟': 'measured_max_latency', '健': 'health', '打开次数': 'open_count', '拒绝数': 'rejected_count', '收命令': 'receive_command', '最近位置': 'latest_position', '间隔秒': 'interval_seconds'}
+_KEYWORDS = {'设备': 'devices', '契约': 'contract', '安全层': 'SafetyLayer', '模拟后端': 'SimulatedBackend', '跟踪回路': 'TrackingLoop', '连接桥': 'connection_bridge', '控制模式': 'ControlMode', '安全状态': 'SafetyState', '错误码': 'ErrorCode', '设备能力': 'DeviceCapabilities', '命令帧': 'CommandFrame', '状态帧': 'StateFrame', '写结果': 'WriteResult', '健康报告': 'HealthReport', '设备后端': 'DeviceBackend', '审计条目': 'AuditEntry', '审计日志': 'AuditLog', '简单物理': 'SimplePhysics', '连接命令': 'ConnectionCommand', '连接状态': 'ConnectionState', '_上限': '_limit', '_条': '_entries', '上限': 'limit', '丢包数': 'dropped_packets', '位置': 'position', '使能中': 'enabling', '停止': 'stop', '健康': 'health', '全部': 'all_entries', '关闭': 'close', '内容': 'content', '内部错误': 'internal_error', '写命令': 'write_command', '力矩': 'torque', '协议错误': 'protocol_error', '可读位置': 'can_read_position', '可读力矩': 'can_read_torque', '可读温度': 'can_read_temperature', '可读速度': 'can_read_velocity', '名称': 'name', '命令': 'command', '增量超限': 'increment_exceeded', '导出csv': 'export_csv', '已连接': 'connected', '平均延迟毫秒': 'mean_latency_ms', '序号': 'sequence', '延迟毫秒': 'latency_ms', '心跳计数': 'heartbeat_count', '急停': 'emergency_stop', '成功': 'success', '打开': 'open', '接收时刻': 'received_at', '支持': 'supports', '支持位置模式': 'supports_position_mode', '支持力矩模式': 'supports_torque_mode', '支持速度模式': 'supports_velocity_mode', '故障': 'fault', '时刻': 'timestamp', '最大命令频率': 'max_command_frequency', '最大延迟毫秒': 'max_latency_ms', '最近': 'latest', '期望位置': 'target_position', '期望力矩': 'target_torque', '期望生效时刻': 'effective_at', '期望速度': 'target_velocity', '未使能': 'not_enabled', '未连接': 'disconnected', '条': 'entry', '条数': 'entry_count', '模式': 'mode', '正常': 'ok', '清空': 'clear', '温度': 'temperature', '版本': 'version', '空闲': 'idle', '类别': 'category', '编码器分辨率': 'encoder_resolution', '能力': 'capabilities', '能力不支持': 'unsupported_capability', '自由度': 'dof', '记': 'record', '设模式': 'set_mode', '说明': 'description', '读状态': 'read_state', '超时': 'timeout', '越限位': 'limit_exceeded', '路径': 'path', '运行': 'running', '速度': 'velocity', '配置': 'config', '采集时刻': 'sampled_at', '错序数': 'out_of_order_packets', '阻尼': 'damping', '_上次命令位置': '_last_command_position', '_上次状态时刻': '_last_state_time', '_序号': '_sequence', '_心跳': '_heartbeat', '_拒绝数': '_rejected_count', '_最近状态': '_latest_state', '_查看门狗': '_check_watchdog', '_限幅': '_clamp', '_首帧待发': '_first_frame_pending', '位置限位': 'position_limits', '低': 'lower', '使能': 'enable', '单周期最大位移': 'max_step_displacement', '原因': 'reason', '后': 'backend', '后端': 'backend', '增量': 'increment', '夹后': 'clamped', '审计': 'audit', '帧': 'frame', '异常': 'exc', '当前': 'current', '快照': 'snapshot', '改过': 'changed', '最大': 'maximum', '果': 'result', '状态': 'state', '看门狗毫秒': 'watchdog_ms', '经过': 'elapsed', '软件限速': 'speed_limit', '进运行': 'enter_running', '高': 'upper', '_丢包': '_dropped_packets', '_产生一帧': '_produce_frame', '_命令序号': '_command_sequence', '_已连接': '_connected', '_延迟们': '_latencies', '_待发': '_pending', '_最后出帧': '_last_frame_time', '_最新': '_latest', '_模式': '_mode', '_物理': '_physics', '_错序': '_out_of_order', '_错误': '_error', '_随机': '_random', 'τ': 'torque', '丢包率': 'packet_loss_rate', '出帧周期毫秒': 'frame_interval_ms', '刚度': 'stiffness', '加速度': 'acceleration', '参考': 'reference', '外': 'external_torque', '属性': 'attribute', '延迟': 'latency', '惯量': 'inertia', '抖动毫秒': 'jitter_ms', '期望': 'target', '步进': 'step', '物理': 'physics', '现在': 'now', '设参考': 'set_reference', '键': 'key', '随机种子': 'random_seed', '_上次指令': '_last_command', '层': 'safety_layer', '步长秒': 'timestep', '目标': 'target', '历史': 'history', '设目标': 'set_target', '实际': 'actual', '误差': 'error', '指令': 'command', '时长秒': 'duration', '截止': 'deadline', '回路': 'loop', '峰': 'peak', '末': 'final', '实际延迟': 'actual_latency', '阶跃响应': 'step_response', '_下次发布': '_next_publish_time', '_包根': '_package_root', '_发布': '_publish', '_发送': '_send', '_导出审计': '_export_audit', '_建': '_build', '_打开': '_open', '_演练断线': '_simulate_disconnect', '_自由度': '_dof', '_设劣化': '_set_impairments', '动作': 'action', '包根': 'package_root', '发送函数': 'send', '墙钟': 'wall_clock', '实测平均延迟': 'measured_mean_latency', '实测最大延迟': 'measured_max_latency', '健': 'health', '打开次数': 'open_count', '拒绝数': 'rejected_count', '收命令': 'receive_command', '最近位置': 'latest_position', '间隔秒': 'interval_seconds'}
 
-# ---------------------------------------------------------------------------
-# 枚举
-# ---------------------------------------------------------------------------
-class 控制模式(enum.Enum):
-    空闲 = "空闲"
-    位置 = "位置"
-    速度 = "速度"
-    力矩 = "力矩"
-    阻尼 = "阻尼"         # 看门狗触发后的"软着陆"：只加阻尼，不出力
-    急停 = "急停"         # 请求切断使能（真机由物理回路保证）
+def __getattr__(name):
+    value = getattr(_implementation, _ALIASES.get(name, name))
+    if callable(value) and not isinstance(value, type) and _KEYWORDS:
+        @wraps(value)
+        def call(*args, **kwargs):
+            mapped = {}
+            for key, item in kwargs.items():
+                translated = _KEYWORDS.get(key, key)
+                if translated in mapped:
+                    raise TypeError(f"Multiple values for argument {translated!r}")
+                mapped[translated] = item
+            return value(*args, **mapped)
+        return call
+    return value
 
+def __dir__():
+    return sorted(set(globals()) | set(dir(_implementation)) | set(_ALIASES))
 
-class 安全状态(enum.Enum):
-    """状态机。**不允许跳过"未使能"直接进入"运行"**（规格 B3-4）。"""
-    未连接 = "未连接"
-    已连接 = "已连接（未使能）"
-    使能中 = "使能中"
-    运行 = "运行"
-    停止 = "停止"
-    故障 = "故障"
-    急停 = "急停"
-
-
-class 错误码(enum.Enum):
-    """错误码要能区分"哪一类问题"，不能糊成一个 False。"""
-    正常 = "正常"
-    未连接 = "未连接"
-    未使能 = "未使能"
-    超时 = "超时"
-    越限位 = "越限位"
-    增量超限 = "增量超限"
-    能力不支持 = "能力不支持"
-    协议错误 = "协议错误"
-    内部错误 = "内部错误"
-
-
-# ---------------------------------------------------------------------------
-# 能力
-# ---------------------------------------------------------------------------
-@dataclasses.dataclass(frozen=True)
-class 设备能力:
-    """后端**如实**声明自己能干什么。控制器按它选代码路径。
-
-    ★ 一张"什么都能"的能力表是最省事的，也是最假的 —— 所以这里的字段
-      都以"控制器真的会读它"为准，不预留没人用的位。
-    """
-    可读位置: bool = True
-    可读速度: bool = True
-    可读力矩: bool = False
-    可读温度: bool = False          # 没有热模型/没有传感器时**必须为 False**
-    支持位置模式: bool = True
-    支持速度模式: bool = False
-    支持力矩模式: bool = False
-    编码器分辨率: float = 0.0       # 米或弧度；0 = 未知（不做事后量化）
-    最大命令频率: float = 0.0       # Hz；0 = 不限
-
-    def 支持(self, 模式: 控制模式) -> bool:
-        if 模式 in (控制模式.空闲, 控制模式.阻尼, 控制模式.急停):
-            return True             # 这三个任何后端都必须支持（安全动作不能可选）
-        return {
-            控制模式.位置: self.支持位置模式,
-            控制模式.速度: self.支持速度模式,
-            控制模式.力矩: self.支持力矩模式,
-        }.get(模式, False)
-
-
-# ---------------------------------------------------------------------------
-# 帧
-# ---------------------------------------------------------------------------
-@dataclasses.dataclass(frozen=True)
-class 命令帧:
-    """一次"往哪走"的请求。**非阻塞写**，所以带序号便于对账。"""
-    序号: int
-    期望位置: tuple = ()            # (n,) 目标位置；空 = 不控制位置
-    期望速度: tuple = ()            # (n,) 目标速度
-    期望力矩: tuple = ()            # (n,) 前馈力矩
-    期望生效时刻: float = 0.0       # 墙钟（perf_counter 基准）；0 = 尽快
-    心跳计数: int = 0               # 看门狗用；**真机的看门狗必须在硬件侧**
-
-
-@dataclasses.dataclass(frozen=True)
-class 状态帧:
-    """一次"现在在哪"的反馈。**时间戳是接口的一部分**。"""
-    序号: int
-    位置: tuple = ()
-    速度: tuple = ()
-    力矩: tuple = ()
-    温度: tuple = ()                # 没有传感器就该是空 tuple，不是 0
-    采集时刻: float = 0.0           # 硬件/仿真侧产生这一帧的时刻
-    接收时刻: float = 0.0           # 本进程收到的时刻
-    模式: 控制模式 = 控制模式.空闲
-
-    def 延迟毫秒(self) -> float:
-        """这一帧在路上花了多久。两个时刻都来自**同一个时钟基准**才有效。"""
-        if self.接收时刻 <= 0 or self.采集时刻 <= 0:
-            return float("nan")
-        return (self.接收时刻 - self.采集时刻) * 1000.0
-
-
-@dataclasses.dataclass(frozen=True)
-class 写结果:
-    成功: bool = True
-    错误码: 错误码 = 错误码.正常
-    说明: str = ""
-
-
-@dataclasses.dataclass(frozen=True)
-class 健康报告:
-    已连接: bool = False
-    模式: 控制模式 = 控制模式.空闲
-    丢包数: int = 0
-    错序数: int = 0
-    平均延迟毫秒: float = float("nan")
-    最大延迟毫秒: float = float("nan")
-    错误码: 错误码 = 错误码.正常
-    说明: str = ""
-
-
-# ---------------------------------------------------------------------------
-# 后端协议
-# ---------------------------------------------------------------------------
-@runtime_checkable
-class 设备后端(Protocol):
-    """任何传输层（Sim / UDP / CAN / ROS2 / 厂商 SDK）都要满足它。
-
-    ★ 用 Protocol 而不是基类：第三方写驱动时**不需要** import 我们的基类，
-      结构对了就能用。这也让"契约测试"能对任意对象跑。
-    """
-    名称: str
-    版本: str
-    能力: 设备能力
-    自由度: int
-
-    def 打开(self, 配置: dict | None = None) -> None: ...
-    def 关闭(self) -> None: ...
-    def 设模式(self, 模式: 控制模式) -> 写结果: ...
-    def 写命令(self, 命令: 命令帧) -> 写结果: ...
-    def 读状态(self) -> 状态帧 | None: ...
-    def 健康(self) -> 健康报告: ...
-
-
-# ---------------------------------------------------------------------------
-# 审计日志
-# ---------------------------------------------------------------------------
-@dataclasses.dataclass(frozen=True)
-class 审计条目:
-    时刻: float
-    类别: str            # 模式切换 / 命令拒绝 / 看门狗 / 状态迁移 / 安全动作
-    内容: str
-    错误码: 错误码 = 错误码.正常
-
-
-class 审计日志:
-    """安全层与后端的**唯一**事后依据。
-
-    ★ 为什么不只 print：真机出问题时要能导出、能按时间对齐外部日志。
-      所以这里存结构化条目，界面上可导出 CSV。
-    """
-
-    def __init__(self, 上限: int = 5000):
-        self._条: list[审计条目] = []
-        self._上限 = int(上限)
-
-    def 记(self, 类别: str, 内容: str, 错误码: 错误码 = 错误码.正常,
-          时刻: float | None = None) -> None:
-        import time as _t
-        self._条.append(审计条目(
-            时刻=float(时刻 if 时刻 is not None else _t.perf_counter()),
-            类别=str(类别), 内容=str(内容), 错误码=错误码))
-        if len(self._条) > self._上限:
-            del self._条[:len(self._条) - self._上限]
-
-    def 全部(self) -> tuple[审计条目, ...]:
-        return tuple(self._条)
-
-    def 最近(self, 条数: int = 50) -> tuple[审计条目, ...]:
-        return tuple(self._条[-int(条数):])
-
-    def 清空(self) -> None:
-        self._条.clear()
-
-    def 导出csv(self, 路径: str) -> int:
-        """写 CSV。返回写了多少条。"""
-        import csv
-        with open(路径, "w", encoding="utf-8", newline="") as f:
-            w = csv.writer(f)
-            w.writerow(["时刻(perf_counter)", "类别", "内容", "错误码"])
-            for 条 in self._条:
-                w.writerow([f"{条.时刻:.6f}", 条.类别, 条.内容, 条.错误码.value])
-        return len(self._条)
+if __name__ == "__main__":
+    import runpy
+    runpy.run_module("devices.contract", run_name="__main__")

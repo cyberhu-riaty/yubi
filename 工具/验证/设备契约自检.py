@@ -27,29 +27,29 @@ import sys
 import time
 from pathlib import Path
 
-包根 = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(包根 / "软件"))
+package_root = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(package_root / "软件"))
 
 明细: list[str] = []
 通过 = 0
 失败 = 0
 
 
-def 判(好: bool, 说明: str) -> None:
+def 判(好: bool, description: str) -> None:
     global 通过, 失败
     if 好:
         通过 += 1
-        明细.append(f"  ✓ {说明}")
+        明细.append(f'  ✓ {description}')
     else:
         失败 += 1
-        明细.append(f"  ✗ {说明}")
+        明细.append(f'  ✗ {description}')
 
 
-def 跑一段时间(层, 秒=0.3, 步=0.001):
+def 跑一段时间(safety_layer, 秒=0.3, 步=0.001):
     """驱动一会儿，让后端出帧（同时给看门狗喂状态）。"""
-    截止 = time.perf_counter() + 秒
-    while time.perf_counter() < 截止:
-        层.读状态()
+    deadline = time.perf_counter() + 秒
+    while time.perf_counter() < deadline:
+        safety_layer.read_state()
         time.sleep(步)
 
 
@@ -58,105 +58,105 @@ def main() -> int:
     ap.add_argument("--简", action="store_true")
     args = ap.parse_args()
 
-    from 设备.契约 import 安全状态, 控制模式, 设备后端
-    from 设备.模拟后端 import 模拟后端
-    from 设备.安全层 import 安全层
+    from devices.contract import SafetyState, ControlMode, DeviceBackend
+    from devices.simulated_backend import SimulatedBackend
+    from devices.safety import SafetyLayer
 
     # ① 协议形状（用 Protocol 对结构做检查，第三方不用继承我们的基类）
-    后 = 模拟后端(6)
-    判(isinstance(后, 设备后端), "① 模拟后端满足 `设备后端` 协议（结构化检查）")
-    判(int(后.自由度) == 6 and bool(后.名称), f"① 名称={后.名称} 自由度={后.自由度}")
+    backend = SimulatedBackend(6)
+    判(isinstance(backend, DeviceBackend), "① 模拟后端满足 `设备后端` 协议（结构化检查）")
+    判(int(backend.dof) == 6 and bool(backend.name), f'① 名称={backend.name} 自由度={backend.dof}')
 
-    层 = 安全层(后, 看门狗毫秒=50, 单周期最大位移=0.05,
-                位置限位=(-1.0, 1.0))
-    层.打开()
-    判(层.状态 == 安全状态.已连接, f"① 打开后状态 = {层.状态.value}")
+    safety_layer = SafetyLayer(backend, watchdog_ms=50, max_step_displacement=0.05,
+                position_limits=(-1.0, 1.0))
+    safety_layer.open()
+    判(safety_layer.state == SafetyState.CONNECTED, f'① 打开后状态 = {safety_layer.state.value}')
 
     # ⑨ 状态机：不能跳级
-    果 = 层.进运行()
-    判(not 果.成功 and 层.状态 == 安全状态.已连接,
+    result = safety_layer.enter_running()
+    判(not result.success and safety_layer.state == SafetyState.CONNECTED,
        "⑨ 从「已连接」不能直接进「运行」（必须显式使能）")
 
-    层.使能(控制模式.位置)
-    判(层.状态 == 安全状态.使能中, f"⑨ 使能后 = {层.状态.value}")
+    safety_layer.enable(ControlMode.POSITION)
+    判(safety_layer.state == SafetyState.ENABLING, f'⑨ 使能后 = {safety_layer.state.value}')
 
     # ⑥ 首帧保护：第一条命令必须被改成"保持当前位置"
-    跑一段时间(层, 0.15)
-    状态 = 层._最近状态
-    判(状态 is not None, "⑥ 拿到了状态帧")
-    if 状态 is not None:
-        层.写命令(期望位置=[0.5] * 6)          # 故意要跳很远
-        判(层._上次命令位置 is not None
-           and max(abs(a - b) for a, b in zip(层._上次命令位置, 状态.位置)) < 1e-9,
+    跑一段时间(safety_layer, 0.15)
+    state = safety_layer._latest_state
+    判(state is not None, "⑥ 拿到了状态帧")
+    if state is not None:
+        safety_layer.write_command(target_position=[0.5] * 6)          # 故意要跳很远
+        判(safety_layer._last_command_position is not None
+           and max(abs(a - b) for a, b in zip(safety_layer._last_command_position, state.position)) < 1e-9,
            "⑥ 首帧保护：第一条命令被改成了「保持当前位置」")
 
-    层.进运行()
-    判(层.状态 == 安全状态.运行, "⑨ 进入运行")
+    safety_layer.enter_running()
+    判(safety_layer.state == SafetyState.RUNNING, "⑨ 进入运行")
 
     # ⑥b 增量限幅：一次跳 0.5 会被夹到单周期上限
     # ★ 局部变量别叫 `后` —— 外层那个 `后` 是后端对象，遮蔽后后面会 AttributeError。
     #   （本项目第五次栽在"同名不同物"上，所以这里特意留一行提醒。）
-    之前 = 层._上次命令位置.copy()
-    层.写命令(期望位置=[之前[0] + 0.5] + list(之前[1:]))
-    现在 = 层._上次命令位置
-    判(abs(现在[0] - 之前[0]) <= 0.05 + 1e-9,
-       f"⑥ 单周期增量被限幅（实际 {abs(现在[0] - 之前[0]):.4f} ≤ 0.05）")
+    之前 = safety_layer._last_command_position.copy()
+    safety_layer.write_command(target_position=[之前[0] + 0.5] + list(之前[1:]))
+    now = safety_layer._last_command_position
+    判(abs(now[0] - 之前[0]) <= 0.05 + 1e-9,
+       f'⑥ 单周期增量被限幅（实际 {abs(now[0] - 之前[0]):.4f} ≤ 0.05）')
 
     # ⑤ 软限位
-    层._上次命令位置 = None                # 临时放开增量限制，单独测软限位
-    层.写命令(期望位置=[9.0] * 6)
-    判(max(abs(x) for x in 层._上次命令位置) <= 1.0 + 1e-9,
+    safety_layer._last_command_position = None                # 临时放开增量限制，单独测软限位
+    safety_layer.write_command(target_position=[9.0] * 6)
+    判(max(abs(x) for x in safety_layer._last_command_position) <= 1.0 + 1e-9,
        "⑤ 超出软限位的命令被夹回")
 
     # ② 时间戳与延迟
-    跑一段时间(层, 0.2)
-    状态 = 层._最近状态
-    判(状态.采集时刻 > 0 and 状态.接收时刻 >= 状态.采集时刻,
+    跑一段时间(safety_layer, 0.2)
+    state = safety_layer._latest_state
+    判(state.sampled_at > 0 and state.received_at >= state.sampled_at,
        "② 时间戳：采集时刻 ≤ 接收时刻")
 
     # ③ 单调性（丢包允许跳，不许回退）
     序号们 = []
     for _ in range(120):
-        s = 层.读状态()
+        s = safety_layer.read_state()
         if s is not None:
-            序号们.append(s.序号)
+            序号们.append(s.sequence)
         time.sleep(0.001)
     判(all(b >= a for a, b in zip(序号们, 序号们[1:])),
        f"③ 序号单调不降（取到 {len(序号们)} 帧，最大 {max(序号们) if 序号们 else 0}）")
 
     # ④ 能力一致：声明读不到力矩 → 状态帧里必须是空
-    判(后.能力.可读力矩 is False and 状态.力矩 == (),
+    判(backend.capabilities.can_read_torque is False and state.torque == (),
        "④ 能力表说读不到力矩，状态帧的力矩就是空（不是 0）")
 
     # ⑧ 丢包可见
-    差 = 模拟后端(6, 丢包率=0.5, 出帧周期毫秒=1)
-    差层 = 安全层(差, 看门狗毫秒=500)
-    差层.打开()
+    差 = SimulatedBackend(6, packet_loss_rate=0.5, frame_interval_ms=1)
+    差层 = SafetyLayer(差, watchdog_ms=500)
+    差层.open()
     跑一段时间(差层, 0.3)
-    判(差.健康().丢包数 > 0, f"⑧ 注入 50% 丢包后统计到 {差.健康().丢包数} 次丢包")
+    判(差.health().dropped_packets > 0, f'⑧ 注入 50% 丢包后统计到 {差.health().dropped_packets} 次丢包')
 
     # ⑦ 看门狗：断开供帧 → 进故障
-    短 = 模拟后端(6, 出帧周期毫秒=1)
-    短层 = 安全层(短, 看门狗毫秒=30, 单周期最大位移=1.0)
-    短层.打开()
-    短层.使能(控制模式.位置)
+    短 = SimulatedBackend(6, frame_interval_ms=1)
+    短层 = SafetyLayer(短, watchdog_ms=30, max_step_displacement=1.0)
+    短层.open()
+    短层.enable(ControlMode.POSITION)
     跑一段时间(短层, 0.1)
-    短层._上次命令位置 = None
-    短层.写命令(期望位置=[0.0] * 6)
-    短层.进运行()
-    短.关闭()                      # 模拟断线：之后不再有新状态
+    短层._last_command_position = None
+    短层.write_command(target_position=[0.0] * 6)
+    短层.enter_running()
+    短.close()                      # 模拟断线：之后不再有新状态
     time.sleep(0.08)               # 超过看门狗阈值
-    短层.读状态()
-    判(短层.状态 == 安全状态.故障, f"⑦ 看门狗触发 → {短层.状态.value}")
-    判(any("看门狗" in 条.类别 for 条 in 短层.审计.全部()),
+    短层.read_state()
+    判(短层.state == SafetyState.FAULT, f'⑦ 看门狗触发 → {短层.state.value}')
+    判(any("看门狗" in entry.category for entry in 短层.audit.all_entries()),
        "⑦ 看门狗事件进了审计日志")
 
     # 审计导出
     import tempfile
     import os
-    路径 = os.path.join(tempfile.gettempdir(), "驭臂_审计.csv")
-    条数 = 层.审计.导出csv(路径)
-    判(条数 > 0 and os.path.getsize(路径) > 0, f"审计日志可导出 CSV（{条数} 条）")
+    path = os.path.join(tempfile.gettempdir(), "驭臂_审计.csv")
+    entry_count = safety_layer.audit.export_csv(path)
+    判(entry_count > 0 and os.path.getsize(path) > 0, f'审计日志可导出 CSV（{entry_count} 条）')
 
     if not args.简:
         print("=" * 78)

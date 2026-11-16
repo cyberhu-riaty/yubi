@@ -12,37 +12,37 @@
  */
 import type { ReactNode } from "react";
 
-export type 标签语气 = "中性" | "强调" | "警示" | "成功" | "警告" | "错误";
+export type TagTone = "neutral" | "emphasis" | "notice" | "success" | "warning" | "error";
 
-export interface 标签参数 {
+export interface TagProps {
   children: ReactNode;
-  语气?: 标签语气;
-  等宽?: boolean;
+  tone?: TagTone;
+  monospace?: boolean;
   title?: string;
 }
 
-const 语气样式: Record<标签语气, React.CSSProperties> = {
-  中性: { background: "var(--bg-frame)", color: "var(--fg-dim)", borderColor: "var(--border)" },
-  强调: { background: "var(--bg-frame-on)", color: "var(--fg)", borderColor: "var(--border-strong)" },
-   警示: {
+const toneStyles: Record<TagTone, React.CSSProperties> = {
+  neutral: { background: "var(--bg-frame)", color: "var(--fg-dim)", borderColor: "var(--border)" },
+  emphasis: { background: "var(--bg-frame-on)", color: "var(--fg)", borderColor: "var(--border-strong)" },
+   notice: {
     background: "transparent",
     color: "var(--fg-dim)",
     borderColor: "var(--border-strong)",
     borderStyle: "dashed",
   },
-  成功: {
+  success: {
     background: "var(--bg-panel)",
     color: "var(--ok)",
     borderColor: "var(--ok)",
     borderStyle: "solid",
   },
-  警告: {
+  warning: {
     background: "var(--bg-panel)",
     color: "var(--warn)",
     borderColor: "var(--warn)",
     borderStyle: "solid",
   },
-  错误: {
+  error: {
     background: "var(--bg-panel)",
     color: "var(--danger)",
     borderColor: "var(--danger)",
@@ -50,11 +50,11 @@ const 语气样式: Record<标签语气, React.CSSProperties> = {
   },
 };
 
-export function 标签({ children, 语气 = "中性", 等宽 = false, title }: 标签参数) {
+export function Tag({ children, tone: tone = "neutral", monospace: monospace = false, title }: TagProps) {
   return (
     <span
-      className={`标签${等宽 ? " 等宽" : ""}`}
-      style={语气样式[语气]}
+      className={`标签${monospace ? " 等宽" : ""}`}
+      style={toneStyles[tone]}
       title={title}
     >
       {children}

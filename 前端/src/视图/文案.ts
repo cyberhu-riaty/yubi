@@ -13,17 +13,17 @@
  */
 import { useSyncExternalStore } from "react";
 
-export type 语言 = "zh" | "en";
+export type Language = "zh" | "en";
 
-export const 语言名: Record<语言, string> = { zh: "中文", en: "English" };
+export const languageNames: Record<Language, string> = { zh: "中文", en: "English" };
 /** 状态栏那个切换按钮上显示的字（显示"另一种语言"） */
-export const 另一种语言: Record<语言, 语言> = { zh: "en", en: "zh" };
+export const otherLanguage: Record<Language, Language> = { zh: "en", en: "zh" };
 
-const 存储键 = "驭臂.语言";
+const STORAGE_KEY = "驭臂.语言";
 
-function 读存档(): 语言 {
+function readSavedLanguage(): Language {
   try {
-    const 存 = window.localStorage.getItem(存储键);
+    const 存 = window.localStorage.getItem(STORAGE_KEY);
     if (存 === "zh" || 存 === "en") return 存;
   } catch {
     /* 存储不可用就用系统语言 */
@@ -35,40 +35,40 @@ function 读存档(): 语言 {
   }
 }
 
-let 当前语言: 语言 = 读存档();
+let currentLanguage: Language = readSavedLanguage();
 
-const 订阅者 = new Set<() => void>();
+const subscribers = new Set<() => void>();
 
-export function 取语言(): 语言 {
-  return 当前语言;
+export function getLanguage(): Language {
+  return currentLanguage;
 }
 
-export function 设语言(语: 语言): void {
-  if (语 === 当前语言) return;
-  当前语言 = 语;
+export function setLanguage(language: Language): void {
+  if (language === currentLanguage) return;
+  currentLanguage = language;
   try {
-    window.localStorage.setItem(存储键, 语);
+    window.localStorage.setItem(STORAGE_KEY, language);
   } catch {
     /* 存不下也能用，只是下次回到系统语言 */
   }
   if (typeof document !== "undefined") {
-    document.documentElement.setAttribute("lang", 语 === "zh" ? "zh-CN" : "en");
+    document.documentElement.setAttribute("lang", language === "zh" ? "zh-CN" : "en");
   }
-  广播();
+  broadcast();
 }
 
-function 广播(): void {
-  for (const f of 订阅者) f();
+function broadcast(): void {
+  for (const f of subscribers) f();
 }
 
-export function 用语言(): 语言 {
+export function useLanguage(): Language {
   return useSyncExternalStore(
     (回调) => {
-      订阅者.add(回调);
-      return () => 订阅者.delete(回调);
+      subscribers.add(回调);
+      return () => subscribers.delete(回调);
     },
-    取语言,
-    取语言,
+    getLanguage,
+    getLanguage,
   );
 }
 
@@ -76,7 +76,7 @@ export function 用语言(): 语言 {
 // 文案表：键 → [中文, English]
 //   ★ 加文案就在这里加一行，不许在组件里写字符串。
 // ---------------------------------------------------------------------------
-const 表 = {
+const messages = {
   // ---- 通用 ----
   "通用.待接入": ["待接入", "not wired yet"],
   "通用.未实现": ["未实现", "not implemented"],
@@ -986,7 +986,7 @@ const 表 = {
   "分隔条.控制台": ["拖动调整控制台高度；方向键微调，Home/End 到两端", "Drag to resize the console; arrow keys nudge, Home/End jump to the ends"],
 } as const satisfies Record<string, readonly [string, string]>;
 
-export type 文案键 = keyof typeof 表;
+export type TranslationKey = keyof typeof messages;
 
 /**
  * 连接状态 → 文案键。
@@ -994,58 +994,58 @@ export type 文案键 = keyof typeof 表;
  * 而模板字符串拼出来的 `` `连接.${状态}` `` 推不出字面量。
  * 与其到处 `as const` 硬转（那等于把类型检查关掉），不如把映射写在这里一次说清。
  */
-export const 连接键 = {
+export const connectionTranslationKeys = {
   连接中: "连接.连接中",
   已连接: "连接.已连接",
   已断开: "连接.已断开",
-} as const satisfies Record<string, 文案键>;
+} as const satisfies Record<string, TranslationKey>;
 
 /**
  * 取文案。
- * @param 键 文案键（由 `表` 约束，写错键名 `tsc` 直接报错）
- * @param 参 模板参数：`{名}` → 值
+ * @param key 文案键（由 `表` 约束，写错键名 `tsc` 直接报错）
+ * @param parameters 模板参数：`{名}` → 值
  */
-export function 取(键: 文案键, 参?: Record<string, string | number>): string {
-  const 条 = 表[键][当前语言 === "zh" ? 0 : 1];
-  const 替换后 = !参
-    ? 条
-    : 条.replace(/\{([^}]+)\}/g, (整, 名: string) => {
-        const 值 = 参[名];
-        return 值 === undefined ? 整 : String(值);
+export function translate(key: TranslationKey, parameters?: Record<string, string | number>): string {
+  const template = messages[key][currentLanguage === "zh" ? 0 : 1];
+  const substituted = !parameters
+    ? template
+    : template.replace(/\{([^}]+)\}/g, (match, name: string) => {
+        const value = parameters[name];
+        return value === undefined ? match : String(value);
       });
   // 文案表是从报告/文档里长出来的，里面夹着 Markdown 的 **粗体** 和 `代码` 标记。
   // 网页层没有 Markdown 渲染器，直接显示这些标记会让普通用户看到 `**` 和反引号
   // （工程师截图里点名的就是这类"排版符号泄漏"）。在**唯一出口**把它们去掉，
   // 保证所有页面、title、日志都不会再漏出原始标记；强调靠字号/颜色/层级表达。
-  return 替换后.replace(/\*\*/g, "").replace(/`/g, "");
+  return substituted.replace(/\*\*/g, "").replace(/`/g, "");
 }
 
 /** 组件里用的版本：语言一变，用到它的组件自动重画 */
-export function use取(): (键: 文案键, 参?: Record<string, string | number>) => string {
-  用语言(); // 订阅语言变化
-  return 取;
+export function useTranslation(): (key: TranslationKey, parameters?: Record<string, string | number>) => string {
+  useLanguage(); // 订阅语言变化
+  return translate;
 }
 
 /** 数字格式化：固定小数位 + 等宽显示（不做任何"美化"，就是格式化） */
-export function 数(值: number | undefined | null, 位 = 3): string {
-  if (值 === undefined || 值 === null || !Number.isFinite(值)) return "--";
-  return 值.toFixed(位);
+export function formatNumber(value: number | undefined | null, digits = 3): string {
+  if (value === undefined || value === null || !Number.isFinite(value)) return "--";
+  return value.toFixed(digits);
 }
 
 /** 时间戳 → HH:MM:SS（本地时区） */
-export function 时刻(毫秒: number): string {
-  const d = new Date(毫秒);
-  const p = (n: number, 宽 = 2) => String(n).padStart(宽, "0");
+export function formatTime(milliseconds: number): string {
+  const d = new Date(milliseconds);
+  const p = (n: number, width = 2) => String(n).padStart(width, "0");
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 /** 秒数 → 人类可读时长（用于耗时/仿真时间） */
-export function 时长(秒: number | undefined | null): string {
-  if (秒 === undefined || 秒 === null || !Number.isFinite(秒)) return "--";
-  if (秒 < 60) return `${秒.toFixed(秒 < 10 ? 2 : 1)} s`;
-  const 分 = Math.floor(秒 / 60);
-  const 余 = Math.floor(秒 % 60);
-  if (分 < 60) return `${分}m ${String(余).padStart(2, "0")}s`;
-  const 时 = Math.floor(分 / 60);
-  return `${时}h ${String(分 % 60).padStart(2, "0")}m`;
+export function formatDuration(seconds: number | undefined | null): string {
+  if (seconds === undefined || seconds === null || !Number.isFinite(seconds)) return "--";
+  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 2 : 1)} s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  if (minutes < 60) return `${minutes}m ${String(remainingSeconds).padStart(2, "0")}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${String(minutes % 60).padStart(2, "0")}m`;
 }
