@@ -239,7 +239,7 @@ def 生成扭矩变体(名字: str, 目录: str, 信息: dict, 扭矩上限: lis
         f"     {os.path.basename(输出路径)} —— {信息['显示名']} 的**力矩接口**变体\n"
         f"     由 工具/导入模型.py 自动生成，**请勿手工编辑**（重新导入会覆盖）。\n"
         f"     来源模型 : {os.path.relpath(基础, 包根)}\n"
-        f"     改了什么 : ① 执行器 <general> 位置伺服 → <motor> 力矩电机（ctrl 就是关节力矩 N·m）\n"
+        f"     改了什么 : ① 执行器（位置伺服）→ <motor> 力矩电机（ctrl 就是关节力矩 N·m）\n"
         f"                ② 丢掉非关节执行器（{'、'.join(丢掉) if 丢掉 else '无'}）→ 保证 nu == nv\n"
         f"                ③ keyframe 的 ctrl 重写为 {新nu} 个 0\n"
         f"                ④ 补电枢惯量 armature={默认电枢惯量:g}："
@@ -329,7 +329,16 @@ def _识别许可(目录: str) -> str:
 
 
 def 更新库索引(打印=print) -> str:
-    """扫描 模型/ 目录，重建 模型库.json（界面选模型时会读它）。"""
+    """扫描 模型/ 目录，重建 模型库.json（界面选模型时会读它）。
+
+    元数据（显示名 / 许可 / 该加载哪个入口 / 类别）按下面的顺序合并：
+      ① `工具/模型清单.json`（menagerie 官方元数据，优先）
+      ② 模型目录里的 `模型信息.json`（本地或非 menagerie 模型用）
+         支持的键：显示名、许可、入口模型、类别、自由度、执行器数、说明。
+         「入口模型」用于一个目录里有多个 XML、默认的 `*_torque.xml` 不是入口的情况
+         （例如 panda_mjpc 的 task.xml）；「类别/自由度/执行器数」用于任务模型 ——
+         nq 里混着方块和夹爪，自动读出来的轴数不是机械臂轴数。
+    """
     try:
         清单模型 = 读清单()["模型"]
     except SystemExit:
@@ -340,11 +349,33 @@ def 更新库索引(打印=print) -> str:
         目录 = os.path.join(模型目录, 子)
         if not os.path.isdir(目录) or 子.startswith("."):
             continue
-        扭矩 = sorted(f for f in os.listdir(目录) if f.endswith("_torque.xml"))
         全部XML = sorted(f for f in os.listdir(目录) if f.endswith(".xml"))
         if not 全部XML:
             continue
-        主XML = 扭矩[0] if 扭矩 else 全部XML[0]
+
+        # ---- 元数据：清单优先，其次目录里的 模型信息.json ----
+        信息 = dict(清单模型.get(子, {}))
+        本地信息路径 = os.path.join(目录, "模型信息.json")
+        if os.path.exists(本地信息路径):
+            try:
+                with open(本地信息路径, encoding="utf-8") as f:
+                    本地信息 = json.load(f)
+                if isinstance(本地信息, dict):
+                    信息 = {**本地信息, **信息}
+            except Exception as 异常:                             # noqa: BLE001
+                打印(f"  ⚠ 读取 {本地信息路径} 失败：{type(异常).__name__}: {异常}")
+
+        # ---- 入口 XML：显式指定 > *_torque.xml > 字母序第一个 ----
+        指定入口 = str(信息.get("入口模型") or 信息.get("扭矩模型") or "").replace("\\", "/")
+        主XML = ""
+        if 指定入口:
+            候选 = 指定入口.rsplit("/", 1)[-1]
+            if 候选 in 全部XML:
+                主XML = 候选
+        扭矩 = sorted(f for f in 全部XML if f.endswith("_torque.xml"))
+        if not 主XML:
+            主XML = 扭矩[0] if 扭矩 else 全部XML[0]
+
         自由度 = 执行器数 = -1
         可控制 = False
         try:
@@ -355,18 +386,23 @@ def 更新库索引(打印=print) -> str:
             可控制 = bool(模型.nu == 模型.nv == 模型.nq and 模型.nu > 0)
         except Exception:                                        # noqa: BLE001
             pass
+        if 信息.get("自由度") is not None:
+            自由度 = int(信息["自由度"])
+        if 信息.get("执行器数") is not None:
+            执行器数 = int(信息["执行器数"])
 
-        信息 = 清单模型.get(子, {})
         许可 = 信息.get("许可") or _识别许可(目录)
-        if 可控制 and 自由度 >= 6:
-            类别 = "arm"
-        elif 可控制 and 自由度 in (1, 2):
-            类别 = "gripper"
-        elif 可控制:
-            类别 = "other"
-        else:
-            类别 = "不可直接控制"          # 例如位置伺服模型、带夹爪导致 nu != nv 的模型
-        条目.append({
+        类别 = str(信息.get("类别") or "")
+        if not 类别:
+            if 可控制 and 自由度 >= 6:
+                类别 = "arm"
+            elif 可控制 and 自由度 in (1, 2):
+                类别 = "gripper"
+            elif 可控制:
+                类别 = "other"
+            else:
+                类别 = "不可直接控制"      # 例如位置伺服模型、带夹爪导致 nu != nv 的模型
+        单条 = {
             "标识": 子,
             "显示名": 信息.get("显示名") or 子,
             "类别": 类别,
@@ -377,7 +413,10 @@ def 更新库索引(打印=print) -> str:
             "执行器数": 执行器数,
             "许可": 许可,
             "模型文件": [f"{子}/{f}" for f in 全部XML],
-        })
+        }
+        if 信息.get("说明"):
+            单条["说明"] = str(信息["说明"])
+        条目.append(单条)
 
     索引 = {
         "说明": ("驭臂的模型库索引，由 工具/导入模型.py 自动生成。"
@@ -389,6 +428,7 @@ def 更新库索引(打印=print) -> str:
     }
     with open(库索引路径, "w", encoding="utf-8") as f:
         json.dump(索引, f, ensure_ascii=False, indent=2)
+        f.write("\n")
     臂 = sum(1 for e in 条目 if e["类别"] == "arm")
     打印(f"  ✓ 已更新模型库索引：模型/模型库.json（{len(条目)} 个模型，其中可控制机械臂 {臂} 个）")
     return 库索引路径

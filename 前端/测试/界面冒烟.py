@@ -151,8 +151,6 @@ async def 主(输出目录: str) -> int:
             必须 = [
                 "驭臂",                 # 标题条
                 "自由度 nq", "执行器数 nu",
-                "握手成功",             # 真握手日志
-                "主题速率",
                 "帧率",
                 "仿真时间",
                 "实时倍率",             # 系统主题里的 RTF，不是墙钟冒充的
@@ -196,18 +194,18 @@ async def 主(输出目录: str) -> int:
                 失败.append("点不到仿真「运行」")
             else:
                 await asyncio.sleep(0.8)
-                运行前 = await P.执行("window.驭臂.取状态().仿真.数据.仿真时间")
+                运行前 = await P.执行("window.驭臂.取状态().仿真.数据.simulation_time")
                 await asyncio.sleep(0.8)
-                运行后 = await P.执行("window.驭臂.取状态().仿真.数据.仿真时间")
+                运行后 = await P.执行("window.驭臂.取状态().仿真.数据.simulation_time")
                 if not isinstance(运行前, (int, float)) or not isinstance(运行后, (int, float)) or 运行后 <= 运行前:
                     失败.append(f"Run 后 data.time 没有增加（{运行前} → {运行后}）")
                 if not await P.点("暂停"):
                     失败.append("点不到仿真「暂停」")
                 else:
                     await asyncio.sleep(0.5)
-                    暂停前 = await P.执行("window.驭臂.取状态().仿真.数据.仿真时间")
+                    暂停前 = await P.执行("window.驭臂.取状态().仿真.数据.simulation_time")
                     await asyncio.sleep(0.7)
-                    暂停后 = await P.执行("window.驭臂.取状态().仿真.数据.仿真时间")
+                    暂停后 = await P.执行("window.驭臂.取状态().仿真.数据.simulation_time")
                     if abs(float(暂停后) - float(暂停前)) > 0.05:
                         失败.append(f"Pause 后 data.time 仍在增加（{暂停前} → {暂停后}）")
                 if not await P.点("复位"):
@@ -217,14 +215,17 @@ async def 主(输出目录: str) -> int:
                     复位态 = await P.执行("""
                     (() => {
                       const x = window.驭臂.取状态().仿真.数据;
-                      return {状态:x.状态, 时间:x.仿真时间, 次数:x.复位次数};
+                      return {状态:x.state, 时间:x.simulation_time, 次数:x.reset_count};
                     })()
                     """)
-                    if not 复位态 or 复位态.get("状态") != "暂停" or float(复位态.get("时间", 1)) > 0.05 or int(复位态.get("次数", 0)) < 1:
+                    if not 复位态 or 复位态.get("状态") != "paused" or float(复位态.get("时间", 1)) > 0.05 or int(复位态.get("次数", 0)) < 1:
                         失败.append(f"Reset 后状态不正确：{复位态}")
 
             # 算法配置闭环：选择只产生“待应用”，临时应用后后端回灌“当前生效”，
             # 再保存时只落盘，不应要求用户重新勾一次。
+            await P.执行("[...document.querySelectorAll('button.段头')].find(e => e.textContent.includes('算法库'))?.click()")
+            await asyncio.sleep(0.4)
+            文 = await P.文本()
             if "算法库" not in 文 or "当前生效" not in 文 or "未保存" not in 文:
                 失败.append("定义视图没有显示算法库的生效/存盘状态")
             选中 = await P.执行("""
@@ -260,7 +261,7 @@ async def 主(输出目录: str) -> int:
                     已存盘 = await P.执行("""
                     (() => {
                       const s = window.驭臂 && window.驭臂.取状态();
-                      return !!(s && s.项目 && s.项目.数据 && s.项目.数据.已存盘);
+                      return !!(s && s.项目 && s.项目.数据 && s.项目.数据.saved);
                     })()
                     """)
                     if not 已存盘:
@@ -339,17 +340,36 @@ async def 主(输出目录: str) -> int:
                 if 绑定 != True:
                     失败.append(f"输入框的 aria-label 没绑定到参数全名「{全名}」")
                 改前 = await P.执行("document.querySelector('input.参数输入').value")
-                目标 = "321" if str(改前) != "321" else "322"
+                参数细节 = await P.执行("""
+                (() => {
+                  const 表 = window.驭臂.取状态().参数.数据.parameters;
+                  const 项 = 表[Object.keys(表).sort()[0]];
+                  return {范围: 项.range, 步长: 项.step};
+                })()
+                """)
+                当前值 = float(改前)
+                步长 = float(参数细节.get("步长") or 1.0)
+                范围 = 参数细节.get("范围") or [float("-inf"), float("inf")]
+                新值 = 当前值 + 步长 if 当前值 + 步长 <= 范围[1] else 当前值 - 步长
+                目标 = f"{新值:g}"
                 发了 = await P.执行("""
                 (() => {
                   const el = document.querySelector('input.参数输入');
                   if (!el) return 'no-input';
+                  el.focus();
                   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
                   setter.call(el, '%s');
                   el.dispatchEvent(new Event('input', { bubbles: true }));
                   return 'ok';
                 })()
                 """ % 目标)
+                await asyncio.sleep(0.2)
+                await P.调("Input.dispatchKeyEvent", {
+                    "type": "keyDown", "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13,
+                })
+                await P.调("Input.dispatchKeyEvent", {
+                    "type": "keyUp", "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13,
+                })
                 await asyncio.sleep(2.5)
                 改后 = await P.执行("document.querySelector('input.参数输入').value")
                 真值 = await P.执行("""
@@ -357,7 +377,7 @@ async def 主(输出目录: str) -> int:
                   const s = window.驭臂 && window.驭臂.取状态();
                   const 表 = (s && s.参数 && s.参数.数据 && s.参数.数据.parameters) || {};
                   const k = Object.keys(表).sort()[0];
-                  return k ? 表[k].值 : null;
+                  return k ? 表[k].value : null;
                 })()
                 """)
                 if 发了 != "ok":

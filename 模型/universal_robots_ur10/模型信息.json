@@ -1,0 +1,7 @@
+{
+  "标识": "universal_robots_ur10",
+  "显示名": "Universal Robots UR10",
+  "许可": "BSD-3-Clause",
+  "来源": "ros-industrial/universal_robot · ur_description 1.5.0 @ 39ad110 (2026-07-20)",
+  "说明": "UR10（CB3 世代）：官方 URDF/网格转换。ur10_torque.xml 是力矩接口（ctrl = 关节力矩 N·m），ur10.xml 是位置伺服。"
+}

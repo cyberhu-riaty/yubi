@@ -364,7 +364,7 @@ class Viewport(NSOpenGLView):
         self._天空 = None            # 缓存的天渐变（尺寸变了才重建，见 `_铺天空`）
         self._拖拽起点 = (0.0, 0.0)
         self._拖拽中 = False
-        self._平移中 = False
+        self._拖拽动作 = ""
         # 分隔条拖动期间锁住 3D 相机输入：分隔条拖动只应该改尺寸，
         # 不允许滚轮/拖拽事件漏进视口把相机拉近（用户报过"拖动后机械臂顶到脸上"）。
         self.交互锁定 = False
@@ -985,12 +985,31 @@ class Viewport(NSOpenGLView):
                 记诊断(f"✗ 绘制失败：{self.错误}")
 
     # ------------------------------------------------------------------
-    # 轨道相机：拖拽转、滚轮缩放、Shift 拖拽平移
+    # 轨道相机：左键拖动旋转、右键拖动平移、滚轮缩放
+    #   ★ 手感对齐 MuJoCo Studio：不自己写角度增量，直接调官方 mjv_moveCamera；
+    #     位移按"占视口宽/高的比例"传，窗口大小不同手感一致。
     # ------------------------------------------------------------------
     def acceptsFirstResponder(self) -> bool:
         return True
 
-    def mouseDown_(self, 事件):
+    def 相机_移动(self, 动作, dx: float, dy: float) -> None:
+        """把屏幕位移交给 MuJoCo 自己的相机逻辑。
+
+        ★ 完全照官方 viewer 的喂法（simulate.cc）：
+            `mjv_moveCamera(model, action, dx / r.height, -dy / r.height, &cam)`
+        ★ AppKit 的 `locationInWindow` 是左下原点、y 向上；官方平台层也先把
+          GLFW 的 y 翻成向上（`y = height - y`），再统一取负。所以这里也要
+          **取负**：不取负的话，右键上下平移和左键上下旋转都会反。
+        """
+        if not self.就绪 or self.相机 is None or self.模型 is None:
+            return
+        import mujoco
+        高 = max(1.0, float(self.bounds().size.height))
+        mujoco.mjv_moveCamera(self.模型, 动作, dx / 高, -dy / 高, self.相机)
+        self.请求渲染()
+        self.setNeedsDisplay_(True)
+
+    def 开始_拖拽(self, 事件, 动作: str) -> None:
         if getattr(self, "交互锁定", False):
             return
         # 点进 3D 才让视口拿键盘焦点：这样 R/F/G 不会和网页输入框抢键。
@@ -998,36 +1017,53 @@ class Viewport(NSOpenGLView):
             self.window().makeFirstResponder_(self)
         except Exception:                                             # noqa: BLE001
             pass
-        if int(事件.clickCount()) >= 2:
-            self.适配_视图()
-            return
         self._拖拽起点 = (事件.locationInWindow().x, 事件.locationInWindow().y)
         self._拖拽中 = True
-        # NSEventModifierFlagShift = 1 << 17
-        self._平移中 = bool(事件.modifierFlags() & (1 << 17))
+        self._拖拽动作 = 动作
 
-    def mouseUp_(self, 事件):
-        self._拖拽中 = False
-
-    def mouseDragged_(self, 事件):
-        if not self.就绪 or getattr(self, "交互锁定", False):
+    def 拖拽_到(self, 事件) -> None:
+        if not self._拖拽中 or getattr(self, "交互锁定", False):
             return
-        import math
+        if not self.就绪 or self.相机 is None:
+            return
+        import mujoco
         x, y = 事件.locationInWindow().x, 事件.locationInWindow().y
         dx, dy = x - self._拖拽起点[0], y - self._拖拽起点[1]
         self._拖拽起点 = (x, y)
-        if self._平移中:
-            比例 = self.相机.distance * 0.0018
-            方位 = math.radians(self.相机.azimuth)
-            self.相机.lookat[0] += (-dx * abs(math.cos(方位))
-                                  + dy * abs(math.sin(方位))) * 比例
-            self.相机.lookat[1] += (dx * abs(math.sin(方位))
-                                  + dy * abs(math.cos(方位))) * 比例
-        else:
-            self.相机.azimuth -= dx * 0.4
-            self.相机.elevation = max(-89.0, min(89.0, self.相机.elevation - dy * 0.4))
-        self.请求渲染()
-        self.setNeedsDisplay_(True)
+        # 对齐官方 viewer：右键是 MOVE_V（真正的屏幕二维平移），
+        # 左键是 ROTATE_V；MOVE_H / ROTATE_H 是按住 Shift 才用的平面版。
+        动作 = (mujoco.mjtMouse.mjMOUSE_MOVE_V if self._拖拽动作 == "平移"
+              else mujoco.mjtMouse.mjMOUSE_ROTATE_V)
+        self.相机_移动(动作, dx, dy)
+
+    def mouseDown_(self, 事件):
+        if int(事件.clickCount()) >= 2:
+            if not getattr(self, "交互锁定", False):
+                self.适配_视图()
+            return
+        # Shift+左键保留为平移别名：触控板单手时比右键方便。
+        # NSEventModifierFlagShift = 1 << 17
+        平移 = bool(事件.modifierFlags() & (1 << 17))
+        self.开始_拖拽(事件, "平移" if 平移 else "旋转")
+
+    def mouseUp_(self, 事件):
+        self._拖拽中 = False
+        self._拖拽动作 = ""
+
+    def mouseDragged_(self, 事件):
+        self.拖拽_到(事件)
+
+    def rightMouseDown_(self, 事件):
+        # 与 MuJoCo Studio 一致：右键拖动 = 平移相机。
+        # 覆盖后不再走 NSView 默认的右键菜单。
+        self.开始_拖拽(事件, "平移")
+
+    def rightMouseUp_(self, 事件):
+        self._拖拽中 = False
+        self._拖拽动作 = ""
+
+    def rightMouseDragged_(self, 事件):
+        self.拖拽_到(事件)
 
     def scrollWheel_(self, 事件):
         if not self.就绪 or getattr(self, "交互锁定", False):
@@ -1636,7 +1672,7 @@ class HostApp(NSObject):
         self.网格按钮.setState_(1 if self.视口.网格开 else 0)
 
         提示 = NSTextField.alloc().initWithFrame_(NSMakeRect(260, 8, 292, 16))
-        提示.setStringValue_("拖拽旋转 · Shift+拖拽平移 · 滚轮缩放 · R 复位 · F 适配")
+        提示.setStringValue_("左键拖动旋转 · 右键拖动平移 · 滚轮缩放 · R 复位 · F 适配")
         提示.setFont_(NSFont.systemFontOfSize_(10.0))
         提示.setTextColor_(NSColor.colorWithCalibratedWhite_alpha_(0.88, 0.82))
         提示.setDrawsBackground_(False)
@@ -2046,7 +2082,7 @@ class HostApp(NSObject):
             print(f"  窗口   : {宽:.0f}×{高:.0f}（--无3D：Web 界面铺满）", flush=True)
         print(f"  界面   : {参数.地址}（我们窗口里的 WKWebView，不是外部浏览器）", flush=True)
         if self.视口:
-            print("  操作   : 拖拽=转视角 ／ 滚轮=缩放 ／ Shift+拖拽=平移 ／ "
+            print("  操作   : 左键拖动=转视角 ／ 右键拖动=平移 ／ 滚轮=缩放 ／ "
                   "R=复位 ／ F=适配 ／ G=网格 ／ 双击=适配", flush=True)
         print("=" * 80, flush=True)
 

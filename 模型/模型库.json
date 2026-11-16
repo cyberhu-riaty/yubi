@@ -1,5 +1,5 @@
 {
-  "说明": "小软件的模型库索引，由 工具/导入模型.py 自动生成。『扭矩模型』是推荐加载的那个 —— 它的 ctrl 就是关节力矩，能被本项目控制插件直接驱动；『可控制』= true 表示 nu==nv==nq（控制插件写 ctrl 的前提）。界面按『类别=arm』列出可选机械臂。",
+  "说明": "驭臂的模型库索引，由 工具/导入模型.py 自动生成。『扭矩模型』是推荐加载的那个 —— 它的 ctrl 就是关节力矩，能被本项目控制插件直接驱动；『可控制』= true 表示 nu==nv==nq（控制插件写 ctrl 的前提）。界面按『类别=arm』列出可选机械臂。",
   "根目录": "模型",
   "模型": [
     {
@@ -42,6 +42,23 @@
       ]
     },
     {
+      "标识": "panda_mjpc",
+      "显示名": "Panda（MJPC 任务模型）",
+      "类别": "arm_task",
+      "目录": "panda_mjpc",
+      "扭矩模型": "panda_mjpc/task.xml",
+      "可控制": false,
+      "自由度": 7,
+      "执行器数": 7,
+      "许可": "Apache-2.0",
+      "模型文件": [
+        "panda_mjpc/common.xml",
+        "panda_mjpc/panda_modified.xml",
+        "panda_mjpc/task.xml"
+      ],
+      "说明": "MJPC 任务模型：6 维末端力控 + 夹爪，含方块/目标；供 MPC 移植使用，不能挂关节 PD。"
+    },
+    {
       "标识": "robotiq_2f85",
       "显示名": "robotiq_2f85",
       "类别": "不可直接控制",
@@ -73,6 +90,23 @@
         "ufactory_xarm7/xarm7_nohand.xml",
         "ufactory_xarm7/xarm7_torque.xml"
       ]
+    },
+    {
+      "标识": "universal_robots_ur10",
+      "显示名": "Universal Robots UR10",
+      "类别": "arm",
+      "目录": "universal_robots_ur10",
+      "扭矩模型": "universal_robots_ur10/ur10_torque.xml",
+      "可控制": true,
+      "自由度": 6,
+      "执行器数": 6,
+      "许可": "BSD-3-Clause",
+      "模型文件": [
+        "universal_robots_ur10/scene.xml",
+        "universal_robots_ur10/ur10.xml",
+        "universal_robots_ur10/ur10_torque.xml"
+      ],
+      "说明": "UR10（CB3 世代）：官方 URDF/网格转换。ur10_torque.xml 是力矩接口（ctrl = 关节力矩 N·m），ur10.xml 是位置伺服。"
     },
     {
       "标识": "universal_robots_ur10e",
