@@ -955,13 +955,9 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                         model_applier.actuator_count = int(model.nu)
                         model_applier.duration_s = duration_s
                     display = _model_bridge.display_name(path) if path else "（外来模型）"
-                    arm_joints = _model_bridge.arm_joint_count(model)
-                    dimensions = f"{arm_joints} 轴"
-                    if int(model.nq) != arm_joints:
-                        dimensions += f"、nq={int(model.nq)} / nu={int(model.nu)}"
-                    return True, (f"已切换到 {display}（{dimensions}、"
+                    return True, (f"已切换到 {display}（{int(model.nq)} 轴、"
                                   f"{len(plugins)} 个算法、耗时 {duration_s*1000:.0f} ms）" if duration_s
-                                  else f"已切换到 {display}（{dimensions}、{len(plugins)} 个算法）")
+                                  else f"已切换到 {display}（{int(model.nq)} 轴、{len(plugins)} 个算法）")
 
                 model_applier = _model_bridge.ModelApplier(switch_model_callback)
                 # ★ 路径/显示名**立刻**填上；自由度等模型到位后由主循环补（见下）。

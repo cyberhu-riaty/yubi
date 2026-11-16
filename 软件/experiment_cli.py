@@ -46,7 +46,7 @@ def initial_messages(experiment: Experiment | None) -> list[object]:
         return []
     import command_bridge
     message, reason = command_bridge.create_message(
-        "命令.控制目标", {"target": [float(x) for x in target]})
+        "命令.控制目标", {"目标": [float(x) for x in target]})
     if message is None:
         raise RuntimeError(f"实验初始控制目标构造失败：{reason}")
     return [message]

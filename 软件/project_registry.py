@@ -315,8 +315,6 @@ def 按模型找项目(模型路径: str) -> str:
     "末端两点运动": "two_point_task_space",
     "正弦摆动": "sinusoidal_joint_motion",
     "轨迹目标执行": "trajectory_target_player",
-    "Panda_官方MPC移植": "panda_mjpc_port",
-    "Panda_抓取演示": "panda_pick_place",
 }
 
 

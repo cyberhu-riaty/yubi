@@ -100,7 +100,7 @@ class GravityApplier:
         self._freeze_count = 0
         self._speed_multiplier = 1.0
         self._last_action = "模型加载后暂停"
-        self._snapshot_parameters = {"speed": 100.0, "noise_scale": 0.0, "noise_rate": 0.0}
+        self._snapshot_parameters = {"speed": 1.0, "noise_scale": 0.0, "noise_rate": 0.0}
         self._remembered_qpos = None          # 没有 home 关键帧时的兜底姿态
         # ★ 重入保护（这里是踩过的真坑）：
         #   冻结时要"补发一条 PAUSED 快照"给官方 StepControl，而补发走的是
@@ -277,19 +277,10 @@ class GravityApplier:
 
     def _send_official_pause(self, paused: bool) -> None:
         """同步官方 StepControl，避免外壳闸门打开后它仍停在旧暂停状态。"""
-        parameters = dict(self._snapshot_parameters)
-        try:
-            from plugin_system import get_registry
-            registry = get_registry()
-            speed = registry.official_speed() if registry is not None else None
-            if speed is not None:
-                parameters["speed"] = speed
-        except Exception:
-            pass
         try:
             self._redispatch(messages.StepControlSnapshot(
                 pause_state=(sim.PauseState.NORMAL_PAUSED if paused else sim.PauseState.UNPAUSED),
-                **parameters))
+                **self._snapshot_parameters))
         except Exception as exc:                                      # noqa: BLE001
             print(f"⚠ 同步官方暂停状态失败：{type(exc).__name__}: {exc}", flush=True)
 

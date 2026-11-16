@@ -53,10 +53,6 @@ def read_model_library(arms_only: bool = True) -> list[dict]:
     """读 `模型/模型库.json`，返回可选的模型条目。
 
     只取机械臂时过滤掉夹爪 / 不可控制的模型 —— 界面上列出来点一下就报错的条目没有意义。
-
-    `类别 == "arm_task"` 是例外：它表示"能加载、但不是关节力矩接口"的任务模型
-    （例如 MJPC 的 Panda：6 维末端力控 + 夹爪，nu != nq）。
-    这类模型不能挂 `关节pd控制`，但可以给 MPC/自定义插件用，所以仍然上架。
     """
     try:
         with open(LIBRARY_INDEX_PATH, encoding="utf-8") as f:
@@ -68,30 +64,8 @@ def read_model_library(arms_only: bool = True) -> list[dict]:
         return []
     entries = index_data.get("模型", [])
     if arms_only:
-        entries = [m for m in entries if (
-            (m.get("类别") == "arm" and m.get("可控制"))
-            or m.get("类别") == "arm_task"
-        )]
+        entries = [m for m in entries if m.get("类别") == "arm" and m.get("可控制")]
     return entries
-
-
-def arm_joint_count(model) -> int:
-    """Count arm hinge/slide joints without gripper or free-joint coordinates."""
-    try:
-        import mujoco
-        count = 0
-        for index in range(int(getattr(model, "njnt", 0))):
-            if int(model.jnt_type[index]) not in (
-                int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)
-            ):
-                continue
-            body = mujoco.mj_id2name(
-                model, mujoco.mjtObj.mjOBJ_BODY, int(model.jnt_bodyid[index])) or ""
-            if "finger" not in body.lower() and "thumb" not in body.lower():
-                count += 1
-        return count
-    except Exception:
-        return int(getattr(model, "nq", 0))
 
 
 def absolute_path(package_relative_path: str) -> str:
@@ -278,7 +252,6 @@ class ModelApplier:
         self.dof = 0
         self.actuator_count = 0
         self.duration_s = 0.0
-        self._first_window_event = True
 
     # ---- 入口 ①：我们自己的面板 ----
     @messages.handler
@@ -286,7 +259,6 @@ class ModelApplier:
         path = str(getattr(command, "path", "") or "")
         if not path or os.path.normpath(path) == os.path.normpath(self.current_path):
             return False
-        self._first_window_event = False
         success, description = self._switch_model(path=path, notify_window=True)
         self._record_result(path, success, description)
         return False
@@ -294,25 +266,14 @@ class ModelApplier:
     # ---- 入口 ②：官方内建的"把文件拖进窗口" ----
     #   窗口侧已经把文件解析成 MjModel 了（event.model），直接采用它的对象，
     #   不重复解析；也不需要再回发 ModelEvent（窗口自己已经有了）。
-    #   ★ 启动时窗口也会发一条同样的 ModelEvent（同步它加载好的模型），
-    #     不能一律写"（拖拽）"—— 这曾让"命令行加载"看起来像用户拖进来的。
     @messages.handler
     def on_model_event(self, event: messages.ModelEvent) -> bool:
         model = getattr(event, "model", None)
         path = str(getattr(event, "path", "") or "")
         if model is None:
             return False
-        same_path = bool(path) and bool(self.current_path) and (
-            os.path.normpath(path) == os.path.normpath(self.current_path))
-        if self._first_window_event:
-            source = "启动同步"
-            self._first_window_event = False
-        elif same_path:
-            source = "窗口同步"
-        else:
-            source = "拖拽"
         success, description = self._switch_model(model=model, path=path, notify_window=False)
-        self._record_result(path, success, f"（{source}）{description}")
+        self._record_result(path, success, f"（拖拽）{description}")
         return False
 
     def _record_result(self, path: str, success: bool, description: str) -> None:

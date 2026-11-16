@@ -420,16 +420,6 @@ class SafeRegistry:
                 continue                    # 判据自己坏了不能把物理卡死/放开，按"不冻结"处理
         return False
 
-    def official_speed(self) -> float | None:
-        """Read the current official StepControl speed, expressed as a percent."""
-        for plugin in self._targets:
-            if isinstance(plugin, step_control.StepControl):
-                try:
-                    return float(plugin.step_control.get_speed())
-                except Exception:
-                    return None
-        return None
-
     def set_user_plugins(self, plugins: list) -> None:
         """★ 换掉整组**用户算法**（方案 C：点模型 → 按项目清单重新装配）。
 

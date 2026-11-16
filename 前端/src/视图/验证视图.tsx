@@ -26,133 +26,80 @@ import { use取 } from "./文案";
 /** `s.曲线` 的环形缓冲窗口（`数据/仓库.ts` 里就是 120 秒） */
 const 窗口秒 = 120;
 
-function 数字文本(值?: number): string {
-  return 值 === undefined || !Number.isFinite(值) ? "" : String(值);
-}
-
-function 参数值编辑({
-  全名, 值, 最小, 最大, 步长, 保存中, 提交,
+/**
+ * 参数编辑框保留一份本地文本：输入过程中不发命令，避免参数表回灌把尚未输完的
+ * 内容覆盖。Enter / 失焦提交，Escape 恢复后端确认过的值。
+ */
+function 参数编辑框({
+  全名,
+  值,
+  最小,
+  最大,
+  步长,
+  禁用,
+  提示,
+  on提交,
 }: {
   全名: string;
-  值?: number;
-  最小?: number;
-  最大?: number;
-  步长?: number;
-  保存中: boolean;
-  提交: (全名: string, 新值: number) => Promise<boolean>;
+  值: number | undefined;
+  最小: number | undefined;
+  最大: number | undefined;
+  步长: number | undefined;
+  禁用: boolean;
+  提示: string;
+  on提交: (文本: string) => Promise<boolean>;
 }) {
-  const t = use取();
-  const [草稿, 设草稿] = useState(() => 数字文本(值));
-  const [焦点, 设焦点] = useState(false);
-  const [脏, 设脏] = useState(false);
-  const [错误, 设错误] = useState("");
-  const 待确认 = useRef<number | null>(null);
+  const [草稿, 设草稿] = useState(值 === undefined ? "" : String(值));
+  const 编辑中 = useRef(false);
+  const 取消提交 = useRef(false);
 
-  // 后端回灌：只有"没在编辑 + 没有未提交修改"时才覆盖草稿。
-  // 提交成功后先等后端真的回灌这个值，避免被旧帧打回原值。
+  // 后端参数变化时刷新；用户正在键入时不覆盖本地草稿。
   useEffect(() => {
-    if (待确认.current !== null) {
-      if (值 !== undefined && Math.abs(值 - 待确认.current) <= 1e-9) {
-        待确认.current = null;
-        设脏(false);
-        设错误("");
-        设草稿(数字文本(值));
-      }
-      return;
-    }
-    if (!焦点 && !脏) {
-      设草稿(数字文本(值));
-      设错误("");
-    }
-  }, [值, 焦点, 脏]);
+    if (!编辑中.current) 设草稿(值 === undefined ? "" : String(值));
+  }, [值]);
 
-  const 还原 = () => {
-    待确认.current = null;
-    设草稿(数字文本(值));
-    设脏(false);
-    设错误("");
-  };
-
-  const 提交草稿 = async () => {
-    const 文本 = 草稿.trim();
-    if (!文本) {
-      还原();
+  const 提交 = async () => {
+    编辑中.current = false;
+    if (取消提交.current) {
+      取消提交.current = false;
+      设草稿(值 === undefined ? "" : String(值));
       return;
     }
-    const 数字 = Number(文本);
-    if (!Number.isFinite(数字)) {
-      设错误(t("验证.参数.无效"));
-      return;
-    }
-    if ((最小 !== undefined && 数字 < 最小) || (最大 !== undefined && 数字 > 最大)) {
-      设错误(t("验证.参数.超范围", {
-        最小: 最小 ?? "−∞",
-        最大: 最大 ?? "+∞",
-      }));
-      return;
-    }
-    if (值 !== undefined && 数字 === 值) {
-      设脏(false);
-      设错误("");
-      设草稿(数字文本(数字));
-      return;
-    }
-    设错误("");
-    const 通过 = await 提交(全名, 数字);
-    if (通过) {
-      待确认.current = 数字;
-      设草稿(数字文本(数字));
-      设脏(true);           // 等后端回灌后再变干净
-    } else {
-      设错误(t("验证.参数.未接受"));
-    }
+    const 成功 = await on提交(草稿);
+    if (!成功) 设草稿(值 === undefined ? "" : String(值));
   };
 
   return (
-    <span className="参数单元">
-      <input
-        type="text"
-        inputMode="decimal"
-        autoComplete="off"
-        spellCheck={false}
-        className="参数输入"
-        aria-label={`${全名} ${t("验证.参数.值")}`}
-        aria-invalid={!!错误}
-        data-错误={错误 ? "true" : undefined}
-        data-脏={脏 && !错误 ? "true" : undefined}
-        value={草稿}
-        disabled={保存中}
-        title={[
-          全名,
-          最小 !== undefined || 最大 !== undefined
-            ? t("验证.参数.范围提示", { 最小: 最小 ?? "−∞", 最大: 最大 ?? "+∞" })
-            : "",
-          步长 ? `步长 ${步长}` : "",
-          t("验证.参数.编辑提示"),
-        ].filter(Boolean).join("\n")}
-        onFocus={() => 设焦点(true)}
-        onBlur={() => {
-          设焦点(false);
-          if (脏) void 提交草稿();
-        }}
-        onChange={(e) => {
-          设草稿(e.target.value);
-          设脏(true);
-          设错误("");
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            if (脏) void 提交草稿();
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            还原();
-          }
-        }}
-      />
-      {错误 ? <span className="参数错误" title={错误} aria-hidden="true">!</span> : null}
-      {保存中 ? <span className="参数保存" aria-hidden="true">…</span> : null}
-    </span>
+    <input
+      type="number"
+      inputMode="decimal"
+      className="参数输入"
+      aria-label={`${全名} ${提示}`}
+      title={提示}
+      value={草稿}
+      min={最小}
+      max={最大}
+      step={typeof 步长 === "number" && 步长 > 0 ? 步长 : "any"}
+      disabled={禁用}
+      onFocus={(e) => {
+        编辑中.current = true;
+        取消提交.current = false;
+        e.currentTarget.select();
+      }}
+      onChange={(e) => 设草稿(e.target.value)}
+      onBlur={() => void 提交()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          e.currentTarget.blur();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          取消提交.current = true;
+          设草稿(值 === undefined ? "" : String(值));
+          e.currentTarget.blur();
+        }
+      }}
+    />
   );
 }
 
@@ -282,12 +229,15 @@ export function 验证视图() {
     return Array.isArray(r) && typeof r[哪端] === "number" ? (r[哪端] as number) : undefined;
   };
 
-  // 改参数：**显式提交**（Enter / 失焦），不再每敲一个字符就发一条命令。
-  // 旧实现把后端当前值直接绑在 input.value 上，onChange 立刻发命令并等回执；
-  // 结果"1"还没打完就被后端回灌成原值，小数点/负号也经常打不进去。
+  // 改参数：走 `command.parameters`，等回执后由 `parameter.table` 回灌最新值。
   const [改中, 设改中] = useState<string | null>(null);
-  async function 提交参数(全名: string, 新值: number): Promise<boolean> {
-    if (改中 !== null) return false;
+  async function 提交参数(全名: string, 原值: number | undefined, 新文本: string): Promise<boolean> {
+    const 新值 = Number(新文本);
+    if (新文本.trim() === "" || !Number.isFinite(新值)) {
+      提示错误(t("验证.参数.数值错误"));
+      return false;
+    }
+    if (新值 === 原值) return true;
     设改中(全名);
     try {
       const 回执 = await 命令.updateParameters({ [全名]: 新值 });
@@ -296,9 +246,6 @@ export function 验证视图() {
         return false;
       }
       return true;
-    } catch (异常) {
-      提示错误(`改参数失败：${String(异常)}`);
-      return false;
     } finally {
       设改中(null);
     }
@@ -329,14 +276,15 @@ export function 验证视图() {
         const 最大 = 范围边(行 as unknown as ParameterItem, 1);
         const 步 = (行 as unknown as ParameterItem).step;
         return (
-          <参数值编辑
+          <参数编辑框
             全名={全名}
             值={值}
             最小={最小}
             最大={最大}
             步长={typeof 步 === "number" ? 步 : undefined}
-            保存中={改中 === 全名}
-            提交={提交参数}
+            禁用={改中 === 全名}
+            提示={t("验证.参数.输入提示")}
+            on提交={(文本值) => 提交参数(全名, 值, 文本值)}
           />
         );
       },
@@ -463,16 +411,20 @@ export function 验证视图() {
       >
         <div className="text-dim text-[0.9em]" title={t("验证.参数.说明")}>{t("验证.参数.可编辑")}</div>
         {参数项们.length ? (
-          <>
-            <div className="mt-2">
-              <小表格
-                列={参数列}
-                行={参数项们.map(([全名, 项]) => 摊开(全名, 项))}
-                行键={(r) => String(r.名)}
-              />
-            </div>
-            <div className="mt-1 text-[0.8em] text-dim">{t("验证.参数.编辑说明")}</div>
-          </>
+          <div className="mt-2">
+            {/* ★ 一张表列全部参数，而不是"每个插件一张小表"。
+                为什么改：`参数` 的键本来就是**全名**（「插件名·参数名」），
+                按插件分组要先 split 一次、还要处理 split 失败的情况；
+                而表格里已经有"参数"这一列能看出归属，分组纯属多余结构。
+                顺带修掉一个真实缺陷：原来按插件分组时，如果拿到的是**未解包的负载**
+                （`{参数: {...}}` 那一层），会把 `参数` 这个包装键当成插件名，
+                于是表格里渲染出 `值/单位/参数/插件/…` 一堆行、每格全是 `--`（实测踩过）。 */}
+            <小表格
+              列={参数列}
+              行={参数项们.map(([全名, 项]) => 摊开(全名, 项))}
+              行键={(r) => String(r.全名)}
+            />
+          </div>
         ) : (
           <div className="mt-2 text-dim">{t("验证.参数.空")}</div>
         )}

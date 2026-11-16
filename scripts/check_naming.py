@@ -138,15 +138,6 @@ def main() -> int:
     for path in ROOT.rglob("*.py"):
         if ".venv" in path.parts or "__pycache__" in path.parts:
             continue
-        # `ur10/` and report folders may hold upstream source or illustrative
-        # snippets; only the application's own Python paths form this contract.
-        relative = path.relative_to(ROOT)
-        if relative.parts[0] not in {
-            "软件", "算法库", "工具", "scripts", "前端",
-            "run_yubi.py", "run_yubi_web.py", "run_experiment_cli.py",
-            "compare_experiments_cli.py",
-        }:
-            continue
         for line, module in imported_modules(path):
             if module in REMOVED_LEGACY_MODULES:
                 errors.append(

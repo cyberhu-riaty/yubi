@@ -202,7 +202,7 @@ def main() -> int:
     experiment = experiment_registry.create("ur5e_pd_tracking")
     initial_messages = experiment_cli.initial_messages(experiment)
     assert len(initial_messages) == 1
-    assert list(getattr(initial_messages[0], "target", ())) == list(
+    assert list(getattr(initial_messages[0], "目标", ())) == list(
         experiment.trajectory["target_qpos"])
     print("[PASS] 实验关节目标可转换为通用控制消息")
     passed += 1
