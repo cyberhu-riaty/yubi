@@ -19,8 +19,8 @@ console_support.prepare_output()
 
 import experiment_registry  # noqa: E402
 import command_bridge  # noqa: E402
-import runtime_engine as 启动  # noqa: E402
-import plugin_system as 插件系统  # noqa: E402
+import runtime_engine as runtime  # noqa: E402
+import plugin_system as plugins  # noqa: E402
 
 
 def main() -> int:
@@ -29,29 +29,29 @@ def main() -> int:
     before = {path.resolve() for path in output_root.glob("ur5e_pd_tracking_*")}
 
     empty_scene = ROOT / "模型" / "空场景.xml"
-    registry = 插件系统.SafeRegistry([], step_plugin=插件系统.FixedStep())
-    config = 插件系统.viewer_protocol.ViewerConfig(
+    registry = plugins.SafeRegistry([], step_plugin=plugins.FixedStep())
+    config = plugins.viewer_protocol.ViewerConfig(
         title="实验 GUI 闭环自检", width=800, height=600, gfx="")
-    启动.stop(1.0)
-    启动.drain_local_queue()
-    视口快照数 = [0]
-    启动.set_state_observer(lambda _快照: 视口快照数.__setitem__(0, 视口快照数[0] + 1))
+    runtime.stop(1.0)
+    runtime.drain_local_queue()
+    snapshot_count = [0]
+    runtime.set_state_observer(lambda _snapshot: snapshot_count.__setitem__(0, snapshot_count[0] + 1))
     try:
-        code = 启动.start(
+        code = runtime.start(
             config, str(empty_scene), None, [], registry,
-            插件系统.notify_model_loaded, project_name="", headless=True,
+            plugins.notify_model_loaded, project_name="", headless=True,
             background_thread=True)
         assert code == 0
-        ready, reason = 启动.wait_until_ready(20.0)
+        ready, reason = runtime.wait_until_ready(20.0)
         assert ready, reason
 
         # 默认暂停时只送初始状态，不应让 3D “状态同步”计数空转。
         time.sleep(0.15)
-        paused_count = 视口快照数[0]
+        paused_count = snapshot_count[0]
         time.sleep(0.15)
-        assert 视口快照数[0] == paused_count, "暂停时仍在重复发送相同3D状态"
+        assert snapshot_count[0] == paused_count, "暂停时仍在重复发送相同3D状态"
 
-        queue = 启动.command_queue()
+        queue = runtime.command_queue()
         ok, reason = command_bridge.enqueue_command(
             queue, "command.experiment",
             {"action": "load", "experiment": experiment.key}, print_result=False)
@@ -78,15 +78,15 @@ def main() -> int:
         for name in ("states.csv", "metrics.json", "curves.html", "experiment.json"):
             assert (latest / name).is_file(), f"缺少结果文件：{name}"
         time.sleep(0.15)
-        completed_count = 视口快照数[0]
+        completed_count = snapshot_count[0]
         time.sleep(0.15)
-        assert 视口快照数[0] == completed_count, "实验完成后3D状态同步仍在增长"
+        assert snapshot_count[0] == completed_count, "实验完成后3D状态同步仍在增长"
         print(f"[PASS] GUI 实验闭环：加载 → 开始 → 自动停止 → 导出\n  {latest}")
         print("[PASS] 暂停/完成后3D状态快照不再重复增长")
         return 0
     finally:
-        启动.set_state_observer(None)
-        启动.stop(5.0)
+        runtime.set_state_observer(None)
+        runtime.stop(5.0)
 
 
 if __name__ == "__main__":

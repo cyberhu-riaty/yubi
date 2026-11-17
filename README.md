@@ -62,7 +62,7 @@
 ```bash
 git clone https://github.com/cyberhu-riaty/yubi.git
 cd yubi
-bash 工具/重建环境.sh
+bash 工具/rebuild_environment.sh
 ```
 
 脚本会创建 `.venv`、安装 MuJoCo 3.13.0、WebSocket 通信和 macOS 窗口依赖，并同步前端生成物。
@@ -133,13 +133,13 @@ Windows 启动方式：
 ### 3. 想要桌面图标（macOS，可选）
 
 ```bash
-.venv/bin/python 工具/打包应用.py \
-  --名字 小软件 \
-  --输出名 小软件 \
-  --主程序 run_yubi.py
+.venv/bin/python 工具/package_macos_app.py \
+  --name 小软件 \
+  --output-name 小软件 \
+  --entry run_yubi.py
 ```
 
-生成的 `.app` 在包根目录，双击即可启动。它只是启动器 + 图标，不含 Python 环境；换机器后仍要先跑 `工具/重建环境.sh`。
+生成的 `.app` 在包根目录，双击即可启动。它只是启动器 + 图标，不含 Python 环境；换机器后仍要先跑 `工具/rebuild_environment.sh`。
 
 ## 项目结构
 
@@ -252,11 +252,11 @@ class MyController(ControlPlugin):
 
 ```bash
 .venv/bin/python 工具/验证/契约自检.py
-.venv/bin/python 工具/验证/校验项目.py
+.venv/bin/python 工具/验证/project_selfcheck.py
 .venv/bin/python 工具/验证/trajectory_planning_selfcheck.py
 .venv/bin/python 工具/验证/parameter_transaction_selfcheck.py
-.venv/bin/python 工具/验证/病态检出自检.py
-.venv/bin/python 工具/验证/设备契约自检.py
+.venv/bin/python 工具/验证/observation_selfcheck.py
+.venv/bin/python 工具/验证/device_contract_selfcheck.py
 ```
 
 另有入口自检：

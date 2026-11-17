@@ -134,7 +134,7 @@ def scan(root: Path, scope: dict) -> dict:
             result = subprocess.run(
                 ["node", str(Path(__file__).with_name("audit_typescript_names.mjs"))],
                 input=json.dumps(dict(root=str(root), files=ts_files)),
-                capture_output=True, text=True, check=False,
+                capture_output=True, encoding="utf-8", check=False,
             )
             if result.returncode:
                 errors.append(result.stderr.strip() or "TypeScript scanner failed")

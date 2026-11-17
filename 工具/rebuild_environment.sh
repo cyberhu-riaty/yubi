@@ -11,7 +11,7 @@
 #   官方 pip 完整版才有那些东西。
 #
 # 用法：
-#   bash 工具/重建环境.sh
+#   bash 工具/rebuild_environment.sh
 set -e
 cd "$(dirname "$0")/.."          # 切到包根
 PKG="$(pwd)"
@@ -45,14 +45,14 @@ else
   "$BASE" -m venv --system-site-packages "$PKG/.venv"
 fi
 
-离线依赖目录="$PKG/归档/离线依赖"
+OFFLINE_WHEEL_DIR="$PKG/归档/离线依赖"
 
 # ---------- 3. 装官方完整版 mujoco（优先用离线包）----------
 echo
 echo "== 2/4 安装 mujoco 3.13.0 =="
-if ls "$离线依赖目录/"mujoco-*.whl >/dev/null 2>&1; then
+if ls "$OFFLINE_WHEEL_DIR/"mujoco-*.whl >/dev/null 2>&1; then
   echo "  用离线包安装"
-  "$PKG/.venv/bin/pip" install --no-index --find-links="$离线依赖目录" "mujoco==3.13.0"
+  "$PKG/.venv/bin/pip" install --no-index --find-links="$OFFLINE_WHEEL_DIR" "mujoco==3.13.0"
 else
   echo "  离线包不在，走网络安装"
   "$PKG/.venv/bin/pip" install "mujoco==3.13.0"
@@ -80,10 +80,10 @@ else
 fi
 
 # ---------- 5. 可选：参数辨识用的依赖 ----------
-if ls "$离线依赖目录/"scipy-*.whl >/dev/null 2>&1; then
+if ls "$OFFLINE_WHEEL_DIR/"scipy-*.whl >/dev/null 2>&1; then
   echo
   echo "== 附加：安装参数辨识依赖（离线包）=="
-  "$PKG/.venv/bin/pip" install --no-index --find-links="$离线依赖目录" \
+  "$PKG/.venv/bin/pip" install --no-index --find-links="$OFFLINE_WHEEL_DIR" \
       scipy colorama imageio imageio-ffmpeg plotly pyyaml tabulate typing_extensions \
       || echo "  （部分依赖没装上，参数辨识可能不可用；界面和执行控制不受影响）"
 else
@@ -138,4 +138,4 @@ echo
 echo "完成。启动："
 echo "  \"$PKG/.venv/bin/python\" \"$PKG/run_yubi.py\""
 echo "  （浏览器入口：\"$PKG/.venv/bin/python\" \"$PKG/run_yubi_web.py\"）"
-echo "  想要双击图标：.venv/bin/python 工具/打包应用.py --主程序 run_yubi.py"
+echo "  想要双击图标：.venv/bin/python 工具/package_macos_app.py --entry run_yubi.py"

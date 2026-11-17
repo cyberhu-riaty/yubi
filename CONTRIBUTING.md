@@ -5,7 +5,7 @@
 ## 开始开发
 
 1. 从 `main` 创建分支，例如 `feature/new-controller` 或 `fix/model-loading`。
-2. 使用 `bash 工具/重建环境.sh` 创建本地环境。
+2. 使用 `bash 工具/rebuild_environment.sh` 创建本地环境。
 3. 修改前后运行与你改动相关的检查或手动验证，并在 Pull Request 中写明结果。
 
 ## 代码与资源

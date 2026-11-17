@@ -103,12 +103,12 @@ def check_environment() -> int:
     # ① 平台层能不能起窗口（由平台实现自己回答，入口不碰平台细节）
     try:
         platform_impl = platform_adapters.get_implementation()
-        available, reason = platform_adapters.is_available(platform_impl)
+        available, reason = platform_impl.is_available()
         if available:
-            print(f"  ✓ 窗口实现：{platform_adapters.display_name(platform_impl)}")
+            print(f"  ✓ 窗口实现：{platform_impl.name}")
         else:
             failures += 1
-            print(f"  ✗ 窗口不可用（{platform_adapters.display_name(platform_impl)}）：{reason}")
+            print(f"  ✗ 窗口不可用（{platform_impl.name}）：{reason}")
     except Exception as exc:                                         # noqa: BLE001
         failures += 1
         print(f"  ✗ 平台适配层不可用：{type(exc).__name__}: {exc}")
@@ -201,9 +201,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"✗ 取不到窗口实现：{type(exc).__name__}: {exc}", flush=True)
         print("  （临时替代：run_yubi_web.py —— 用外部浏览器看同一个界面）", flush=True)
         return 1
-    available, reason = platform_adapters.is_available(platform_impl)
+    available, reason = platform_impl.is_available()
     if not available:
-        print(f"✗ 起不了窗口（{platform_adapters.display_name(platform_impl)}）：{reason}", flush=True)
+        print(f"✗ 起不了窗口（{platform_impl.name}）：{reason}", flush=True)
         return 1
 
     port = int(os.environ.get("驭臂_Web端口", "") or web_bridge.DEFAULT_PORT)
@@ -268,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
         # ⚠️ 这个函数在**仿真线程**里被调用：只允许做"放好引用"这种事
         viewport = viewport_slot["视口"]
         if viewport is not None:
-            platform_adapters.push_viewport_state(viewport, snapshot)
+            viewport.receive_state(snapshot)
 
     def receive_model_event(event):
         # 模型桥在换模型成功后会广播 ModelEvent；这里只记路径，绝不碰 AppKit。
@@ -332,8 +332,7 @@ def main(argv: list[str] | None = None) -> int:
     exit_code = 0
     try:
         # 视口槽交给平台层：它建好原生渲染面后回填，状态观察者据此把每步状态喂进去。
-        exit_code = platform_adapters.run(
-            platform_impl,
+        exit_code = platform_impl.run(
             url=url, title=args.title, width=args.width, height=args.height,
             command_queue=runtime_engine.command_queue(), no_3d=args.no_3d,
             viewport_slot=viewport_slot,
