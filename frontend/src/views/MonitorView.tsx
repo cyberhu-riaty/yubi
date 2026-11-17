@@ -23,7 +23,15 @@ export function MonitorView() {
   const connection = useStore((s) => s.connection);
   const alerts = useStore((s) => s.alerts.data);
   const activeAlerts = alerts?.active ?? [];
-  const errorCount = activeAlerts.filter((a) => a.severity === "严重").length;
+  const errorCount = activeAlerts.filter((a) => a.severity === "critical").length;
+  const alertKindLabel = (kind?: string): string => {
+    const labels = {
+      oscillation: "监控.告警.振荡", divergence: "监控.告警.发散",
+      tracking_error: "监控.告警.跟踪超差", saturation: "监控.告警.饱和",
+    } as const;
+    const key = labels[kind as keyof typeof labels];
+    return t(key ?? "监控.告警.未知");
+  };
   const frozen = simulation?.state === "paused";
   const canRun = system?.RTF !== undefined && system.RTF >= 0.95;
 
@@ -75,11 +83,11 @@ export function MonitorView() {
                 key={`${a.kind}-${a.signal}-${i}`}
                 className="panel p-2"
                 style={{
-                  borderLeft: `3px solid ${a.severity === "严重" ? "var(--danger)" : "var(--warn)"}`,
+                  borderLeft: `3px solid ${a.severity === "critical" ? "var(--danger)" : "var(--warn)"}`,
                 }}
               >
                 <div className="flex flex-wrap items-baseline gap-1.5">
-                  <Tag tone={a.severity === "严重" ? "notice" : "emphasis"}>{a.kind}</Tag>
+                  <Tag tone={a.severity === "critical" ? "notice" : "emphasis"}>{alertKindLabel(a.kind)}</Tag>
                   <span className="min-w-0 flex-1 break-words text-[0.85em] monospace" title={a.signal}>
                     {String(a.signal ?? "")}
                   </span>

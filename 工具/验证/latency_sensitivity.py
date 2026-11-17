@@ -43,17 +43,17 @@ def main() -> int:
         rows = []
         for d in (0, 5, 10, 20, 40, 60):
             r = step_response(d, kp=kp, kd=kd, duration=2.5)
-            if not r.get("可达"):
+            if not r.get("reachable"):
                 print(f"    {d:>7}   预热超时（延迟大于预热窗口）")
                 continue
             rows.append(r)
-            print(f"    {d:>7}   {r['峰值']:6.3f}  {r['超调%']:7.1f}%  "
-                  f"{r['稳态误差']:9.5f}  {r['平均延迟毫秒']:7.1f}ms   "
-                  f"{'是' if r['发散'] else '否'}")
+            print(f"    {d:>7}   {r['peak']:6.3f}  {r['overshoot_percent']:7.1f}%  "
+                  f"{r['steady_error']:9.5f}  {r['mean_latency_ms']:7.1f}ms   "
+                  f"{'是' if r['diverged'] else '否'}")
         if len(rows) >= 2:
-            error = rows[-1]["超调%"] - rows[0]["超调%"]
+            error = rows[-1]["overshoot_percent"] - rows[0]["overshoot_percent"]
             print(f"    → 延迟 0→60 ms，超调增加 {error:+.1f} 个百分点；"
-                  f"{'出现过发散' if any(x['发散'] for x in rows) else '未发散'}")
+                  f"{'出现过发散' if any(x['diverged'] for x in rows) else '未发散'}")
 
     print("\n  ⚠️ 本层闭环是「位置指令 + 后端伺服 + 单周期增量限幅」，")
     print("     这种结构对延迟是**退化**（超调变大）而不是**崩溃**（发散）。")

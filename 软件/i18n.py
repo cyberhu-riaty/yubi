@@ -15,7 +15,7 @@
        **切不了**，字符串编译在 ux.*.so 里。这是天花板，已记进设计规格。
 
 语言选择的优先级（`决定启动语言`）：命令行 `--语言` > 环境变量 `YUBI_LANG` / `驭臂_语言` > 存档 > **默认中文**。
-存档位置：`输出/设置.json` 的 `语言` 键（和"上次模型"等设置共用一个文件）。
+存档位置：`输出/设置.json` 的 `language` 键（和 `last_model` 等设置共用一个文件）。
 """
 from __future__ import annotations
 
@@ -455,17 +455,19 @@ def _write_settings(data: dict) -> None:
 
 def read_saved_language() -> str:
     """存档里的语言；没有/认不出就回空串。"""
-    language_code = str(_read_settings().get("语言") or "").strip().lower()
+    settings = _read_settings()
+    language_code = str(settings.get("language", settings.get("语言")) or "").strip().lower()
     return language_code if language_code in SUPPORTED_LANGUAGES else ""
 
 
 def write_saved_language(language: str) -> None:
     """写语言到 输出/设置.json（空串 = 清掉这一项，交回默认）。"""
     data = _read_settings()
+    data.pop("语言", None)
     if language:
-        data["语言"] = language
+        data["language"] = language
     else:
-        data.pop("语言", None)
+        data.pop("language", None)
     _write_settings(data)
 
 

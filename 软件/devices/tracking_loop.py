@@ -91,7 +91,7 @@ def step_response(latency_ms: float, kp: float = 60.0, kd: float = 8.0,
         safety_layer.read_state()
         time.sleep(0.001)
     if safety_layer._latest_state is None:
-        return {"可达": False}
+        return {"reachable": False}
 
     loop = TrackingLoop(safety_layer, kp=kp, kd=kd)
     loop.set_target([1.0])
@@ -109,9 +109,9 @@ def step_response(latency_ms: float, kp: float = 60.0, kd: float = 8.0,
             peak = max(peak, final)
     actual_latency = backend.health().mean_latency_ms
     return {
-        "可达": True, "峰值": peak, "超调%": (peak - 1.0) * 100.0,
-        "稳态误差": abs((final if final is not None else 0.0) - 1.0),
-        "平均延迟毫秒": actual_latency,
-        "发散": peak > 5.0 or (final is not None and abs(final) > 5.0),
-        "安全状态": safety_layer.state.value,
+        "reachable": True, "peak": peak, "overshoot_percent": (peak - 1.0) * 100.0,
+        "steady_error": abs((final if final is not None else 0.0) - 1.0),
+        "mean_latency_ms": actual_latency,
+        "diverged": peak > 5.0 or (final is not None and abs(final) > 5.0),
+        "safety_state": safety_layer.state.value,
     }

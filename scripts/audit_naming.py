@@ -215,6 +215,8 @@ def markdown_report(report: dict, scope: dict) -> str:
         lines.append(f"| `{path}` | {identifiers} | {paths} | {counts['json_key']} | {counts['string_key']} |")
     lines.extend(["", "## 下一步", "",
                   "实施批次和验收标准见 [迁移计划](naming-migration-plan.md)。",
+                  "字符串键的逐类说明见 [字符串键分类](string-key-classification.md)，",
+                  "保留的中文路径/模块见 [兼容入口登记](legacy-compatibility-registry.md)。",
                   "完整名称与行号可用 `--json-report /tmp/yubi-naming-audit.json` 导出。", ""])
     return "\n".join(lines)
 

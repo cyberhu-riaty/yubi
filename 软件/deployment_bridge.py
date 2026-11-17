@@ -182,7 +182,7 @@ class Deployer:
         if not project_name:
             try:
                 import model_bridge as _model_bridge
-                project_name = str(_model_bridge.read_setting("上次项目", "") or "")
+                project_name = str(_model_bridge.read_setting("last_project", "") or "")
             except Exception:                                         # noqa: BLE001
                 project_name = ""
         try:

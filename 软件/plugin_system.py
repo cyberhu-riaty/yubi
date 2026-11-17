@@ -567,19 +567,19 @@ def check_version() -> dict:
     fingerprint = {
         "mujoco": getattr(mujoco, "__version__", "未知"),
         "python": platform.python_version(),
-        "可执行文件": sys.executable,
-        "ViewerConfig 字段": tuple(f.name for f in __import__("dataclasses").fields(viewer_protocol.ViewerConfig)),
-        "gfx 模式数": len(getattr(viewer_protocol, "GFX_MODES", ())),
-        "消息类型数": len([n for n in dir(messages) if isinstance(getattr(messages, n), type)
-                          and issubclass(getattr(messages, n), messages.Message)]),
+        "executable": sys.executable,
+        "viewer_config_fields": tuple(f.name for f in __import__("dataclasses").fields(viewer_protocol.ViewerConfig)),
+        "gfx_mode_count": len(getattr(viewer_protocol, "GFX_MODES", ())),
+        "message_type_count": len([n for n in dir(messages) if isinstance(getattr(messages, n), type)
+                                   and issubclass(getattr(messages, n), messages.Message)]),
     }
 
     print("─" * 78)
     print("【环境自检】")
     print(f"  mujoco 版本 : {fingerprint['mujoco']}   （实测跑通过的版本：{', '.join(KNOWN_GOOD_VERSIONS)}）")
-    print(f"  Python      : {fingerprint['python']}  @ {fingerprint['可执行文件']}")
-    print(f"  官方 API    : ViewerConfig{fingerprint['ViewerConfig 字段']}、gfx {fingerprint['gfx 模式数']} 种、"
-          f"消息 {fingerprint['消息类型数']} 类")
+    print(f"  Python      : {fingerprint['python']}  @ {fingerprint['executable']}")
+    print(f"  官方 API    : ViewerConfig{fingerprint['viewer_config_fields']}、"
+          f"gfx {fingerprint['gfx_mode_count']} 种、消息 {fingerprint['message_type_count']} 类")
 
     if fingerprint["mujoco"] not in KNOWN_GOOD_VERSIONS:
         print(f"  ⚠ 当前 mujoco {fingerprint['mujoco']} 不在「实测跑通」名单里 —— "

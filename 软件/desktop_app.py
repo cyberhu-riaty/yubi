@@ -89,7 +89,7 @@ def select_project(model_path: str, requested_project: str | None) -> str:
             return str(requested_project)
         if os.path.basename(model_path) == "空场景.xml":
             return ""
-        last_model = model_bridge.read_setting("上次项目", "")
+        last_model = model_bridge.read_setting("last_project", "")
         return str(last_model) if last_model else (
             project_registry.find_project_for_model(model_path) if model_path else "")
     except Exception:                                                 # noqa: BLE001

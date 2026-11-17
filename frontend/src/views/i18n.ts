@@ -298,6 +298,11 @@ const messages = {
     "Real-time factor, step rate, memory — whether it keeps up",
   ],
   "监控.告警": ["病态告警", "Fault alerts"],
+  "监控.告警.振荡": ["振荡", "Oscillation"],
+  "监控.告警.发散": ["发散", "Divergence"],
+  "监控.告警.跟踪超差": ["跟踪超差", "Tracking error"],
+  "监控.告警.饱和": ["饱和", "Saturation"],
+  "监控.告警.未知": ["告警", "Alert"],
   "监控.告警.说明": [
     "这些是软件根据已标定规则给出的实时筛查：当前可靠判断持续跟踪超差和执行器饱和。振荡/发散要等逐关节有符号信号，暂不从聚合峰值猜测。没检出不等于没有问题。",
     "These are real-time checks based on calibrated rules. Persistent tracking error and actuator saturation are currently supported. Oscillation/divergence require signed per-joint signals and are not inferred from aggregate peaks. No alert does not prove that everything is healthy.",

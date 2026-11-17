@@ -258,13 +258,13 @@ class SafetyLayer:
         """给界面用的一行摘要。**所有字段都来自真实状态**，不做补零。"""
         backend = self.health()
         return {
-            "状态": self.state.value,
-            "模式": backend.mode.value,
-            "已连接": backend.connected,
-            "丢包": backend.dropped_packets,
-            "错序": backend.out_of_order_packets,
-            "平均延迟毫秒": backend.mean_latency_ms,
-            "最大延迟毫秒": backend.max_latency_ms,
-            "拒绝数": self._rejected_count,
-            "说明": backend.description,
+            "state": self.state.value,
+            "mode": backend.mode.value,
+            "connected": backend.connected,
+            "dropped_packets": backend.dropped_packets,
+            "out_of_order_packets": backend.out_of_order_packets,
+            "mean_latency_ms": backend.mean_latency_ms,
+            "max_latency_ms": backend.max_latency_ms,
+            "rejected_count": self._rejected_count,
+            "description": backend.description,
         }

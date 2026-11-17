@@ -439,7 +439,7 @@ class TrajectoryPlanner:
                 }
                 try:
                     import model_bridge as _model_bridge
-                    _project_name = str(_model_bridge.read_setting("上次项目", "") or "")
+                    _project_name = str(_model_bridge.read_setting("last_project", "") or "")
                 except Exception:                                         # noqa: BLE001
                     _project_name = ""
                 self.output_directory = _save_trajectory(report, self._package_root, _project_name)

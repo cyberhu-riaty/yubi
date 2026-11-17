@@ -14,7 +14,7 @@ model_bridge.py —— 模型库、模型切换与项目状态的界面↔仿真
     真正的加载与"重绑 model/data + 通知插件"由外壳注入的回调完成（见 runtime_engine.py）。
 
 另外它会记录"上次用的模型"：
-    `输出/设置.json` 里存 `上次模型`，用于保留操作记录和空场景缺失时兜底；
+    `输出/设置.json` 里存 `last_model`，用于保留操作记录和空场景缺失时兜底；
     普通启动仍固定进入空场景，不会自动恢复机械臂。
     启动外壳会在每次切换成功后记录。
 
@@ -153,9 +153,22 @@ def _write_settings(data: dict) -> None:
         print(f"⚠ 设置保存失败（不影响使用）：{type(exc).__name__}: {exc}")
 
 
+SETTING_ALIASES = {
+    "last_model": "上次模型",
+    "last_project": "上次项目",
+    "language": "语言",
+    "windows_split_v2": "Windows主分栏V2",
+    "windows_right_split": "Windows右列分栏",
+}
+
+
 def read_setting(key: str, default=None):
-    """读一个设置项（`输出/设置.json`）。"""
-    return _read_settings().get(key, default)
+    """读一个设置项（`输出/设置.json`），兼容旧中文键。"""
+    data = _read_settings()
+    if key in data:
+        return data[key]
+    legacy = SETTING_ALIASES.get(key)
+    return data.get(legacy, default) if legacy else default
 
 
 def write_setting(key: str, value) -> None:
@@ -169,7 +182,7 @@ def write_setting(key: str, value) -> None:
 
 def read_last_model() -> str:
     """返回上次成功加载的模型路径；没有 / 文件已不在 → 返回空串。"""
-    path = str(_read_settings().get("上次模型") or "")
+    path = str(read_setting("last_model", "") or "")
     if path and os.path.exists(path):
         return path
     return ""
@@ -178,9 +191,10 @@ def read_last_model() -> str:
 def remember_model(path: str) -> None:
     """记住这次用的模型。空场景也记（等价于"上次我就是要空着"）。"""
     data = _read_settings()
-    if data.get("上次模型") == path:
+    if data.get("last_model") == path and "上次模型" not in data:
         return
-    data["上次模型"] = path
+    data.pop("上次模型", None)
+    data["last_model"] = path
     _write_settings(data)
     print(f"【模型】已记录最近选择：{display_name(path)}（普通启动仍进入空场景）", flush=True)
 
