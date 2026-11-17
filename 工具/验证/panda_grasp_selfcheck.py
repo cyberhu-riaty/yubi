@@ -30,7 +30,7 @@ plugin_path = ROOT / "算法库" / "通用" / "panda_pick_place.py"
 
 
 def load_plugin():
-    spec = importlib.util.spec_from_file_location("Panda_抓取演示", plugin_path)
+    spec = importlib.util.spec_from_file_location("panda_grasp_selfcheck_plugin", plugin_path)
     if spec is None or spec.loader is None:
         raise RuntimeError("无法加载抓取插件")
     module = importlib.util.module_from_spec(spec)

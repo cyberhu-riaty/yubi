@@ -121,15 +121,15 @@ if [ -z "$APP_PY" ]; then
 fi
 
 # 运行期回退：当前入口**非 0 退出**时换下一个（0 = 用户正常关了窗口，不回退）
-回退() {
+fallback() {
   case "$APP_PY" in
-    */run_yubi.py)      次="$PKG_DIR/run_yubi_web.py" ;;
+    */run_yubi.py)      NEXT_ENTRY="$PKG_DIR/run_yubi_web.py" ;;
     */run_yubi_web.py)  return 1 ;;
     *)                return 1 ;;
   esac
-  [ -f "$次" ] || return 1
-  echo "----- $APP_PY 未能启动，回退到 $次 -----" >> "$LOG"
-  APP_PY="$次"
+  [ -f "$NEXT_ENTRY" ] || return 1
+  echo "----- $APP_PY 未能启动，回退到 $NEXT_ENTRY -----" >> "$LOG"
+  APP_PY="$NEXT_ENTRY"
   return 0
 }
 
@@ -140,10 +140,10 @@ cd "$PKG_DIR" || exit 1
 while :; do
   # shellcheck disable=SC2086
   "$PY" -u "$APP_PY" {extra_args} "$@" >> "$LOG" 2>&1
-  码=$?
+  EXIT_CODE=$?
   # 0 = 正常退出（用户关了窗口），不回退
-  [ "$码" -eq 0 ] && exit 0
-  回退 || exit "$码"
+  [ "$EXIT_CODE" -eq 0 ] && exit 0
+  fallback || exit "$EXIT_CODE"
 done
 """
 
@@ -171,49 +171,49 @@ NATIVE_LAUNCHER_SOURCE = r"""// {app_name} 原生 arm64 启动器（由 工具/p
 #include <mach-o/dyld.h>
 
 int main(int argc, char** argv) {
-  char 自身[PATH_MAX];
-  uint32_t 长度 = sizeof(自身);
-  if (_NSGetExecutablePath(自身, &长度) != 0) {
+  char self_path[PATH_MAX];
+  uint32_t path_length = sizeof(self_path);
+  if (_NSGetExecutablePath(self_path, &path_length) != 0) {
     fprintf(stderr, "{app_name}: 无法获取自身路径（路径过长？）\n");
     return 1;
   }
-  char 真实[PATH_MAX];
-  if (realpath(自身, 真实) == NULL) {
+  char resolved_path[PATH_MAX];
+  if (realpath(self_path, resolved_path) == NULL) {
     fprintf(stderr, "{app_name}: 无法解析自身路径\n");
     return 1;
   }
   // 目录 = …/X.app/Contents/MacOS
-  char* 斜杠 = strrchr(真实, '/');
-  if (斜杠 == NULL) {
-    fprintf(stderr, "{app_name}: 自身路径异常：%s\n", 真实);
+  char* slash = strrchr(resolved_path, '/');
+  if (slash == NULL) {
+    fprintf(stderr, "{app_name}: 自身路径异常：%s\n", resolved_path);
     return 1;
   }
-  *斜杠 = '\0';
+  *slash = '\0';
 
-  char 脚本[PATH_MAX];
-  if (snprintf(脚本, sizeof(脚本), "%s/../Resources/启动.sh", 真实) >= (int)sizeof(脚本)) {
+  char script_path[PATH_MAX];
+  if (snprintf(script_path, sizeof(script_path), "%s/../Resources/启动.sh", resolved_path) >= (int)sizeof(script_path)) {
     fprintf(stderr, "{app_name}: 路径过长\n");
     return 1;
   }
-  if (access(脚本, R_OK) != 0) {
-    fprintf(stderr, "{app_name}: 找不到启动脚本：%s\n", 脚本);
+  if (access(script_path, R_OK) != 0) {
+    fprintf(stderr, "{app_name}: 找不到启动脚本：%s\n", script_path);
     return 1;
   }
 
   // argv = ["/bin/bash", 脚本, 原参数…, NULL]
-  char** 新参数 = (char**)calloc((size_t)argc + 3, sizeof(char*));
-  if (新参数 == NULL) {
+  char** new_argv = (char**)calloc((size_t)argc + 3, sizeof(char*));
+  if (new_argv == NULL) {
     fprintf(stderr, "{app_name}: 内存不足\n");
     return 1;
   }
-  新参数[0] = (char*)"/bin/bash";
-  新参数[1] = 脚本;
+  new_argv[0] = (char*)"/bin/bash";
+  new_argv[1] = script_path;
   for (int i = 1; i < argc; i++) {
-    新参数[i + 1] = argv[i];
+    new_argv[i + 1] = argv[i];
   }
-  新参数[argc + 1] = NULL;
+  new_argv[argc + 1] = NULL;
 
-  execv("/bin/bash", 新参数);
+  execv("/bin/bash", new_argv);
   fprintf(stderr, "{app_name}: 无法执行 /bin/bash\n");
   return 1;
 }
