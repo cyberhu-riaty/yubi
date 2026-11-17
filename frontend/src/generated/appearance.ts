@@ -13,13 +13,22 @@ import { DEFAULT_THEME, themes } from "@generated/themes";
 
 const STORAGE_KEY = "驭臂.风格";
 
-/** 当前合法风格名集合（校验用） */
-const validThemeNames = new Set(themes.map((s) => s.name));
+/** 当前合法风格 id 集合（校验用）。`data-theme` 与本地存储都使用 ASCII id。 */
+const validThemeIds = new Set(themes.map((s) => s.id));
+/** 旧版本把中文短名存进 localStorage；读取时迁移到 id。 */
+const legacyThemeIds = new Map(themes.flatMap((s) => [
+  [s.legacyName, s.id], [s.name, s.id],
+]));
 
 function readSavedTheme(): string {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored && validThemeNames.has(stored)) return stored;
+    if (stored && validThemeIds.has(stored)) return stored;
+    const legacy = stored ? legacyThemeIds.get(stored) : undefined;
+    if (legacy) {
+      window.localStorage.setItem(STORAGE_KEY, legacy);
+      return legacy;
+    }
   } catch {
     /* 隐私模式 / 存储被禁用：用默认值，不报错 */
   }
@@ -46,7 +55,7 @@ export function getTheme(): string {
 }
 
 export function setTheme(name: string): void {
-  if (!validThemeNames.has(name) || name === currentTheme) return;
+  if (!validThemeIds.has(name) || name === currentTheme) return;
   currentTheme = name;
   try {
     window.localStorage.setItem(STORAGE_KEY, name);

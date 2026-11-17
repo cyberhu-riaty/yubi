@@ -66,13 +66,18 @@ def read_model_library(arms_only: bool = True) -> list[dict]:
     except Exception as exc:                                       # noqa: BLE001
         print(f"⚠ 模型库索引读取失败：{type(exc).__name__}: {exc}")
         return []
-    entries = index_data.get("模型", [])
+    entries = index_data.get("models", index_data.get("模型", []))
     if arms_only:
         entries = [m for m in entries if (
-            (m.get("类别") == "arm" and m.get("可控制"))
-            or m.get("类别") == "arm_task"
+            (_model_field(m, "category", "类别") == "arm" and _model_field(m, "controllable", "可控制"))
+            or _model_field(m, "category", "类别") == "arm_task"
         )]
     return entries
+
+
+def _model_field(entry: dict, english: str, legacy: str, default=None):
+    """Model-library field with a legacy Chinese-key fallback."""
+    return entry[english] if english in entry else entry.get(legacy, default)
 
 
 def arm_joint_count(model) -> int:
@@ -118,8 +123,9 @@ def display_name(path: str) -> str:
     if absolute and os.path.normpath(absolute) == os.path.normpath(EMPTY_SCENE_PATH):
         return "空场景（无机械臂）"
     for m in read_model_library(arms_only=False):
-        if os.path.normpath(absolute_path(m.get("扭矩模型", ""))) == os.path.normpath(absolute):
-            return str(m.get("显示名") or m.get("标识") or os.path.basename(path))
+        if os.path.normpath(absolute_path(_model_field(m, "torque_model", "扭矩模型", ""))) == os.path.normpath(absolute):
+            return str(_model_field(m, "display_name", "显示名")
+                       or _model_field(m, "identifier", "标识") or os.path.basename(path))
     return os.path.basename(path)
 
 
@@ -240,18 +246,18 @@ def asset_manifest(arms_only: bool = True) -> dict:
     for m in library:
         # ★ 用「扭矩模型」而不是「模型文件」：前者是"该加载的那一个"，
         #   后者是这个资产包里的全部 xml（含 mjx_* 变体），拿它去加载会挑错。
-        relative = str(m.get("扭矩模型", "") or "")
+        relative = str(_model_field(m, "torque_model", "扭矩模型", "") or "")
         absolute = absolute_path(relative) if relative else ""
         if not absolute:
             continue                       # 没有可加载文件的条目不上架（点了也白点）
         output.append({
-            "id": str(m.get("标识", "")),
-            "display_name": str(m.get("显示名", "")),
-            "category": str(m.get("类别", "")),
-            "dof": int(m.get("自由度", 0) or 0),
-            "actuator_count": int(m.get("执行器数", 0) or 0),
-            "license": str(m.get("许可", "")),
-            "controllable": bool(m.get("可控制", False)),
+            "id": str(_model_field(m, "identifier", "标识", "")),
+            "display_name": str(_model_field(m, "display_name", "显示名", "")),
+            "category": str(_model_field(m, "category", "类别", "")),
+            "dof": int(_model_field(m, "dof", "自由度", 0) or 0),
+            "actuator_count": int(_model_field(m, "actuator_count", "执行器数", 0) or 0),
+            "license": str(_model_field(m, "license", "许可", "")),
+            "controllable": bool(_model_field(m, "controllable", "可控制", False)),
             "path": absolute,
         })
     return {"count": len(output), "models": output}

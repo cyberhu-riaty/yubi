@@ -1,33 +1,65 @@
 {
-  "_说明": "驭臂 · 外观风格表（前端换肤的唯一数据源）。颜色为 #RRGGBB 或 #RRGGBBAA（AA 省略=不透明）。`风格` 里每套风格由 `工具/generate_frontend_assets.py` 生成一组 CSS 变量；未列出的项沿用「基底主题」。`风格列表` 决定界面里的顺序，`默认风格` 决定首次启动用哪套；中文名/英文名/一句话用于双语界面。",
-  "_实测依据": "颜色键与 `网页语义色` 由 `工具/generate_frontend_assets.py` 消费；新增风格时保持键集合一致。历史实测见 CHANGELOG 0.6.0 的外观改造记录。",
-  "_用法": "改完本文件后跑 `工具/generate_frontend_assets.py`，把风格同步成前端的 CSS 变量与风格元数据。",
-  "_版本": "v2 · 2026-10-22",
-  "风格列表": [
-    "极简",
-    "现代深色",
-    "蓝图",
-    "暖夜",
-    "航天测控"
+  "_comment": "驭臂 · 外观风格表（前端换肤的唯一数据源）。颜色为 #RRGGBB 或 #RRGGBBAA（AA 省略=不透明）。`风格` 里每套风格由 `工具/generate_frontend_assets.py` 生成一组 CSS 变量；未列出的项沿用「基底主题」。`风格列表` 决定界面里的顺序，`默认风格` 决定首次启动用哪套；中文名/英文名/一句话用于双语界面。",
+  "_version": "v2 · 2026-10-22",
+  "_usage": "改完本文件后跑 `工具/generate_frontend_assets.py`，把风格同步成前端的 CSS 变量与风格元数据。",
+  "_evidence": "颜色键与 `网页语义色` 由 `工具/generate_frontend_assets.py` 消费；新增风格时保持键集合一致。历史实测见 CHANGELOG 0.6.0 的外观改造记录。",
+  "theme_order": [
+    "minimal",
+    "modern_dark",
+    "blueprint",
+    "warm_night",
+    "mission_control"
   ],
-  "网页语义色": {
-    "_说明": "网页端语义状态色（成功/警告/错误/信息）。与 ImGui 风格表同源生成，供前端状态标签、日志等级和兼容性提示使用；颜色对比度按各自底色挑过。",
-    "极简": {"成功": "#0E7A4F", "警告": "#9A5B00", "错误": "#B42318", "信息": "#1D4ED8"},
-    "现代深色": {"成功": "#4FD1A5", "警告": "#FFB020", "错误": "#FF6B8A", "信息": "#6C8CFF"},
-    "蓝图": {"成功": "#6EE7B7", "警告": "#FFC65C", "错误": "#FF8A9A", "信息": "#7FC4FF"},
-    "暖夜": {"成功": "#9DBF9E", "警告": "#E0A458", "错误": "#E88A8A", "信息": "#7FB8C4"},
-    "航天测控": {"成功": "#5BE08A", "警告": "#FFB020", "错误": "#FF6B9D", "信息": "#35D0D0"},
-    "工作台": {"成功": "#0E7A4F", "警告": "#9A5B00", "错误": "#B42318", "信息": "#1D4ED8"}
+  "default_theme": "workbench",
+  "web_semantic_colors": {
+    "_comment": "网页端语义状态色（成功/警告/错误/信息）。与 ImGui 风格表同源生成，供前端状态标签、日志等级和兼容性提示使用；颜色对比度按各自底色挑过。",
+    "minimal": {
+      "ok": "#0E7A4F",
+      "warn": "#9A5B00",
+      "danger": "#B42318",
+      "info": "#1D4ED8"
+    },
+    "modern_dark": {
+      "ok": "#4FD1A5",
+      "warn": "#FFB020",
+      "danger": "#FF6B8A",
+      "info": "#6C8CFF"
+    },
+    "blueprint": {
+      "ok": "#6EE7B7",
+      "warn": "#FFC65C",
+      "danger": "#FF8A9A",
+      "info": "#7FC4FF"
+    },
+    "warm_night": {
+      "ok": "#9DBF9E",
+      "warn": "#E0A458",
+      "danger": "#E88A8A",
+      "info": "#7FB8C4"
+    },
+    "mission_control": {
+      "ok": "#5BE08A",
+      "warn": "#FFB020",
+      "danger": "#FF6B9D",
+      "info": "#35D0D0"
+    },
+    "workbench": {
+      "ok": "#0E7A4F",
+      "warn": "#9A5B00",
+      "danger": "#B42318",
+      "info": "#1D4ED8"
+    }
   },
-  "风格": {
-    "极简": {
-      "显示名": "极简 Minimal",
-      "一句话": "白纸灰线、全直角、发丝边框，唯一强调色是低饱和蓝。信息密度最低，适合演示与截图。",
-      "英文名": "Minimal",
-      "英文说明": "White paper, grey hairlines, square corners, one quiet blue accent.",
-      "基底主题": "light",
-      "自研面板字号": 1.0,
-      "颜色": {
+  "themes": {
+    "minimal": {
+      "display_name": "极简 Minimal",
+      "legacy_name": "极简",
+      "tagline": "白纸灰线、全直角、发丝边框，唯一强调色是低饱和蓝。信息密度最低，适合演示与截图。",
+      "english_name": "Minimal",
+      "english_description": "White paper, grey hairlines, square corners, one quiet blue accent.",
+      "base_theme": "light",
+      "panel_font_scale": 1.0,
+      "colors": {
         "WindowBg": "#FFFFFF",
         "ChildBg": "#FFFFFF",
         "PopupBg": "#FFFFFF",
@@ -84,7 +116,7 @@
         "ModalWindowDimBg": "#00000033",
         "DragDropTarget": "#2F6FEB99"
       },
-      "样式": {
+      "styles": {
         "WindowRounding": 0.0,
         "ChildRounding": 0.0,
         "FrameRounding": 0.0,
@@ -138,7 +170,7 @@
         "Alpha": 1.0,
         "DisabledAlpha": 0.45
       },
-      "曲线": {
+      "plots": {
         "implot": {
           "PlotBg": "#FFFFFF",
           "PlotBorder": "#E6E6E6",
@@ -157,7 +189,8 @@
           "Selection": "#2F6FEB44",
           "FrameBg": "#F4F4F4"
         },
-        "调色板": [
+        "line_styles": {},
+        "palette": [
           "#2F6FEB",
           "#111111",
           "#6B7280",
@@ -169,14 +202,15 @@
         ]
       }
     },
-    "现代深色": {
-      "显示名": "现代深色 · 玻璃 Modern Dark",
-      "一句话": "圆角 + 半透明 + 柔和蓝紫强调色。日常干活最舒服的一套，也是建议的默认皮肤。",
-      "英文名": "Modern Dark",
-      "英文说明": "Rounded, translucent, soft indigo accent. Default; easiest on the eyes.",
-      "基底主题": "dark",
-      "自研面板字号": 1.0,
-      "颜色": {
+    "modern_dark": {
+      "display_name": "现代深色 · 玻璃 Modern Dark",
+      "legacy_name": "现代深色",
+      "tagline": "圆角 + 半透明 + 柔和蓝紫强调色。日常干活最舒服的一套，也是建议的默认皮肤。",
+      "english_name": "Modern Dark",
+      "english_description": "Rounded, translucent, soft indigo accent. Default; easiest on the eyes.",
+      "base_theme": "dark",
+      "panel_font_scale": 1.0,
+      "colors": {
         "WindowBg": "#1B1D23E8",
         "ChildBg": "#00000000",
         "PopupBg": "#22252C",
@@ -233,7 +267,7 @@
         "ModalWindowDimBg": "#00000066",
         "DragDropTarget": "#6C8CFF99"
       },
-      "样式": {
+      "styles": {
         "WindowRounding": 6.0,
         "ChildRounding": 6.0,
         "FrameRounding": 4.0,
@@ -287,7 +321,7 @@
         "Alpha": 1.0,
         "DisabledAlpha": 0.4
       },
-      "曲线": {
+      "plots": {
         "implot": {
           "PlotBg": "#15171C",
           "PlotBorder": "#2A2E38",
@@ -306,7 +340,8 @@
           "Selection": "#6C8CFF44",
           "FrameBg": "#24272F"
         },
-        "调色板": [
+        "line_styles": {},
+        "palette": [
           "#6C8CFF",
           "#4FD1A5",
           "#FFB020",
@@ -318,14 +353,15 @@
         ]
       }
     },
-    "蓝图": {
-      "显示名": "蓝图 Blueprint",
-      "一句话": "深蓝图纸底 + 冰白细线 + 天蓝强调色，像一张工程蓝图。",
-      "英文名": "Blueprint",
-      "英文说明": "Blueprint paper: deep blue ground, ice-white hairlines, sky accent.",
-      "基底主题": "dark",
-      "自研面板字号": 1.0,
-      "颜色": {
+    "blueprint": {
+      "display_name": "蓝图 Blueprint",
+      "legacy_name": "蓝图",
+      "tagline": "深蓝图纸底 + 冰白细线 + 天蓝强调色，像一张工程蓝图。",
+      "english_name": "Blueprint",
+      "english_description": "Blueprint paper: deep blue ground, ice-white hairlines, sky accent.",
+      "base_theme": "dark",
+      "panel_font_scale": 1.0,
+      "colors": {
         "WindowBg": "#0F3057F5",
         "ChildBg": "#00000000",
         "PopupBg": "#133A63",
@@ -382,7 +418,7 @@
         "ModalWindowDimBg": "#04101C99",
         "DragDropTarget": "#7FC4FF99"
       },
-      "样式": {
+      "styles": {
         "WindowRounding": 0.0,
         "ChildRounding": 0.0,
         "FrameRounding": 0.0,
@@ -436,7 +472,7 @@
         "Alpha": 1.0,
         "DisabledAlpha": 0.4
       },
-      "曲线": {
+      "plots": {
         "implot": {
           "PlotBg": "#0A2440",
           "PlotBorder": "#3E6E9E",
@@ -455,7 +491,8 @@
           "Selection": "#7FC4FF44",
           "FrameBg": "#133A63"
         },
-        "调色板": [
+        "line_styles": {},
+        "palette": [
           "#7FC4FF",
           "#E6F1FA",
           "#FFC65C",
@@ -467,14 +504,15 @@
         ]
       }
     },
-    "暖夜": {
-      "显示名": "暖夜 · 暖色深色 Warm Dark",
-      "一句话": "暖炭灰底 + 铜金强调色，夜里长时间看最不刺眼。",
-      "英文名": "Warm Dark",
-      "英文说明": "Warm charcoal ground with a copper accent; easiest on the eyes at night.",
-      "基底主题": "dark",
-      "自研面板字号": 1.0,
-      "颜色": {
+    "warm_night": {
+      "display_name": "暖夜 · 暖色深色 Warm Dark",
+      "legacy_name": "暖夜",
+      "tagline": "暖炭灰底 + 铜金强调色，夜里长时间看最不刺眼。",
+      "english_name": "Warm Dark",
+      "english_description": "Warm charcoal ground with a copper accent; easiest on the eyes at night.",
+      "base_theme": "dark",
+      "panel_font_scale": 1.0,
+      "colors": {
         "WindowBg": "#1C1917F2",
         "ChildBg": "#00000000",
         "PopupBg": "#262220",
@@ -531,7 +569,7 @@
         "ModalWindowDimBg": "#0A080699",
         "DragDropTarget": "#E0A45899"
       },
-      "样式": {
+      "styles": {
         "WindowRounding": 3.0,
         "ChildRounding": 3.0,
         "FrameRounding": 3.0,
@@ -585,7 +623,7 @@
         "Alpha": 1.0,
         "DisabledAlpha": 0.4
       },
-      "曲线": {
+      "plots": {
         "implot": {
           "PlotBg": "#171412",
           "PlotBorder": "#3D3630",
@@ -604,7 +642,8 @@
           "Selection": "#E0A45844",
           "FrameBg": "#262220"
         },
-        "调色板": [
+        "line_styles": {},
+        "palette": [
           "#E0A458",
           "#EDE4DA",
           "#9DBF9E",
@@ -616,14 +655,15 @@
         ]
       }
     },
-    "航天测控": {
-      "显示名": "航天测控 Mission Control",
-      "一句话": "近黑深蓝底 + 青色主色 + 琥珀告警色，边框 1px、内边距压到最小。信息密度最高，长时间盯屏最省眼。",
-      "英文名": "Mission Control",
-      "英文说明": "Near-black navy, cyan accent, 1px borders, densest layout.",
-      "基底主题": "dark",
-      "自研面板字号": 1.0,
-      "颜色": {
+    "mission_control": {
+      "display_name": "航天测控 Mission Control",
+      "legacy_name": "航天测控",
+      "tagline": "近黑深蓝底 + 青色主色 + 琥珀告警色，边框 1px、内边距压到最小。信息密度最高，长时间盯屏最省眼。",
+      "english_name": "Mission Control",
+      "english_description": "Near-black navy, cyan accent, 1px borders, densest layout.",
+      "base_theme": "dark",
+      "panel_font_scale": 1.0,
+      "colors": {
         "WindowBg": "#0A0F14F0",
         "ChildBg": "#00000000",
         "PopupBg": "#0E151B",
@@ -680,7 +720,7 @@
         "ModalWindowDimBg": "#00000080",
         "DragDropTarget": "#35D0D099"
       },
-      "样式": {
+      "styles": {
         "WindowRounding": 0.0,
         "ChildRounding": 0.0,
         "FrameRounding": 0.0,
@@ -734,7 +774,7 @@
         "Alpha": 1.0,
         "DisabledAlpha": 0.35
       },
-      "曲线": {
+      "plots": {
         "implot": {
           "PlotBg": "#070C10",
           "PlotBorder": "#1E3A46",
@@ -753,7 +793,8 @@
           "Selection": "#35D0D033",
           "FrameBg": "#0E151B"
         },
-        "调色板": [
+        "line_styles": {},
+        "palette": [
           "#35D0D0",
           "#FFB020",
           "#5BE08A",
@@ -765,14 +806,15 @@
         ]
       }
     },
-    "工作台": {
-      "显示名": "工作台",
-      "一句话": "浅灰桌面 + 白色卡片 + 蓝色主按钮，8px 圆角与柔和投影。最适合日常操作，也是现在的默认皮肤。",
-      "英文名": "Workbench",
-      "英文说明": "Light grey canvas, white cards, blue primary action, 8px radii and soft shadows.",
-      "基底主题": "light",
-      "自研面板字号": 1.0,
-      "颜色": {
+    "workbench": {
+      "display_name": "工作台",
+      "legacy_name": "工作台",
+      "tagline": "浅灰桌面 + 白色卡片 + 蓝色主按钮，8px 圆角与柔和投影。最适合日常操作，也是现在的默认皮肤。",
+      "english_name": "Workbench",
+      "english_description": "Light grey canvas, white cards, blue primary action, 8px radii and soft shadows.",
+      "base_theme": "light",
+      "panel_font_scale": 1.0,
+      "colors": {
         "WindowBg": "#F6F7F9",
         "ChildBg": "#FFFFFF",
         "PopupBg": "#FFFFFF",
@@ -829,7 +871,7 @@
         "ModalWindowDimBg": "#00000033",
         "DragDropTarget": "#2F6FEB99"
       },
-      "样式": {
+      "styles": {
         "WindowRounding": 8.0,
         "ChildRounding": 8.0,
         "FrameRounding": 8.0,
@@ -883,7 +925,7 @@
         "Alpha": 1.0,
         "DisabledAlpha": 0.45
       },
-      "曲线": {
+      "plots": {
         "implot": {
           "PlotBg": "#FFFFFF",
           "PlotBorder": "#E6E6E6",
@@ -902,7 +944,8 @@
           "Selection": "#2F6FEB44",
           "FrameBg": "#F4F4F4"
         },
-        "调色板": [
+        "line_styles": {},
+        "palette": [
           "#2F6FEB",
           "#111111",
           "#6B7280",
@@ -915,20 +958,38 @@
       }
     }
   },
-  "可选风格_备选": {
-    "_说明": "本次未进 5 套，留给以后按需增补；结构与上面完全一致，加一套 = 加一个键。",
-    "高对比无障碍": "纯黑底 + 纯白字 + 黄色焦点框、2px 边框、16px 滚动条（投屏/低视力/强光环境）",
-    "极光 Nord": "蓝灰底 #2E3440 + 霜色强调 #88C0D0，低饱和、很耐看的北欧配色",
-    "终端绿 Phosphor": "近黑绿底 + 荧光绿字，复古 CRT 终端观感",
-    "官方": "不推任何皮肤，完全交给官方 ux.setup_theme（= 现在的样子，作为退路）"
+  "alternatives": {
+    "_comment": "本次未进 5 套，留给以后按需增补；结构与上面完全一致，加一套 = 加一个键。",
+    "items": [
+      {
+        "id": "official",
+        "display_name": "官方",
+        "description": "不推任何皮肤，完全交给官方 ux.setup_theme（= 现在的样子，作为退路）"
+      },
+      {
+        "id": "high_contrast",
+        "display_name": "高对比无障碍",
+        "description": "纯黑底 + 纯白字 + 黄色焦点框、2px 边框、16px 滚动条（投屏/低视力/强光环境）"
+      },
+      {
+        "id": "nord_aurora",
+        "display_name": "极光 Nord",
+        "description": "蓝灰底 #2E3440 + 霜色强调 #88C0D0，低饱和、很耐看的北欧配色"
+      },
+      {
+        "id": "phosphor_green",
+        "display_name": "终端绿 Phosphor",
+        "description": "近黑绿底 + 荧光绿字，复古 CRT 终端观感"
+      }
+    ]
   },
-  "落地约定": {
-    "持久化": "输出/外观.json：{\"风格\": \"现代深色\", \"基底主题\": \"dark\"}；与 输出/面板状态.json 同目录同风格",
-    "命令行": "--风格 <名字>（或 ASCII 别名 --style）｜可选名字以本表的『风格列表』为准；不指定则读 输出/外观.json，缺省=现代深色",
-    "环境变量": "小软件_风格（优先级低于命令行、高于存档）",
-    "快捷键": "F10 = 在 5 套 + 关闭之间轮换（F9 已被面板恢复占用；官方占 F2/F3/F6/F7）",
-    "切换生效时间": "下一帧（因为皮肤是逐帧推入的）",
-    "失败降级": "皮肤任何一步抛异常 → 立即停止推入并对本帧做反向弹出 → 界面回到基底主题，终端打印一行警告，绝不崩窗"
+  "conventions": {
+    "persistence": "输出/外观.json：{\"风格\": \"现代深色\", \"基底主题\": \"dark\"}；与 输出/面板状态.json 同目录同风格",
+    "command_line": "--风格 <名字>（或 ASCII 别名 --style）｜可选名字以本表的『风格列表』为准；不指定则读 输出/外观.json，缺省=现代深色",
+    "environment": "小软件_风格（优先级低于命令行、高于存档）",
+    "shortcut": "F10 = 在 5 套 + 关闭之间轮换（F9 已被面板恢复占用；官方占 F2/F3/F6/F7）",
+    "apply_timing": "下一帧（因为皮肤是逐帧推入的）",
+    "fallback": "皮肤任何一步抛异常 → 立即停止推入并对本帧做反向弹出 → 界面回到基底主题，终端打印一行警告，绝不崩窗"
   },
-  "默认风格": "工作台"
+  "conventions_notes": {}
 }

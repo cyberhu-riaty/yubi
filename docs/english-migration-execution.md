@@ -150,3 +150,17 @@ Windows 的类、方法、导入及反射名称已同步改名并通过静态检
 - 验证：50 项 Python 单元测试（新增 10 项项目文档迁移/往返/大小写/参数隔离检查）、39 项契约检查、74 项项目检查、11 项参数事务检查、4 项运行内核检查、13 项实验注册检查、桌面启动器 `--check` 通过；无界面实验 `ur5e_pid_plain` 实际恢复 4 个参数并完成录制导出。前端类型检查与生产构建通过。
 - 命名扫描：总位置 5,813 → 5,547；JSON 键 578 → 367，文件名 37 → 27；增量基线从 625 个位置缩到 404 个位置，没有新增基线条目。新增测试中的旧格式样例按字符串字面量保存，不属于新增产品机器键。
 - 尚未完成：`工具/模型清单.json`（245 键）、`软件/风格表.json`（118 键）与 URDF 示例参数仍是中文键；录制元信息、插件元数据内部结构、`模型/模型库.json` 及剩余目录名仍需后续批次。Windows 宿主仍未在 Windows 真机验证。
+
+
+## 2026-11-17：机器配置清单与外观表（13:55 起）
+
+本批清掉扫描范围内最后一批中文 JSON 键（模型清单、外观风格表、URDF 示例参数），并给旧文件保留读取兼容。
+
+- `工具/模型清单.json` 改为英文键（`source / asset_base_url / proxy_prefix / models`，每项 `display_name / category / license / asset / download_bytes / unpacked_bytes / default_model / entrypoints / torque_limit`）；`import_model.py` 的 `read_manifest()` 同时接受旧中文键，`normalize_manifest()` 负责统一。清单本身未增删模型，24 个条目与哈希值不变。
+- 重新生成 `模型/模型库.json`，键改为 `models / identifier / display_name / torque_model / controllable / dof / ...`；两个 `模型信息.json` 同步改英文键。`model_bridge`、`project_registry` 与项目自检保留旧键回退，用户已有的模型索引仍可读。
+- `软件/风格表.json` 改为 `themes`（ASCII id：`minimal / modern_dark / blueprint / warm_night / mission_control / workbench`）、`theme_order`、`default_theme`、`web_semantic_colors`、`conventions`；每套风格使用 `display_name / legacy_name / tagline / english_name / base_theme / colors / styles / plots`。中文显示名仍是值，不是键。
+- 生成器输出 `ThemeMetadata` 增加 `id` 与 `legacyName`；CSS 的 `data-theme` 改用 ASCII id，仍以 `display_name` 作为界面名称。前端 `appearance.ts` 读取旧 localStorage 时把历史中文短名迁移到 id，`AppearanceView` 仍显示中文名。
+- `工具/urdf_to_mjcf.py` 的覆盖参数段改为 `joints / motors`，读取兼容旧的 `关节 / 电机`；两个示例 JSON 已改英文键。
+- 验证：51 项 Python 单元测试、39 项契约检查、74 项项目检查、4 项运行内核检查、13 项实验注册检查通过；风格表自检 474 个颜色 + 168 个样式值通过；生成物 `--check` 一致；前端类型检查与生产构建通过。
+- 命名扫描：5,547 → 5,110；`json_key` 从 367 降到 **0**；剩余 5,073 处字符串键、27 个文件名、10 个目录名。基线待本批收尾时重建。
+- 说明：本次只把机器键改成英文；模型/风格/参数的显示值（中文名、说明）没有翻译。Windows 宿主仍未验证。

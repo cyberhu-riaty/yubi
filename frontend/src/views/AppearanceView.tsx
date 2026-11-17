@@ -22,13 +22,13 @@ export function AppearanceView() {
       <CollapsibleSection title={t("外观.皮肤")} badge={<span className="monospace">{themes.length}</span>}>
         <ul className="space-y-1">
           {themes.map((s) => {
-            const selected = s.name === current;
+            const selected = s.id === current;
             return (
-              <li key={s.name}>
+              <li key={s.id}>
                 <Button
                   variant="secondary"
                   pressed={selected}
-                  onPress={() => setTheme(s.name)}
+                  onPress={() => setTheme(s.id)}
                   className="w-full justify-start"
                   style={selected ? { background: "var(--bg-frame-on)", borderColor: "var(--grab)", color: "var(--fg)" } : undefined}
                 >
@@ -41,7 +41,7 @@ export function AppearanceView() {
                       </span>
                       <span className="text-[0.85em] text-dim">{s.description}</span>
                     </span>
-                    <span className="theme-preview" data-theme={s.name} aria-hidden="true">
+                    <span className="theme-preview" data-theme={s.id} aria-hidden="true">
                       <span className="theme-preview-bar" />
                       <span className="theme-preview-text">Aa</span>
                       <span className="theme-preview-button" />

@@ -479,12 +479,14 @@ def main() -> int:
     # 规则：每个可控制的机械臂都应该能在项目里找到归宿（否则点它就没算法）
     uncovered: list[str] = []
     for m in projects.model_library_entries():
-        if not m.get("可控制"):
+        if not m.get("controllable", m.get("可控制")):
             continue
-        path = os.path.normpath(projects.absolute_path(str(m.get("扭矩模型") or "")))
+        path = os.path.normpath(projects.absolute_path(
+            str(m.get("torque_model") or m.get("扭矩模型") or "")))
         matches = [n for n, p in model_inventory if p == path]
         if not matches:
-            uncovered.append(str(m.get("显示名") or m.get("标识")))
+            uncovered.append(str(m.get("display_name") or m.get("identifier")
+                                  or m.get("显示名") or m.get("标识")))
     if uncovered:
         summary.warn(f"这些机械臂还没有对应的项目（点开它们不会挂任何算法）：{'、'.join(uncovered)}")
 

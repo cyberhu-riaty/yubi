@@ -1,9 +1,9 @@
 {
-  "显示名": "Panda（MJPC 任务模型）",
-  "许可": "Apache-2.0",
-  "入口模型": "task.xml",
-  "类别": "arm_task",
-  "自由度": 7,
-  "执行器数": 7,
-  "说明": "MJPC 任务模型：6 维末端力控 + 夹爪，含方块/目标；供 MPC 移植使用，不能挂关节 PD。"
+  "display_name": "Panda（MJPC 任务模型）",
+  "license": "Apache-2.0",
+  "entry_model": "task.xml",
+  "category": "arm_task",
+  "dof": 7,
+  "actuator_count": 7,
+  "description": "MJPC 任务模型：6 维末端力控 + 夹爪，含方块/目标；供 MPC 移植使用，不能挂关节 PD。"
 }

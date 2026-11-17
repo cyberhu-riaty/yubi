@@ -24,8 +24,8 @@ urdf_to_mjcf.py —— 把 URDF 脚本化转成 MJCF，并把「URDF 表达不�
 
 参数.json 格式（都可省略）：
   {
-    "关节": { "joint1": {"armature": 0.0015, "damping": 0.05, "frictionloss": 0.02} },
-    "电机": { "joint1": {"gear": 9.0, "Kt": 0.945, "Ke": 0.945, "R": 0.85,
+    "joints": { "joint1": {"armature": 0.0015, "damping": 0.05, "frictionloss": 0.02} },
+    "motors": { "joint1": {"gear": 9.0, "Kt": 0.945, "Ke": 0.945, "R": 0.85,
                           "电压": 24.0, "堵转扭矩": 20.0, "空载转速rpm": 200.0} }
   }
 
@@ -156,8 +156,9 @@ def convert(input_path: pathlib.Path, output_path: pathlib.Path, config: dict, p
     joint_count_before_compile = 0
 
     # ---------- 第 2 段：补 URDF 表达不了、或读入时丢掉的东西 ----------
-    joint_config = config.get("关节", {})
-    motor_config = config.get("电机", {})
+    # Version-1 example files used Chinese section keys; accept both.
+    joint_config = config.get("joints", config.get("关节", {}))
+    motor_config = config.get("motors", config.get("电机", {}))
 
     # 2.1 逐个关节补 armature / damping / frictionloss
     for j in spec.joints:

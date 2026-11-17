@@ -19,7 +19,9 @@ SPEC.loader.exec_module(IMPORTER)
 
 class ModelImportTests(unittest.TestCase):
     def test_english_and_legacy_list_options_produce_the_same_result(self):
-        manifest = {"资产基地址": "https://example.invalid/", "来源": "test", "模型": {}}
+        manifest = {"asset_base_url": "https://example.invalid/", "source": "test", "models": {}}
+        legacy_manifest = {"资产基地址": "https://example.invalid/", "来源": "test", "模型": {}}
+        self.assertEqual(IMPORTER.normalize_manifest(legacy_manifest), manifest)
         outputs = []
         for option in ("--list", "--列表"):
             output = io.StringIO()
@@ -39,7 +41,7 @@ class ModelImportTests(unittest.TestCase):
             path = Path(directory)
             (path / "test.xml").write_text(xml, encoding="utf-8")
             result, stats = IMPORTER.generate_torque_variant(
-                "test", directory, {"默认模型": "test", "显示名": "Test"}, None,
+                "test", directory, {"default_model": "test", "display_name": "Test"}, None,
             )
             root = ET.parse(result).getroot()
             motor = root.find("actuator/motor")
@@ -47,8 +49,8 @@ class ModelImportTests(unittest.TestCase):
             self.assertEqual(motor.get("joint"), "joint")
             self.assertEqual(motor.get("ctrlrange"), "-7 7")
             self.assertEqual(root.find("keyframe/key").get("ctrl"), "0")
-            self.assertEqual(stats["扭矩上限"], [7.0])
-            self.assertEqual(stats["补电枢惯量"], ["joint"])
+            self.assertEqual(stats["torque_limits"], [7.0])
+            self.assertEqual(stats["armature_joints"], ["joint"])
 
 
 if __name__ == "__main__":

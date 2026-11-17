@@ -85,6 +85,44 @@ TORQUE_LIMIT_OVERRIDES: dict[str, list[float]] = {
 # ---------------------------------------------------------------------------
 DEFAULT_ARMATURE = 0.1
 
+# Version-1 manifests used Chinese machine keys. New files use English keys; the
+# reader accepts both so an existing checkout or a user's copy keeps working.
+MANIFEST_TOP_KEYS = {
+    "source": "来源", "asset_base_url": "资产基地址", "proxy_prefix": "代理前缀",
+    "description": "说明", "models": "模型",
+}
+MANIFEST_MODEL_KEYS = {
+    "display_name": "显示名", "category": "类别", "license": "许可",
+    "asset": "资产", "download_bytes": "下载字节", "unpacked_bytes": "解包字节",
+    "default_model": "默认模型", "scene": "场景", "entrypoints": "入口",
+    "torque_limit": "扭矩上限", "description": "说明",
+}
+
+
+def _rename_keys(mapping: dict, aliases: dict[str, str]) -> dict:
+    result = {}
+    for key, value in mapping.items():
+        result[str(key)] = value
+    for english, legacy in aliases.items():
+        if english not in result and legacy in result:
+            result[english] = result[legacy]
+    for legacy in aliases.values():
+        if legacy in result and legacy not in aliases:
+            result.pop(legacy, None)
+    return result
+
+
+def normalize_manifest(data: dict) -> dict:
+    """Return the manifest with English machine keys (legacy keys still accepted)."""
+    result = _rename_keys(data, MANIFEST_TOP_KEYS)
+    models = result.get("models")
+    if isinstance(models, dict):
+        result["models"] = {
+            str(name): _rename_keys(info, MANIFEST_MODEL_KEYS) if isinstance(info, dict) else info
+            for name, info in models.items()
+        }
+    return result
+
 
 def read_manifest() -> dict:
     if not os.path.exists(MANIFEST_PATH):
@@ -92,7 +130,7 @@ def read_manifest() -> dict:
             f"✗ 找不到模型清单：{MANIFEST_PATH}\n"
             f"  这个文件记录了 menagerie 各模型的下载地址与 sha256，是导入工具的依据。")
     with open(MANIFEST_PATH, encoding="utf-8") as f:
-        return json.load(f)
+        return normalize_manifest(json.load(f))
 
 
 # ---------------------------------------------------------------------------
@@ -135,9 +173,9 @@ def _select_base_xml(model_id: str, directory: str, info: dict) -> str:
     优先 `*_nohand.xml`：它去掉了夹爪，能让 nu == nv == 自由度，
     正好符合我们控制插件"ctrl 长度 = qvel 长度"的假设。
     """
-    default_model = info["默认模型"]
+    default_model = info["default_model"]
     candidate = []
-    if f"{default_model}_nohand" in info.get("入口", []):
+    if f"{default_model}_nohand" in info.get("entrypoints", []):
         candidate.append(f"{default_model}_nohand.xml")
     candidate += [f"{default_model}.xml"]
     for c in candidate:
@@ -233,10 +271,10 @@ def generate_torque_variant(model_id: str, directory: str, info: dict, torque_li
                 frame.set("ctrl", " ".join(["0"] * new_nu))
 
     ET.indent(tree, space="  ")                            # 让输出可读
-    output_path = os.path.join(directory, f"{info['默认模型']}_torque.xml")
+    output_path = os.path.join(directory, f"{info['default_model']}_torque.xml")
     header = (
         f"<!-- ============================================================================\n"
-        f"     {os.path.basename(output_path)} —— {info['显示名']} 的**力矩接口**变体\n"
+        f"     {os.path.basename(output_path)} —— {info['display_name']} 的**力矩接口**变体\n"
         f"     由 工具/import_model.py 自动生成，**请勿手工编辑**（重新导入会覆盖）。\n"
         f"     来源模型 : {os.path.relpath(base_xml, PACKAGE_ROOT)}\n"
         f"     改了什么 : ① 执行器（位置伺服）→ <motor> 力矩电机（ctrl 就是关节力矩 N·m）\n"
@@ -258,11 +296,11 @@ def generate_torque_variant(model_id: str, directory: str, info: dict, torque_li
         f.write(tree_xml + "\n")
 
     statistics = {
-        "基础XML": os.path.relpath(base_xml, PACKAGE_ROOT),
-        "扭矩对象": len(joint_actuators),
-        "丢掉执行器": discarded_actuators,
-        "扭矩上限": torque_limits,
-        "补电枢惯量": armature_joints,
+        "base_xml": os.path.relpath(base_xml, PACKAGE_ROOT),
+        "torque_objects": len(joint_actuators),
+        "discarded_actuators": discarded_actuators,
+        "torque_limits": torque_limits,
+        "armature_joints": armature_joints,
     }
     return output_path, statistics
 
@@ -283,7 +321,7 @@ def validate_torque_variant(path: str, steps: int = 1500) -> dict:
     mujoco.mj_forward(model, data)
 
     if not (model.nu == model.nv == model.nq):
-        return {"通过": False, "原因": f"nu={model.nu} nv={model.nv} nq={model.nq}（需要三者相等）"}
+        return {"passed": False, "reason": f"nu={model.nu} nv={model.nv} nq={model.nq}（需要三者相等）"}
 
     target = data.qpos.copy()
     target[1] += 0.35                      # 和默认插件一样：抬一下肩
@@ -300,9 +338,9 @@ def validate_torque_variant(path: str, steps: int = 1500) -> dict:
     #   实测参考：Panda 0.0000°、UR10e 0.0100°、xArm7 0.139°（都在正常范围）；
     #             发散的话会是几十到上百度的量级，一眼可分。
     return {
-        "通过": bool(np.isfinite(final_error) and final_error < np.radians(0.5)),
-        "末误差_度": float(np.degrees(final_error)),
-        "历史最大误差_度": float(np.degrees(max_error)),
+        "passed": bool(np.isfinite(final_error) and final_error < np.radians(0.5)),
+        "final_error_deg": float(np.degrees(final_error)),
+        "max_error_deg": float(np.degrees(max_error)),
     }
 
 
@@ -340,7 +378,7 @@ def update_library_index(log=print) -> str:
          nq 里混着方块和夹爪，自动读出来的轴数不是机械臂轴数。
     """
     try:
-        manifest_models = read_manifest()["模型"]
+        manifest_models = read_manifest()["models"]
     except SystemExit:
         manifest_models = {}
 
@@ -361,12 +399,17 @@ def update_library_index(log=print) -> str:
                 with open(metadata_path, encoding="utf-8") as f:
                     local_info = json.load(f)
                 if isinstance(local_info, dict):
+                    local_info = _rename_keys(local_info, {
+                        **MANIFEST_MODEL_KEYS,
+                        "entry_model": "入口模型", "torque_model": "扭矩模型",
+                        "dof": "自由度", "actuator_count": "执行器数",
+                    })
                     info = {**local_info, **info}
             except Exception as exc:                             # noqa: BLE001
                 log(f"  ⚠ 读取 {metadata_path} 失败：{type(exc).__name__}: {exc}")
 
         # ---- 入口 XML：显式指定 > *_torque.xml > 字母序第一个 ----
-        requested_entry = str(info.get("入口模型") or info.get("扭矩模型") or "").replace("\\", "/")
+        requested_entry = str(info.get("entry_model") or info.get("torque_model") or "").replace("\\", "/")
         primary_xml = ""
         if requested_entry:
             candidate = requested_entry.rsplit("/", 1)[-1]
@@ -386,13 +429,13 @@ def update_library_index(log=print) -> str:
             controllable = bool(model.nu == model.nv == model.nq and model.nu > 0)
         except Exception:                                        # noqa: BLE001
             pass
-        if info.get("自由度") is not None:
-            joint_count = int(info["自由度"])
-        if info.get("执行器数") is not None:
-            actuator_count = int(info["执行器数"])
+        if info.get("dof") is not None:
+            joint_count = int(info["dof"])
+        if info.get("actuator_count") is not None:
+            actuator_count = int(info["actuator_count"])
 
-        license_name = info.get("许可") or _detect_license(directory)
-        category = str(info.get("类别") or "")
+        license_name = info.get("license") or _detect_license(directory)
+        category = str(info.get("category") or "")
         if not category:
             if controllable and joint_count >= 6:
                 category = "arm"
@@ -403,33 +446,34 @@ def update_library_index(log=print) -> str:
             else:
                 category = "不可直接控制"      # 例如位置伺服模型、带夹爪导致 nu != nv 的模型
         entry = {
-            "标识": child,
-            "显示名": info.get("显示名") or child,
-            "类别": category,
-            "目录": child,
-            "扭矩模型": f"{child}/{primary_xml}",
-            "可控制": controllable,
-            "自由度": joint_count,
-            "执行器数": actuator_count,
-            "许可": license_name,
-            "模型文件": [f"{child}/{f}" for f in xml_files],
+            "identifier": child,
+            "display_name": info.get("display_name") or child,
+            "category": category,
+            "directory": child,
+            "torque_model": f"{child}/{primary_xml}",
+            "controllable": controllable,
+            "dof": joint_count,
+            "actuator_count": actuator_count,
+            "license": license_name,
+            "model_files": [f"{child}/{f}" for f in xml_files],
         }
-        if info.get("说明"):
-            entry["说明"] = str(info["说明"])
+        if info.get("description"):
+            entry["description"] = str(info["description"])
         entries.append(entry)
 
     index = {
-        "说明": ("驭臂的模型库索引，由 工具/import_model.py 自动生成。"
-                 "『扭矩模型』是推荐加载的那个 —— 它的 ctrl 就是关节力矩，能被本项目控制插件直接驱动；"
-                 "『可控制』= true 表示 nu==nv==nq（控制插件写 ctrl 的前提）。"
-                 "界面按『类别=arm』列出可选机械臂。"),
-        "根目录": "模型",
-        "模型": entries,
+        "schema_version": 2,
+        "description": ("驭臂的模型库索引，由 工具/import_model.py 自动生成。"
+                        "『扭矩模型』是推荐加载的那个 —— 它的 ctrl 就是关节力矩，能被本项目控制插件直接驱动；"
+                        "『可控制』= true 表示 nu==nv==nq（控制插件写 ctrl 的前提）。"
+                        "界面按『类别=arm』列出可选机械臂。"),
+        "root": "模型",
+        "models": entries,
     }
     with open(LIBRARY_INDEX_PATH, "w", encoding="utf-8") as f:
         json.dump(index, f, ensure_ascii=False, indent=2)
         f.write("\n")
-    arm_count = sum(1 for e in entries if e["类别"] == "arm")
+    arm_count = sum(1 for e in entries if e["category"] == "arm")
     log(f"  ✓ 已更新模型库索引：模型/模型库.json（{len(entries)} 个模型，其中可控制机械臂 {arm_count} 个）")
     return LIBRARY_INDEX_PATH
 
@@ -440,8 +484,8 @@ def update_library_index(log=print) -> str:
 def import_model(model_id: str, info: dict, proxy_prefix: str, torque_only: bool,
              torque_limit: list[float] | None, force: bool, log=print) -> dict:
     directory = os.path.join(MODEL_DIR, model_id)
-    log(f"\n【{model_id}】{info['显示名']}　{info['许可']}　"
-         f"下载 {info['下载字节']/1e6:.1f} MB / 解包 {info['解包字节']/1e6:.1f} MB")
+    log(f"\n【{model_id}】{info['display_name']}　{info['license']}　"
+         f"下载 {info['download_bytes']/1e6:.1f} MB / 解包 {info['unpacked_bytes']/1e6:.1f} MB")
 
     if not torque_only:
         if os.path.isdir(directory) and not force:
@@ -449,12 +493,12 @@ def import_model(model_id: str, info: dict, proxy_prefix: str, torque_only: bool
             if existing:
                 log(f"  ℹ 已存在（{len(existing)} 个模型文件），跳过下载；要重下加 --强制")
         else:
-            url = f"{info.get('资产基地址') or ASSET_BASE_URL}/{info['资产']}"
+            url = f"{info.get('asset_base_url') or ASSET_BASE_URL}/{info['asset']}"
             with tempfile.TemporaryDirectory(prefix="小软件导入_") as temporary:
-                archive_path = os.path.join(temporary, info["资产"])
+                archive_path = os.path.join(temporary, info["asset"])
                 download(url, archive_path, proxy_prefix)
                 if not verify_checksum(archive_path, info["sha256"]):
-                    raise SystemExit(f"  ✗ sha256 校验失败：{info['资产']}"
+                    raise SystemExit(f"  ✗ sha256 校验失败：{info['asset']}"
                                      f"\n     可能是代理返回了错误页，换 --直连 或别的 --代理 再试")
                 log("  ✓ sha256 校验通过")
                 os.makedirs(MODEL_DIR, exist_ok=True)
@@ -469,18 +513,18 @@ def import_model(model_id: str, info: dict, proxy_prefix: str, torque_only: bool
 
     torque_path, statistics = generate_torque_variant(model_id, directory, info, torque_limit, log)
     log(f"  ✓ 扭矩变体：模型/{os.path.relpath(torque_path, MODEL_DIR)}"
-         f"（{statistics['扭矩对象']} 个力矩电机，上限 "
-         f"{'/'.join(f'{x:g}' for x in statistics['扭矩上限'])} N·m）")
-    if statistics["丢掉执行器"]:
-        log(f"    丢了非关节执行器：{'、'.join(statistics['丢掉执行器'])}（保证 nu == nv）")
+         f"（{statistics['torque_objects']} 个力矩电机，上限 "
+         f"{'/'.join(f'{x:g}' for x in statistics['torque_limits'])} N·m）")
+    if statistics["discarded_actuators"]:
+        log(f"    丢了非关节执行器：{'、'.join(statistics['discarded_actuators'])}（保证 nu == nv）")
 
     result = validate_torque_variant(torque_path)
-    if result["通过"]:
-        log(f"  ✓ 闭环验证通过：PD 控制后残差 {result['末误差_度']:.4f}°"
-             f"（历史最大 {result['历史最大误差_度']:.1f}°）")
+    if result["passed"]:
+        log(f"  ✓ 闭环验证通过：PD 控制后残差 {result['final_error_deg']:.4f}°"
+             f"（历史最大 {result['max_error_deg']:.1f}°）")
     else:
-        log(f"  ✗ 闭环验证未通过：{result.get('原因') or result}")
-    return {"名字": model_id, "统计": statistics, "验证": result}
+        log(f"  ✗ 闭环验证未通过：{result.get('reason') or result}")
+    return {"name": model_id, "stats": statistics, "validation": result}
 
 
 ASSET_BASE_URL = ""
@@ -503,8 +547,8 @@ def main(argv: list[str]) -> int:
     args = ap.parse_args(argv)
 
     manifest = read_manifest()
-    ASSET_BASE_URL = manifest["资产基地址"]
-    all_models = manifest["模型"]
+    ASSET_BASE_URL = manifest["asset_base_url"]
+    all_models = manifest["models"]
 
     if args.index:
         print("重建模型库索引…")
@@ -513,15 +557,15 @@ def main(argv: list[str]) -> int:
 
     if args.list_models:
         print("=" * 96)
-        print(f"可导入的机械臂（{len(all_models)} 个）—— 来源：{manifest['来源']}")
+        print(f"可导入的机械臂（{len(all_models)} 个）—— 来源：{manifest['source']}")
         print("=" * 96)
         print(f"  {'标识':26s}{'名称':30s}{'许可':15s}{'下载':>7s}{'解包':>8s}")
-        for name, info in sorted(all_models.items(), key=lambda kv: kv[1]["显示名"]):
+        for name, info in sorted(all_models.items(), key=lambda kv: kv[1]["display_name"]):
             installed = "✓" if os.path.isdir(os.path.join(MODEL_DIR, name)) else " "
-            print(f"  {installed}{name:25s}{info['显示名'][:28]:30s}{info['许可']:15s}"
-                  f"{info['下载字节']/1e6:6.1f}M{info['解包字节']/1e6:7.1f}M")
-        print(f"\n  合计下载 {sum(v['下载字节'] for v in all_models.values())/1e6:.0f} MB、"
-              f"解包 {sum(v['解包字节'] for v in all_models.values())/1e6:.0f} MB")
+            print(f"  {installed}{name:25s}{info['display_name'][:28]:30s}{info['license']:15s}"
+                  f"{info['download_bytes']/1e6:6.1f}M{info['unpacked_bytes']/1e6:7.1f}M")
+        print(f"\n  合计下载 {sum(v['download_bytes'] for v in all_models.values())/1e6:.0f} MB、"
+              f"解包 {sum(v['unpacked_bytes'] for v in all_models.values())/1e6:.0f} MB")
         print(f"  协议：全部为 MIT / BSD-3-Clause / Apache-2.0，可自由使用与分发")
         return 0
 
@@ -538,7 +582,7 @@ def main(argv: list[str]) -> int:
         print("  用 --列表 看可用的标识。")
         return 2
 
-    proxy_prefix = "" if args.direct else (manifest.get("代理前缀", "") if args.proxy is None else args.proxy)
+    proxy_prefix = "" if args.direct else (manifest.get("proxy_prefix", "") if args.proxy is None else args.proxy)
     torque_limit = ([float(x) for x in args.torque_limit.replace("，", ",").split(",") if x.strip()]
                 if args.torque_limit else None)
 
@@ -566,7 +610,7 @@ def main(argv: list[str]) -> int:
     print("=" * 96)
     print(f"完成：成功 {len(succeeded)} 个、失败 {len(failed)} 个")
     for r in succeeded:
-        print(f"  ✓ {r['名字']:24s} 扭矩模型 {'通过' if r['验证']['通过'] else '未通过'}")
+        print(f"  ✓ {r['name']:24s} 扭矩模型 {'通过' if r['validation']['passed'] else '未通过'}")
     for name, reason in failed:
         print(f"  ✗ {name:24s} {reason[:100]}")
     print()

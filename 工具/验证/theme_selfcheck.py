@@ -109,60 +109,61 @@ def main() -> int:
     # 所以"两份一致"的检查退役——若将来又出现副本，会出现的那天再加回来。
     print()
 
-    themes = table["风格"]
-    print(f"读入风格表：{len(themes)} 套风格 —— {'、'.join(themes)}")
+    themes = table["themes"]
+    print(f"读入风格表：{len(themes)} 套风格 —— {'、'.join(theme.get('display_name', name) for name, theme in themes.items())}")
     print(f"绑定里的可用枚举：imgui.Col {len(imgui_colors)} 项 / imgui.StyleVar {len(imgui_styles)} 项 / "
           f"implot.Col {len(implot_colors)} 项 / implot.StyleVar {len(implot_styles)} 项\n")
 
     for name, theme in themes.items():
-        print(f"── {name}（{theme.get('显示名','?')}）")
+        display = theme.get("display_name", name)
+        print(f"── {name}（{display}）")
         # 颜色
-        for key, value in theme.get("颜色", {}).items():
+        for key, value in theme.get("colors", {}).items():
             if key not in imgui_colors:
-                errors.append(f"{name}.颜色.{key}：imgui.Col 里没有这个枚举项（最接近的："
+                errors.append(f"{name}.colors.{key}：imgui.Col 里没有这个枚举项（最接近的："
                             f"{sorted(x for x in imgui_colors if key[:5].lower() in x.lower())[:3]}）")
-            check_color(f"{name}.颜色.{key}", value)
+            check_color(f"{name}.colors.{key}", value)
         # 样式
-        for key, value in theme.get("样式", {}).items():
+        for key, value in theme.get("styles", {}).items():
             if key not in imgui_styles:
-                errors.append(f"{name}.样式.{key}：imgui.StyleVar 里没有这个枚举项")
-            check_number(f"{name}.样式", value, key)
+                errors.append(f"{name}.styles.{key}：imgui.StyleVar 里没有这个枚举项")
+            check_number(f"{name}.styles", value, key)
         # 曲线
-        plot = theme.get("曲线", {})
+        plot = theme.get("plots", {})
         for key, value in plot.get("implot", {}).items():
             if key not in implot_colors:
-                errors.append(f"{name}.曲线.implot.{key}：implot.Col 里没有这个枚举项")
-            check_color(f"{name}.曲线.implot.{key}", value)
-        for key, value in plot.get("曲线样式", {}).items():
+                errors.append(f"{name}.plots.implot.{key}：implot.Col 里没有这个枚举项")
+            check_color(f"{name}.plots.implot.{key}", value)
+        for key, value in plot.get("line_styles", {}).items():
             if key not in implot_styles:
-                errors.append(f"{name}.曲线.曲线样式.{key}：implot.StyleVar 里没有这个枚举项")
-            check_number(f"{name}.曲线.曲线样式", value, key)
-        palette = plot.get("调色板", [])
+                errors.append(f"{name}.plots.line_styles.{key}：implot.StyleVar 里没有这个枚举项")
+            check_number(f"{name}.plots.line_styles", value, key)
+        palette = plot.get("palette", [])
         for i, value in enumerate(palette):
-            check_color(f"{name}.曲线.调色板[{i}]", value)
+            check_color(f"{name}.plots.palette[{i}]", value)
         if len(palette) != 8:
-            warnings.append(f"{name}.曲线.调色板 有 {len(palette)} 色（曲线基类默认 8 色，可改但要对齐）")
-        print(f"   颜色 {len(theme.get('颜色',{}))} 项 / 样式 {len(theme.get('样式',{}))} 项 / "
-              f"曲线颜色 {len(plot.get('implot',{}))} 项 / 曲线样式 {len(plot.get('曲线样式',{}))} 项 / "
+            warnings.append(f"{name}.plots.palette 有 {len(palette)} 色（曲线基类默认 8 色，可改但要对齐）")
+        print(f"   颜色 {len(theme.get('colors',{}))} 项 / 样式 {len(theme.get('styles',{}))} 项 / "
+              f"曲线颜色 {len(plot.get('implot',{}))} 项 / 曲线样式 {len(plot.get('line_styles',{}))} 项 / "
               f"调色板 {len(palette)} 色")
 
     # ★ 面板上会画的字段必须是纯 ASCII（官方 UI 字体没有中文字形，中文会变成 ?）
     #   中文的 显示名/一句话 只给终端与文档用，面板用 英文名/英文说明。
     for name, theme in themes.items():
-        for field in ("英文名", "英文说明"):
+        for field in ("english_name", "english_description"):
             value = str(theme.get(field) or "")
             if not value:
                 errors.append(f"{name}.{field} 缺失 —— 面板上要显示它（中文会画成 ?）")
             elif not ascii_text.is_supported(value):
                 errors.append(f"{name}.{field} 含字体画不出来的字符：{value!r}")
-        if not ascii_text.is_supported(str(theme.get("基底主题") or "")):
-            errors.append(f"{name}.基底主题 含画不出来的字符")
+        if not ascii_text.is_supported(str(theme.get("base_theme") or "")):
+            errors.append(f"{name}.base_theme 含画不出来的字符")
 
     # 基底主题必须是官方认得的
     valid_bases = {"dark", "light", "classic"}
     for name, theme in themes.items():
-        if theme.get("基底主题") not in valid_bases:
-            errors.append(f"{name}.基底主题={theme.get('基底主题')!r}，官方只认 {valid_bases}")
+        if theme.get("base_theme") not in valid_bases:
+            errors.append(f"{name}.base_theme={theme.get('base_theme')!r}，官方只认 {valid_bases}")
 
     # ★ 源码里 var(--x) 用到的变量必须在主题里真的定义过：
     #   写错名字时浏览器**不报错**，只是那条颜色"没有值"，表现是文字/曲线没颜色。

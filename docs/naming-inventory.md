@@ -2,7 +2,7 @@
 
 由 `scripts/audit_naming.py` 从当前工作区生成。
 
-扫描 218 个源码与配置文件；非 ASCII 名称出现位置共 5547 处。次数表示位置数量，不是迁移完成百分比。
+扫描 218 个源码与配置文件；非 ASCII 名称出现位置共 5110 处。次数表示位置数量，不是迁移完成百分比。
 
 中文界面、普通字符串值、注释和文档不计为标识符。字符串键是人工确认项，可能是机器字段，也可能是显示标签；JSON 键列入迁移范围。
 
@@ -14,8 +14,7 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | --- | ---: |
 | `directory_name` | 10 |
 | `file_name` | 27 |
-| `json_key` | 367 |
-| `string_key` | 5143 |
+| `string_key` | 5073 |
 
 ## 按文件迁移
 
@@ -35,20 +34,20 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `scripts/tests/test_connection.cjs` | 0 | 0 | 0 | 10 |
 | `scripts/tests/test_contract.py` | 0 | 0 | 0 | 21 |
 | `scripts/tests/test_frontend_state.cjs` | 0 | 0 | 0 | 9 |
-| `scripts/tests/test_model_import.py` | 0 | 0 | 0 | 7 |
+| `scripts/tests/test_model_import.py` | 0 | 0 | 0 | 3 |
 | `scripts/tests/test_official_api.py` | 0 | 0 | 0 | 3 |
 | `scripts/tests/test_project_schema.py` | 0 | 0 | 0 | 32 |
 | `scripts/tests/test_wire_compatibility.cjs` | 0 | 0 | 0 | 81 |
 | `scripts/tests/test_wire_compatibility.py` | 0 | 0 | 0 | 5 |
 | `实验` | 0 | 1 | 0 | 0 |
 | `工具` | 0 | 1 | 0 | 0 |
-| `工具/generate_frontend_assets.py` | 0 | 0 | 0 | 33 |
-| `工具/import_model.py` | 0 | 0 | 0 | 79 |
+| `工具/generate_frontend_assets.py` | 0 | 0 | 0 | 30 |
+| `工具/import_model.py` | 0 | 0 | 0 | 17 |
 | `工具/urdf_to_mjcf.py` | 0 | 0 | 0 | 25 |
-| `工具/模型清单.json` | 0 | 1 | 245 | 0 |
+| `工具/模型清单.json` | 0 | 1 | 0 | 0 |
 | `工具/示例_urdf转mjcf` | 0 | 1 | 0 | 0 |
-| `工具/示例_urdf转mjcf/示例_参数.json` | 0 | 1 | 2 | 0 |
-| `工具/示例_urdf转mjcf/示例_参数_六轴.json` | 0 | 1 | 2 | 0 |
+| `工具/示例_urdf转mjcf/示例_参数.json` | 0 | 1 | 0 | 0 |
+| `工具/示例_urdf转mjcf/示例_参数_六轴.json` | 0 | 1 | 0 | 0 |
 | `工具/验证` | 0 | 1 | 0 | 0 |
 | `工具/验证/command_receipt_selfcheck.py` | 0 | 0 | 0 | 13 |
 | `工具/验证/contract_selfcheck.py` | 0 | 0 | 0 | 11 |
@@ -59,7 +58,7 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `工具/验证/parameter_transaction_selfcheck.py` | 0 | 0 | 0 | 4 |
 | `工具/验证/project_selfcheck.py` | 0 | 0 | 0 | 2 |
 | `工具/验证/runtime_selfcheck.py` | 0 | 0 | 0 | 1 |
-| `工具/验证/theme_selfcheck.py` | 0 | 0 | 0 | 8 |
+| `工具/验证/theme_selfcheck.py` | 0 | 0 | 0 | 7 |
 | `算法库` | 0 | 1 | 0 | 0 |
 | `算法库/通用` | 0 | 1 | 0 | 0 |
 | `算法库/通用/controller_template.py` | 0 | 0 | 0 | 1 |
@@ -129,7 +128,7 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `软件/诊断桥.py` | 0 | 1 | 0 | 84 |
 | `软件/辨识桥.py` | 0 | 1 | 0 | 48 |
 | `软件/部署桥.py` | 0 | 1 | 0 | 88 |
-| `软件/风格表.json` | 0 | 1 | 118 | 0 |
+| `软件/风格表.json` | 0 | 1 | 0 | 0 |
 | `软件/验证参数辨识.py` | 0 | 1 | 0 | 0 |
 | `软件/骨架` | 0 | 1 | 0 | 0 |
 | `软件/骨架/官方接口清单.py` | 0 | 1 | 0 | 96 |
