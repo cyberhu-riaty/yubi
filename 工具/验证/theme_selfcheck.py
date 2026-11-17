@@ -1,5 +1,5 @@
 """
-theme_selfcheck.py —— 逐键校验 优化/风格表.json 是否只用了真实存在的枚举项
+theme_selfcheck.py —— 逐键校验 软件/theme_table.json 是否只用了真实存在的枚举项
 
 为什么必须校验：
     风格表里的键名（Col.Button / StyleVar.WindowRounding / implot.Col.PlotBg …）
@@ -100,12 +100,14 @@ def check_undefined_css_variables() -> None:
 
 
 def main() -> int:
-    table_path = os.path.join(ROOT, "软件", "风格表.json")      # ★ 唯一权威份（应用读它）
+    table_path = os.path.join(ROOT, "软件", "theme_table.json")  # ★ 唯一权威份（应用读它）
+    if not os.path.exists(table_path):
+        table_path = os.path.join(ROOT, "软件", "风格表.json")   # 旧检出回退
     with open(table_path, encoding="utf-8") as f:
         table = json.load(f)
 
     # 2026-10-16 整理：原先 `优化/风格表.json` 是审查期快照，要求两份逐字节一致。
-    # 现在不保留第二份副本（副本漂移过），权威份只剩 软件/风格表.json，
+    # 现在不保留第二份副本（副本漂移过），权威份只剩 软件/theme_table.json，
     # 所以"两份一致"的检查退役——若将来又出现副本，会出现的那天再加回来。
     print()
 

@@ -56,7 +56,8 @@ import xml.etree.ElementTree as ET
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PACKAGE_ROOT = os.path.normpath(os.path.join(SCRIPT_DIR, ".."))
 MODEL_DIR = os.path.join(PACKAGE_ROOT, "模型")
-MANIFEST_PATH = os.path.join(SCRIPT_DIR, "模型清单.json")
+MANIFEST_PATH = os.path.join(SCRIPT_DIR, "model_manifest.json")
+LEGACY_MANIFEST_PATH = os.path.join(SCRIPT_DIR, "模型清单.json")
 LIBRARY_INDEX_PATH = os.path.join(MODEL_DIR, "模型库.json")
 
 # ---------------------------------------------------------------------------
@@ -125,11 +126,12 @@ def normalize_manifest(data: dict) -> dict:
 
 
 def read_manifest() -> dict:
-    if not os.path.exists(MANIFEST_PATH):
+    path = MANIFEST_PATH if os.path.exists(MANIFEST_PATH) else LEGACY_MANIFEST_PATH
+    if not os.path.exists(path):
         raise SystemExit(
             f"✗ 找不到模型清单：{MANIFEST_PATH}\n"
             f"  这个文件记录了 menagerie 各模型的下载地址与 sha256，是导入工具的依据。")
-    with open(MANIFEST_PATH, encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return normalize_manifest(json.load(f))
 
 
@@ -370,7 +372,7 @@ def update_library_index(log=print) -> str:
     """扫描 模型/ 目录，重建 模型库.json（界面选模型时会读它）。
 
     元数据（显示名 / 许可 / 该加载哪个入口 / 类别）按下面的顺序合并：
-      ① `工具/模型清单.json`（menagerie 官方元数据，优先）
+      ① `工具/model_manifest.json`（menagerie 官方元数据，优先）
       ② 模型目录里的 `模型信息.json`（本地或非 menagerie 模型用）
          支持的键：显示名、许可、入口模型、类别、自由度、执行器数、说明。
          「入口模型」用于一个目录里有多个 XML、默认的 `*_torque.xml` 不是入口的情况

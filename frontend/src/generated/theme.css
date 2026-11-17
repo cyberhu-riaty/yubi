@@ -1,5 +1,5 @@
 /* ⚠️ 本文件由 `工具/generate_frontend_assets.py` 生成，**不要手改**。
- * 来源：`软件/风格表.json`（全部风格，数据驱动换肤的唯一数据源）。
+ * 来源：`软件/theme_table.json`（全部风格，数据驱动换肤的唯一数据源）。
  * 用法：把 `data-theme="mission_control"` 放在 <html> 上即可整站换肤。 */
 
 :root {

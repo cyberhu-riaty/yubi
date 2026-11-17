@@ -16,7 +16,9 @@ import project_registry as _projects
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
-EXPERIMENT_DIRECTORY = PACKAGE_ROOT / "实验"
+EXPERIMENT_DIRECTORY = PACKAGE_ROOT / "experiments"
+# Legacy directory, still scanned for experiments copied by older installs.
+LEGACY_EXPERIMENT_DIRECTORY = PACKAGE_ROOT / "实验"
 
 
 @dataclass(frozen=True)
@@ -94,16 +96,30 @@ class ExperimentRegistry:
         self.directory = Path(directory)
         self._factories: dict[str, Callable[[], Experiment]] = {}
 
+    def _directories(self) -> tuple[Path, ...]:
+        candidates = [self.directory]
+        if self.directory == EXPERIMENT_DIRECTORY:
+            candidates.append(LEGACY_EXPERIMENT_DIRECTORY)
+        return tuple(path for path in candidates if path.is_dir())
+
+    def _find(self, key: str) -> Path | None:
+        for directory in self._directories():
+            path = directory / f"{key}.json"
+            if path.is_file():
+                return path
+        return None
+
     def register(self, name: str, factory: Callable[[], Experiment]) -> None:
         key = str(name).strip()
         if not key:
             raise ValueError("实验注册名不能为空")
-        if key in self._factories or (self.directory / f"{key}.json").exists():
+        if key in self._factories or self._find(key) is not None:
             raise KeyError(f"实验已经注册：{key}")
         self._factories[key] = factory
 
     def keys(self) -> tuple[str, ...]:
-        files = {p.stem for p in self.directory.glob("*.json") if not p.name.startswith("_")}
+        files = {p.stem for directory in self._directories()
+                 for p in directory.glob("*.json") if not p.name.startswith("_")}
         return tuple(sorted(files | set(self._factories)))
 
     def create(self, name: str, validate: bool = True) -> Experiment:
@@ -111,8 +127,8 @@ class ExperimentRegistry:
         if key in self._factories:
             experiment = self._factories[key]()
         else:
-            path = self.directory / f"{key}.json"
-            if not path.is_file():
+            path = self._find(key)
+            if path is None:
                 available = "、".join(self.keys()) or "（无）"
                 raise KeyError(f"找不到实验「{key}」；现有：{available}")
             data = json.loads(path.read_text(encoding="utf-8-sig"))

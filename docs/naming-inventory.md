@@ -2,7 +2,7 @@
 
 由 `scripts/audit_naming.py` 从当前工作区生成。
 
-扫描 220 个源码与配置文件；非 ASCII 名称出现位置共 4956 处。次数表示位置数量，不是迁移完成百分比。
+扫描 220 个源码与配置文件；非 ASCII 名称出现位置共 4947 处。次数表示位置数量，不是迁移完成百分比。
 
 中文界面、普通字符串值、注释和文档不计为标识符。字符串键是人工确认项，可能是机器字段，也可能是显示标签；JSON 键列入迁移范围。
 
@@ -12,8 +12,8 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 
 | 类别 | 出现位置 |
 | --- | ---: |
-| `directory_name` | 10 |
-| `file_name` | 27 |
+| `directory_name` | 5 |
+| `file_name` | 23 |
 | `string_key` | 4919 |
 
 ## 按文件迁移
@@ -22,6 +22,19 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 
 | 文件或目录 | 代码标识符 | 路径/导入 | JSON 键 | 字符串键待确认 |
 | --- | ---: | ---: | ---: | ---: |
+| `controllers/common/controller_template.py` | 0 | 0 | 0 | 1 |
+| `controllers/common/data_recorder.py` | 0 | 0 | 0 | 4 |
+| `controllers/common/joint_pd_control.py` | 0 | 0 | 0 | 8 |
+| `controllers/common/joint_pd_gravity_ff.py` | 0 | 0 | 0 | 3 |
+| `controllers/common/joint_pd_plain.py` | 0 | 0 | 0 | 2 |
+| `controllers/common/joint_pid_control.py` | 0 | 0 | 0 | 9 |
+| `controllers/common/joint_pid_plain.py` | 0 | 0 | 0 | 4 |
+| `controllers/common/panda_mjpc_port.py` | 0 | 0 | 0 | 29 |
+| `controllers/common/panda_pick_place.py` | 0 | 0 | 0 | 13 |
+| `controllers/common/parameter_identification_plugin.py` | 0 | 0 | 0 | 13 |
+| `controllers/common/sinusoidal_joint_motion.py` | 0 | 0 | 0 | 3 |
+| `controllers/common/trajectory_target_player.py` | 0 | 0 | 0 | 8 |
+| `controllers/common/two_point_task_space.py` | 0 | 0 | 0 | 4 |
 | `frontend/src/data/wire_compatibility.ts` | 0 | 0 | 0 | 80 |
 | `frontend/src/generated/contract.ts` | 0 | 0 | 0 | 91 |
 | `frontend/src/generated/wire_fields.ts` | 0 | 0 | 0 | 91 |
@@ -40,13 +53,8 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `scripts/tests/test_project_schema.py` | 0 | 0 | 0 | 32 |
 | `scripts/tests/test_wire_compatibility.cjs` | 0 | 0 | 0 | 81 |
 | `scripts/tests/test_wire_compatibility.py` | 0 | 0 | 0 | 5 |
-| `实验` | 0 | 1 | 0 | 0 |
 | `工具` | 0 | 1 | 0 | 0 |
 | `工具/generate_frontend_assets.py` | 0 | 0 | 0 | 30 |
-| `工具/模型清单.json` | 0 | 1 | 0 | 0 |
-| `工具/示例_urdf转mjcf` | 0 | 1 | 0 | 0 |
-| `工具/示例_urdf转mjcf/示例_参数.json` | 0 | 1 | 0 | 0 |
-| `工具/示例_urdf转mjcf/示例_参数_六轴.json` | 0 | 1 | 0 | 0 |
 | `工具/验证` | 0 | 1 | 0 | 0 |
 | `工具/验证/command_receipt_selfcheck.py` | 0 | 0 | 0 | 13 |
 | `工具/验证/contract_selfcheck.py` | 0 | 0 | 0 | 11 |
@@ -55,21 +63,6 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `工具/验证/parameter_transaction_selfcheck.py` | 0 | 0 | 0 | 4 |
 | `工具/验证/project_selfcheck.py` | 0 | 0 | 0 | 2 |
 | `工具/验证/theme_selfcheck.py` | 0 | 0 | 0 | 7 |
-| `算法库` | 0 | 1 | 0 | 0 |
-| `算法库/通用` | 0 | 1 | 0 | 0 |
-| `算法库/通用/controller_template.py` | 0 | 0 | 0 | 1 |
-| `算法库/通用/data_recorder.py` | 0 | 0 | 0 | 4 |
-| `算法库/通用/joint_pd_control.py` | 0 | 0 | 0 | 8 |
-| `算法库/通用/joint_pd_gravity_ff.py` | 0 | 0 | 0 | 3 |
-| `算法库/通用/joint_pd_plain.py` | 0 | 0 | 0 | 2 |
-| `算法库/通用/joint_pid_control.py` | 0 | 0 | 0 | 9 |
-| `算法库/通用/joint_pid_plain.py` | 0 | 0 | 0 | 4 |
-| `算法库/通用/panda_mjpc_port.py` | 0 | 0 | 0 | 29 |
-| `算法库/通用/panda_pick_place.py` | 0 | 0 | 0 | 13 |
-| `算法库/通用/parameter_identification_plugin.py` | 0 | 0 | 0 | 13 |
-| `算法库/通用/sinusoidal_joint_motion.py` | 0 | 0 | 0 | 3 |
-| `算法库/通用/trajectory_target_player.py` | 0 | 0 | 0 | 8 |
-| `算法库/通用/two_point_task_space.py` | 0 | 0 | 0 | 4 |
 | `软件` | 0 | 1 | 0 | 0 |
 | `软件/Web桥.py` | 0 | 1 | 0 | 130 |
 | `软件/ascii_text.py` | 0 | 0 | 0 | 48 |
@@ -119,12 +112,10 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `软件/诊断桥.py` | 0 | 1 | 0 | 84 |
 | `软件/辨识桥.py` | 0 | 1 | 0 | 48 |
 | `软件/部署桥.py` | 0 | 1 | 0 | 88 |
-| `软件/风格表.json` | 0 | 1 | 0 | 0 |
 | `软件/验证参数辨识.py` | 0 | 1 | 0 | 0 |
 | `软件/骨架` | 0 | 1 | 0 | 0 |
 | `软件/骨架/官方接口清单.py` | 0 | 1 | 0 | 96 |
 | `软件/高亮桥.py` | 0 | 1 | 0 | 64 |
-| `项目` | 0 | 1 | 0 | 0 |
 
 ## 下一步
 

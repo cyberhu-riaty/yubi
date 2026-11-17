@@ -677,7 +677,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                         "（本列表由界面【Algorithms】面板的 Save 写回）")
                     if _project.save_project(write_back):
                         currently_persisted = True
-                        report.append(f"（已把这组算法写回 项目/{os.path.basename(_project.project_file_path(new_project_name))}）")
+                        report.append(f"（已把这组算法写回 projects/{os.path.basename(_project.project_file_path(new_project_name))}）")
                     else:
                         report.append("✗ 写回项目文件失败（选择已在本次运行生效，但没记住）")
 

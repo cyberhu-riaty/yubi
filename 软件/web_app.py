@@ -278,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:                                     # noqa: BLE001
             print(f"⚠ 项目装配失败（将不挂任何算法）：{type(exc).__name__}: {exc}",
                   flush=True)
-            print("  （算法由 项目/*.json 声明：加算法 = 把 .py 放进 算法库/ 并写进项目文件）",
+            print("  （算法由 projects/*.json 声明：加算法 = 把 .py 放进 controllers/common/ 并写进项目文件）",
                   flush=True)
             print("   （注意：兼容性预检需要模型对象，装配时会给到；"
                   "换模型时会按项目重新装配）", flush=True)

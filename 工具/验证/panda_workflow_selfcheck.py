@@ -34,7 +34,7 @@ from official_api import messages                                            # n
 
 model_path = ROOT / "模型" / "panda_mjpc" / "task.xml"
 project_name = "Panda_MJPC"
-plugin_path = ROOT / "算法库" / "通用" / "panda_mjpc_port.py"
+plugin_path = ROOT / "controllers" / "common" / "panda_mjpc_port.py"
 required_sensors = ("hand", "box", "box1", "box2", "target1", "target2")
 
 

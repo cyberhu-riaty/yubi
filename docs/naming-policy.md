@@ -48,7 +48,8 @@ experiments and plugins keep working during the transition.
 ## Compatibility boundary
 
 - `run_yubi.py`, `run_experiment_cli.py` and `compare_experiments_cli.py` are the supported ASCII entry points.
-- The legacy `软件/`, `算法库/`, `实验/`, `项目/`, `模型/` and `工具/` paths remain valid for now.
+- `projects/`, `experiments/` and `controllers/common/` are the new data/algorithm directories. Readers still accept the legacy `项目/`, `实验/` and `算法库/` trees so projects copied by older installs keep working.
+- The legacy `软件/` and `工具/` runtime/tooling roots remain valid; every Chinese module name inside them is an explicit compatibility shim. See [legacy name registry](legacy-compatibility-registry.md) for the retirement condition of each entry.
 - Do not rename a legacy module without first adding an English replacement and a thin compatibility shim.
 - A migration is complete only after imports, JSON paths, frontend build paths, tests and documentation all use the new name.
 

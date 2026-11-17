@@ -37,8 +37,8 @@ frontend/                     构建期源码（不参与运行时，可随时�
 | 生成物 | 来源（单一事实来源） | 生成命令 |
 |---|---|---|
 | `contract.ts` | `软件/契约.py` | `./.venv/bin/python 工具/generate_frontend_assets.py` |
-| `themes.ts` | `软件/风格表.json` | 同上 |
-| `theme.css` | `软件/风格表.json` | 同上 |
+| `themes.ts` | `软件/theme_table.json` | 同上 |
+| `theme.css` | `软件/theme_table.json` | 同上 |
 
 改了来源就跑一次生成。`工具/验证/contract_selfcheck.py` 会检查它们有没有过期。
 
@@ -71,7 +71,7 @@ if (!回执.通过) 提示(回执.说明);
 
 ## 三、界面约定
 
-- **换肤**：`<html data-风格="航天测控">`。全部风格与 `软件/风格表.json` 同源，
+- **换肤**：`<html data-theme="mission_control">`。全部风格与 `软件/theme_table.json` 同源，
   颜色一律用 `var(--…)`，**不要写死颜色**（写死就没法换肤）。状态色另有一组
   `--ok / --warn / --danger / --info`（生成自风格表的 `网页语义色`），
   并且**颜色不单独承担信息**：状态标签必须带文字/符号。
@@ -134,7 +134,7 @@ cd ..
 `软件/web/` 里不再保存第二份生成物。所以先构建、再跑生成脚本。
 
 第二步是幂等的；跑它的意义是让 `工具/验证/contract_selfcheck.py` 的「生成物是否过期」
-检查通过，并保证构建用的 `src/generated/` 没有落后于 `风格表.json` / `契约.py`。
+检查通过，并保证构建用的 `src/generated/` 没有落后于 `theme_table.json` / `contract.py`。
 
 ### 构建失败时
 

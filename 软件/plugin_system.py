@@ -602,7 +602,7 @@ def print_plugin_list(plugins: list, project_name: str = "") -> None:
     """
     header = f"（项目：{project_name}）" if project_name else ""
     print(f"【已加载 {len(plugins)} 个算法】{header}"
-          f"（加算法：把 .py 放进 算法库/，在项目文件的 算法 字段里写上它；"
+          f"（加算法：把 .py 放进 controllers/common/，在项目文件的 algorithms 字段里写上它；"
           f"参见 --列项目）")
     for i, plugin in enumerate(plugins, 1):
         name = str(getattr(plugin, "name", type(plugin).__name__))

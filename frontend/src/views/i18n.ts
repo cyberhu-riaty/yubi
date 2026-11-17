@@ -896,8 +896,8 @@ const messages = {
   ],
   "外观.高级": ["高级信息（开发者）", "Advanced (developer)"],
   "外观.高级说明": [
-    "皮肤定义来自 软件/风格表.json，生成前端主题；选择写在浏览器本地存储里。普通使用不需要看这些。",
-    "Skin definitions live in 软件/风格表.json and are generated into the frontend theme; the choice is stored in browser local storage. Normal use does not need this.",
+    "皮肤定义来自 软件/theme_table.json，生成前端主题；选择写在浏览器本地存储里。普通使用不需要看这些。",
+    "Skin definitions live in 软件/theme_table.json and are generated into the frontend theme; the choice is stored in browser local storage. Normal use does not need this.",
   ],
   "外观.语言当前": ["当前界面语言：{language}", "Current UI language: {language}"],
   "外观.当前": ["当前", "current"],

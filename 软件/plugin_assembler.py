@@ -93,7 +93,7 @@ def import_algorithm_file(file_path: str):
     if not os.path.isfile(file_path):
         return None, f"文件不存在：{file_path}"
 
-    for directory in (_SOFTWARE_DIRECTORY, _projects.ALGORITHM_DIRECTORY):
+    for directory in (_SOFTWARE_DIRECTORY, *_projects.algorithm_directories()):
         if os.path.isdir(directory) and directory not in sys.path:
             sys.path.insert(0, directory)
 

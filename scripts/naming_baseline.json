@@ -57,57 +57,15 @@
   },
   "entries": [
     {
-      "path": "实验",
-      "category": "directory_name",
-      "name": "实验",
-      "count": 1
-    },
-    {
       "path": "工具",
       "category": "directory_name",
       "name": "工具",
       "count": 1
     },
     {
-      "path": "工具/模型清单.json",
-      "category": "file_name",
-      "name": "模型清单.json",
-      "count": 1
-    },
-    {
-      "path": "工具/示例_urdf转mjcf",
-      "category": "directory_name",
-      "name": "示例_urdf转mjcf",
-      "count": 1
-    },
-    {
-      "path": "工具/示例_urdf转mjcf/示例_参数.json",
-      "category": "file_name",
-      "name": "示例_参数.json",
-      "count": 1
-    },
-    {
-      "path": "工具/示例_urdf转mjcf/示例_参数_六轴.json",
-      "category": "file_name",
-      "name": "示例_参数_六轴.json",
-      "count": 1
-    },
-    {
       "path": "工具/验证",
       "category": "directory_name",
       "name": "验证",
-      "count": 1
-    },
-    {
-      "path": "算法库",
-      "category": "directory_name",
-      "name": "算法库",
-      "count": 1
-    },
-    {
-      "path": "算法库/通用",
-      "category": "directory_name",
-      "name": "通用",
       "count": 1
     },
     {
@@ -243,12 +201,6 @@
       "count": 1
     },
     {
-      "path": "软件/风格表.json",
-      "category": "file_name",
-      "name": "风格表.json",
-      "count": 1
-    },
-    {
       "path": "软件/验证参数辨识.py",
       "category": "file_name",
       "name": "验证参数辨识.py",
@@ -270,12 +222,6 @@
       "path": "软件/高亮桥.py",
       "category": "file_name",
       "name": "高亮桥.py",
-      "count": 1
-    },
-    {
-      "path": "项目",
-      "category": "directory_name",
-      "name": "项目",
       "count": 1
     }
   ]

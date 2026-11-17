@@ -26,7 +26,7 @@ if str(ROOT / "软件") not in sys.path:
 from official_api import messages                                            # noqa: E402
 
 model_path = ROOT / "模型" / "panda_mjpc" / "task.xml"
-plugin_path = ROOT / "算法库" / "通用" / "panda_pick_place.py"
+plugin_path = ROOT / "controllers" / "common" / "panda_pick_place.py"
 
 
 def load_plugin():
