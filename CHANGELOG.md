@@ -5,6 +5,22 @@
 
 ---
 
+## [未发布] — 2026-11-17 · 内部命名英文化收尾（兼容迁移）
+
+> 目标：自有代码的机器标识符用英文；界面文案继续支持中文；旧项目、录制、插件和宿主保持兼容。
+
+- **项目文档 v2**：`projects/*.json` 使用 `schema_version / project / model / algorithms / parameters / appearance` 英文键；旧版 `项目/*.json` 由 `软件/project_schema.py` 读取转换。项目文件从 `项目/` 移到 `projects/`，旧目录仍被读取。
+- **控制器参数**：参数标识改为英文（如 `position_gain`、`integral_limit`、`monitored_joint`），参数表机器键为「插件模块名·参数名」；界面显示中文 `label`，旧中文参数名仍可设置和加载。
+- **目录**：`算法库/通用/` → `controllers/common/`，`实验/` → `experiments/`；旧树保留读取回退。`工具/模型清单.json` → `工具/model_manifest.json`，`软件/风格表.json` → `软件/theme_table.json`。
+- **持久化数据**：录制 `.meta.json` 改为英文键（`recording_file`、`algorithms` 等）；设置改为 `last_model / last_project / language` 并兼容旧键；模型清单与模型库索引改英文键；主题表使用 ASCII id。
+- **环境变量**：写入改用 `YUBI_MODEL / YUBI_WEB_PORT / YUBI_CURRENT_MODEL / YUBI_CURRENT_PROJECT / YUBI_DISABLE_WEB / YUBI_GFX / YUBI_DIAGNOSTIC / YUBI_LANG / YUBI_PACKAGE_PATH`；旧中文名只读兼容。
+- **协议边界**：v21 线上字段、`legacy_wire` 声明、插件目录/项目状态的嵌套负载和前端编解码适配层保持不变；没有借英文化修改通信协议。
+- **保留的兼容入口**：`软件/` 与 `工具/` 根目录及中文模块转发层仍在，逐项退役条件见 `docs/legacy-compatibility-registry.md`。
+- **验收**：58 项 Python 单元测试、3 组 Node 回归、39 项契约检查、74 项项目检查、4 项运行内核检查、13 项实验注册检查、19 项观测自检、风格表 474 颜色 + 168 样式、Panda 抓取闭环、GUI 实验闭环、桌面启动器 `--check`、前端类型检查与构建通过；干净工作树内重新跑通测试、类型检查/构建、打包 `.app` 的 `--check` 和无界面实验。
+- **未验证**：Windows 宿主（需 Windows 真机）；真实辨识插件的“开始/停止”动作值漂移已记录，未修改。
+
+---
+
 ## [未发布] — 2026-11-09 · UR10（CB3）模型导入
 
 - **新增 `模型/universal_robots_ur10/`**：用 `ros-industrial/universal_robot` 的

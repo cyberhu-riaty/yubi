@@ -227,10 +227,10 @@ async def main(output_dir: str) -> int:
             (() => {
               const header = [...document.querySelectorAll('button.section-header')]
                 .find(e => e.textContent.includes('算法库'));
-              if (header?.getAttribute('aria-expanded') === 'false') header.click();
+              if (header) header.click();
             })()
             """)
-            await asyncio.sleep(0.4)
+            await asyncio.sleep(0.6)
             text = await P.text()
             if "算法库" not in text or "当前生效" not in text or "未保存" not in text:
                 failed.append("定义视图没有显示算法库的生效/存盘状态")
@@ -435,13 +435,13 @@ async def main(output_dir: str) -> int:
             await asyncio.sleep(0.8)
             theme = await P.evaluate("document.documentElement.dataset.theme || document.documentElement.getAttribute('data-theme')")
             background = await P.evaluate("getComputedStyle(document.body).backgroundColor")
-            if theme != "航天测控":
+            if theme != "mission_control":
                 failed.append(f"皮肤没切过去（data-theme={theme}）")
             if background in (None, "", "rgba(0, 0, 0, 0)"):
                 failed.append(f"切肤后 body 背景没拿到（{background}）")
             elif background_before == background:
                 failed.append(f"切肤后 body 背景没变（{background}）—— 默认皮肤的 :root 可能覆盖了其他皮肤")
-            await P.screenshot(os.path.join(output_dir, "05-皮肤-航天测控.png"))
+            await P.screenshot(os.path.join(output_dir, "05-theme-mission-control.png"))
 
             # 切语言：英文
             await P.evaluate("""[...document.querySelectorAll('button')]
