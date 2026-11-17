@@ -21,7 +21,7 @@
 | 文件 | 作用 |
 |---|---|
 | `requirements.lock`（包根） | 把**实测跑通过**的版本钉死（`mujoco==3.13.0` 等） |
-| `工具/检查版本锁.py` | 随时核对当前环境是否与锁一致 |
+| `工具/check_dependency_lock.py` | 随时核对当前环境是否与锁一致 |
 
 **两道防线合起来才完整**：
 - 版本对了，接口不一定对（官方可能发了同版本号的修订）→ 要靠 `官方接口清单`
@@ -48,7 +48,7 @@
 cd "$HOME/Desktop/驭臂"
 .venv/bin/python 软件/主程序.py --自检      # 逐条列出 21 项
 .venv/bin/python 软件/骨架/官方接口清单.py   # 直接跑这个模块也行
-.venv/bin/python 工具/检查版本锁.py                 # 核对版本
+.venv/bin/python 工具/check_dependency_lock.py                 # 核对版本
 ```
 
 ### 在外壳代码里取用官方接口

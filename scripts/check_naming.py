@@ -68,10 +68,10 @@ MIGRATED_FILES = (
     "算法库/通用/two_point_task_space.py",
     "算法库/通用/sinusoidal_joint_motion.py",
     "算法库/通用/controller_template.py",
-    "工具/验证/实验注册自检.py",
-    "工具/验证/校验项目.py",
-    "工具/验证/运行内核自检.py",
-    "工具/验证/实验GUI闭环自检.py",
+    "工具/验证/experiment_registry_selfcheck.py",
+    "工具/验证/project_selfcheck.py",
+    "工具/验证/runtime_selfcheck.py",
+    "工具/验证/experiment_gui_selfcheck.py",
     "工具/验证/trajectory_planning_selfcheck.py",
     "工具/验证/parameter_transaction_selfcheck.py",
 )
@@ -83,6 +83,7 @@ REMOVED_LEGACY_MODULES = {
     "实验桥", "规划桥", "轨迹规划", "逆解", "模型加载", "模型桥", "重力桥", "参数桥",
     "插件系统", "装配器", "项目", "启动", "主程序窗口", "主程序Web",
     "控制桥", "指标桥", "系统桥",
+    "宿主窗口", "定时器", "平台适配层",
 }
 # These shims remain available to external plugins, but application code must
 # depend on the English implementation so the old import cannot grow back.
@@ -98,7 +99,7 @@ ASCII_IDENTIFIER_FILES = (
     "软件/official_api.py",
     "软件/官方层.py",
     "工具/验证/official_api_selfcheck.py",
-    "工具/验证/官方层自检.py",
+    "工具/验证/platform_selfcheck.py",
     "软件/plugin_system.py",
     "软件/plugin_assembler.py",
     "软件/runtime_engine.py",

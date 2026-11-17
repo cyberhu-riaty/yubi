@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-延迟敏感性.py —— L2 要回答的那个问题：**延迟到多少会出问题**
+latency_sensitivity.py —— L2 要回答的那个问题：**延迟到多少会出问题**
 
 这不是"通过/失败"的测试，是一张**测量表**：同一组增益下，延迟从 0 增到 60 ms，
 超调怎么变、稳态误差怎么变、什么时候发散。
@@ -21,8 +21,8 @@ import argparse
 import sys
 from pathlib import Path
 
-包根 = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(包根 / "软件"))
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "软件"))
 
 
 def main() -> int:
@@ -35,25 +35,25 @@ def main() -> int:
     print("=" * 78)
     print("  延迟敏感性：位置阶跃 0 → 1，看超调与稳态误差怎么随延迟变化")
     print("=" * 78)
-    for 增益 in ((60.0, 8.0, "温和 kp=60  kd=8"),
+    for gain in ((60.0, 8.0, "温和 kp=60  kd=8"),
                  (400.0, 6.0, "激进 kp=400 kd=6")):
-        kp, kd, 名 = 增益
-        print(f"\n  {名}")
+        kp, kd, name = gain
+        print(f"\n  {name}")
         print("    延迟(ms)   峰值     超调%     稳态误差    实测延迟   发散")
-        行们 = []
+        rows = []
         for d in (0, 5, 10, 20, 40, 60):
-            r = step_response(d, kp=kp, kd=kd, 时长秒=2.5)
+            r = step_response(d, kp=kp, kd=kd, duration=2.5)
             if not r.get("可达"):
                 print(f"    {d:>7}   预热超时（延迟大于预热窗口）")
                 continue
-            行们.append(r)
+            rows.append(r)
             print(f"    {d:>7}   {r['峰值']:6.3f}  {r['超调%']:7.1f}%  "
                   f"{r['稳态误差']:9.5f}  {r['平均延迟毫秒']:7.1f}ms   "
                   f"{'是' if r['发散'] else '否'}")
-        if len(行们) >= 2:
-            差 = 行们[-1]["超调%"] - 行们[0]["超调%"]
-            print(f"    → 延迟 0→60 ms，超调增加 {差:+.1f} 个百分点；"
-                  f"{'出现过发散' if any(x['发散'] for x in 行们) else '未发散'}")
+        if len(rows) >= 2:
+            error = rows[-1]["超调%"] - rows[0]["超调%"]
+            print(f"    → 延迟 0→60 ms，超调增加 {error:+.1f} 个百分点；"
+                  f"{'出现过发散' if any(x['发散'] for x in rows) else '未发散'}")
 
     print("\n  ⚠️ 本层闭环是「位置指令 + 后端伺服 + 单周期增量限幅」，")
     print("     这种结构对延迟是**退化**（超调变大）而不是**崩溃**（发散）。")

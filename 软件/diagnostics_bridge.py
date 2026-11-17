@@ -63,16 +63,16 @@ class DiagnosticsReport(messages.Snapshot):
 #   (显示名, 脚本相对路径)
 SUITES: tuple[tuple[str, str], ...] = (
     ("官方层", "工具/验证/official_api_selfcheck.py"),
-    ("平台层", "工具/验证/平台层自检.py"),
+    ("平台层", "工具/验证/platform_selfcheck.py"),
     ("契约", "工具/验证/契约自检.py"),
-    ("项目", "工具/验证/校验项目.py"),
-    ("作用域", "工具/验证/作用域自检.py"),
-    ("语言", "工具/验证/语言自检.py"),
-    ("风格表", "工具/验证/校验风格表.py"),
+    ("项目", "工具/验证/project_selfcheck.py"),
+    ("作用域", "工具/验证/scope_selfcheck.py"),
+    ("语言", "工具/验证/language_selfcheck.py"),
+    ("风格表", "工具/验证/theme_selfcheck.py"),
     ("轨迹规划", "工具/验证/trajectory_planning_selfcheck.py"),
     ("参数事务", "工具/验证/parameter_transaction_selfcheck.py"),
-    ("病态检出", "工具/验证/病态检出自检.py"),
-    ("设备契约", "工具/验证/设备契约自检.py"),
+    ("病态检出", "工具/验证/observation_selfcheck.py"),
+    ("设备契约", "工具/验证/device_contract_selfcheck.py"),
 )
 
 SUITE_TIMEOUT_SECONDS = 120.0        # 任何一项超时就判失败，别让界面永远"检查中"
@@ -83,11 +83,11 @@ def _run_suite(script: str, package_root: str) -> tuple[bool, str, float]:
     started_at = time.perf_counter()
     try:
         # ★ 不猜参数：直接跑脚本的默认行为。
-        #   我第一版按脚本名猜着加 `--简`，结果 `校验项目.py` 不认这个参数，
+        #   我第一版按脚本名猜着加 `--简`，结果 `project_selfcheck.py` 不认这个参数，
         #   于是"诊断把好脚本报成失败"——诊断自己报假错是最不能接受的那类错。
         result = subprocess.run(
-            [sys.executable, script],
-            cwd=package_root, capture_output=True, text=True, timeout=SUITE_TIMEOUT_SECONDS,
+            [sys.executable, "-X", "utf8", script],
+            cwd=package_root, capture_output=True, encoding="utf-8", timeout=SUITE_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
         return False, f'超时（>{SUITE_TIMEOUT_SECONDS:.0f}s）', time.perf_counter() - started_at
