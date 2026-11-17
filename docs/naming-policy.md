@@ -49,7 +49,7 @@ experiments and plugins keep working during the transition.
 
 - `run_yubi.py`, `run_experiment_cli.py` and `compare_experiments_cli.py` are the supported ASCII entry points.
 - `projects/`, `experiments/` and `controllers/common/` are the new data/algorithm directories. Readers still accept the legacy `项目/`, `实验/` and `算法库/` trees so projects copied by older installs keep working.
-- The legacy `软件/` and `工具/` runtime/tooling roots remain valid; every Chinese module name inside them is an explicit compatibility shim. See [legacy name registry](legacy-compatibility-registry.md) for the retirement condition of each entry.
+- The legacy `软件/` and `tools/` runtime/tooling roots remain valid; every Chinese module name inside them is an explicit compatibility shim. See [legacy name registry](legacy-compatibility-registry.md) for the retirement condition of each entry.
 - Do not rename a legacy module without first adding an English replacement and a thin compatibility shim.
 - A migration is complete only after imports, JSON paths, frontend build paths, tests and documentation all use the new name.
 
@@ -304,7 +304,7 @@ retain their existing lazy loading and caching. New application imports from the
 shim are rejected by the naming check. The English implementation and shim are
 also covered by the strict identifier-file list.
 
-The self-check implementation moved to `工具/验证/official_api_selfcheck.py`;
+The self-check implementation moved to `tools/selfchecks/official_api_selfcheck.py`;
 the old command path and `--简` option remain supported, and the diagnostics page
 calls the new command. Runtime contracts, controller gains, model files and UI
 labels keep their existing values and formats in this batch.

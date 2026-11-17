@@ -11,8 +11,8 @@ contract_selfcheck.py —— P1 的 L0 层"可机检的不变量"
        否则"契约里有、实际发不出去"。
 
 用法：
-    .venv/bin/python 工具/验证/contract_selfcheck.py          # 跑全部检查
-    .venv/bin/python 工具/验证/contract_selfcheck.py --简      # 只打结论
+    .venv/bin/python tools/selfchecks/contract_selfcheck.py          # 跑全部检查
+    .venv/bin/python tools/selfchecks/contract_selfcheck.py --简      # 只打结论
 """
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ def check_contract_definitions() -> None:
 
 def check_generated_assets() -> None:
     details.append("\n【② 生成物是否过期】")
-    script = os.path.join(PACKAGE_ROOT, "工具", "generate_frontend_assets.py")
+    script = os.path.join(PACKAGE_ROOT, "tools", "generate_frontend_assets.py")
     result = subprocess.run([sys.executable, "-X", "utf8", script, "--check"],
                           capture_output=True, encoding="utf-8")
     check(result.returncode == 0,
@@ -155,7 +155,7 @@ def check_registered_messages() -> None:
             "Web 界面改参数走 `command.parameters`，不走这条，所以它不该进契约。",
     }
     # ★ 用文件顶部算好的 `软件目录`。我第一版这里又算了一遍，还少了一层
-    #   （`工具/验证` → `工具`），于是 glob 到空目录、扫了 0 个类、"全部通过" ——
+    #   （`tools/selfchecks` → `工具`），于是 glob 到空目录、扫了 0 个类、"全部通过" ——
     #   **一个什么都不查的检查比没有检查更糟**：它会给你一个假的绿灯。
     missing = []
     scanned = 0

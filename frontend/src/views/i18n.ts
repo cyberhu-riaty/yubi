@@ -283,8 +283,8 @@ const messages = {
   ],
   "诊断.高级": ["高级信息（命令 / 子进程）", "Advanced (commands / subprocesses)"],
   "诊断.高级说明": [
-    "检查脚本位于本机 工具/验证/ 目录，由后端用子进程执行；命令与进程细节属于开发诊断信息。",
-    "The checks live in 工具/验证/ and are executed by the backend as subprocesses; command and process details are developer diagnostics.",
+    "检查脚本位于本机 tools/selfchecks/ 目录，由后端用子进程执行；命令与进程细节属于开发诊断信息。",
+    "The checks live in tools/selfchecks/ and are executed by the backend as subprocesses; command and process details are developer diagnostics.",
   ],
   "诊断.未运行": ["未运行", "not run"],
   "诊断.已用时": ["已用时 {seconds} s", "elapsed {seconds} s"],

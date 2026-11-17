@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SPEC = importlib.util.spec_from_file_location("model_import_test_target", ROOT / "工具/import_model.py")
+SPEC = importlib.util.spec_from_file_location("model_import_test_target", ROOT / "tools/import_model.py")
 assert SPEC is not None and SPEC.loader is not None
 IMPORTER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(IMPORTER)

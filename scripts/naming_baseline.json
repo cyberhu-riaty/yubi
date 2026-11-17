@@ -4,19 +4,19 @@
     "version": 1,
     "source_roots": [
       "软件",
-      "算法库",
-      "工具",
-      "前端",
-      "项目",
-      "实验",
-      "scripts",
-      "src",
-      "frontend",
       "controllers",
       "tools",
+      "frontend",
       "projects",
       "experiments",
-      "tests"
+      "scripts",
+      "src",
+      "tests",
+      "算法库",
+      "项目",
+      "实验",
+      "工具",
+      "前端"
     ],
     "exclude_directories": [
       "node_modules",
@@ -56,18 +56,6 @@
     }
   },
   "entries": [
-    {
-      "path": "工具",
-      "category": "directory_name",
-      "name": "工具",
-      "count": 1
-    },
-    {
-      "path": "工具/验证",
-      "category": "directory_name",
-      "name": "验证",
-      "count": 1
-    },
     {
       "path": "软件",
       "category": "directory_name",

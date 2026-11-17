@@ -118,7 +118,7 @@ export interface DiagnosticItem {
   seconds?: number;
 }
 
-/** 自检报告（来自 `诊断桥`，真跑 工具/验证 下的脚本） */
+/** 自检报告（来自 `诊断桥`，真跑 tools/selfchecks 下的脚本） */
 export interface DiagnosticReport {
   running?: boolean;
   passed?: number;

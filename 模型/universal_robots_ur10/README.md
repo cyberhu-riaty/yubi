@@ -21,7 +21,7 @@
    - 关节 `armature=0.1`、阻尼（肩 10 / 肘 5 / 腕 2）
    - 6 个位置伺服执行器（`kp=5000, kv=500`）与力矩上限 330/330/150/56/56/56 N·m
    - `home` 关键帧、末端站点 `attachment_site`（法兰外 0.1 m 的 TCP）
-5. `工具/import_model.py` 生成 `ur10_torque.xml`：执行器换成 `<motor>`，`ctrl` 直接是关节力矩（N·m）
+5. `tools/import_model.py` 生成 `ur10_torque.xml`：执行器换成 `<motor>`，`ctrl` 直接是关节力矩（N·m）
 6. 用与 `算法库/通用/关节pd控制.py` 相同的 PD 算式做闭环验证：**残差 0.018°**（判定阈值 0.5°）
 
 ## 文件
@@ -32,7 +32,7 @@
 | `ur10_torque.xml` | 力矩模型（**推荐加载**，`ctrl` = 关节力矩，单位 N·m） |
 | `scene.xml` | 独立场景（自带地面 / 灯光 / 天空盒），用于单独打开模型 |
 | `assets/` | 视觉 OBJ 与碰撞 STL |
-| `模型信息.json` | 模型库索引用的显示名 / 许可 / 说明（`工具/import_model.py --索引` 会读它） |
+| `模型信息.json` | 模型库索引用的显示名 / 许可 / 说明（`tools/import_model.py --索引` 会读它） |
 
 在驭臂里加载纯机械臂 XML 时，`软件/模型加载.py` 会自动把 `模型/公共场景.xml`
 （地面、灯光、棋盘格材质）挂上，所以一般不需要 `scene.xml`。

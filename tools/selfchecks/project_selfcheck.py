@@ -15,10 +15,10 @@ project_selfcheck.py —— 项目 / 模型 / 算法 三者的交叉一致性自
 
 用法
 ----------------------------------------------------------------------------
-    .venv/bin/python 工具/验证/project_selfcheck.py
-    .venv/bin/python 工具/验证/project_selfcheck.py --详表
+    .venv/bin/python tools/selfchecks/project_selfcheck.py
+    .venv/bin/python tools/selfchecks/project_selfcheck.py --详表
 
-退出码：0 = 全部通过；1 = 有错误（可直接接进 pre-commit 或 工具/跑检查.sh）
+退出码：0 = 全部通过；1 = 有错误（可直接接进 pre-commit 或 tools/跑检查.sh）
 """
 from __future__ import annotations
 

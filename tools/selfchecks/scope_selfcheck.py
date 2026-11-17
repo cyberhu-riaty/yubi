@@ -26,8 +26,8 @@ scope_selfcheck.py —— 扫"函数里先引用、后局部导入"这类**只�
   ③ 如果同名在函数里既被 import、又被赋值 → 也报（同一个坑）
 
 用法：
-    .venv/bin/python 工具/验证/scope_selfcheck.py
-    .venv/bin/python 工具/验证/scope_selfcheck.py --全（连算法库/工具一起扫）
+    .venv/bin/python tools/selfchecks/scope_selfcheck.py
+    .venv/bin/python tools/selfchecks/scope_selfcheck.py --全（连算法库/工具一起扫）
 """
 from __future__ import annotations
 
@@ -132,7 +132,7 @@ def main() -> int:
 
     targets = list(default_targets)
     if args.all_files:
-        targets += [ROOT / "controllers", ROOT / "工具", ROOT / "frontend" / "tests"]
+        targets += [ROOT / "controllers", ROOT / "tools", ROOT / "frontend" / "tests"]
 
     files: list[Path] = []
     for directory in targets:

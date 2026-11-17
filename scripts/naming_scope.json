@@ -1,8 +1,8 @@
 {
   "version": 1,
   "source_roots": [
-    "软件", "算法库", "工具", "前端", "项目", "实验", "scripts",
-    "src", "frontend", "controllers", "tools", "projects", "experiments", "tests"
+    "软件", "controllers", "tools", "frontend", "projects", "experiments", "scripts",
+    "src", "tests", "算法库", "项目", "实验", "工具", "前端"
   ],
   "exclude_directories": [
     "node_modules", ".venv", "__pycache__", ".git", ".pnpm-store", "dist"

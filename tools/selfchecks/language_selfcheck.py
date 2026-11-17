@@ -1,6 +1,6 @@
 """语言机制自检（不需要开窗口）：文案表完整性 / 语言开关与存档 / 决定优先级 / **禁止硬编码中文**。
 
-用法：./.venv/bin/python "工具/验证/language_selfcheck.py"
+用法：./.venv/bin/python "tools/selfchecks/language_selfcheck.py"
 
 ★ 最后一条是这套机制的"防漏闸门"：面板里任何**画到界面上的中文**都必须走 `文案.取(键)`，
   否则切到英文时它不会跟着变（用户就会看到"半中半英"）。注释、docstring、终端日志（print）
