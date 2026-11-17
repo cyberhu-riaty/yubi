@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import env_config
 from typing import Any
 
 from .interface import PlatformCapabilities
@@ -84,7 +85,7 @@ class Windows(PlatformCapabilities):
             from .windows_viewport import MuJoCoViewport
             from .windows_runtime_info import RuntimeInfoPanel
 
-            model_path = os.environ.get("驭臂_当前模型", "")
+            model_path = env_config.read("YUBI_CURRENT_MODEL")
             viewport = MuJoCoViewport(model_path, window)
 
             # 3D 不再裸贴窗口边缘：外壳负责留白、边框和一条短工具栏，

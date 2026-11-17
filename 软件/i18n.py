@@ -22,6 +22,8 @@ from __future__ import annotations
 import json
 import os as _os
 
+import env_config
+
 ZH = "zh"
 EN = "en"
 SUPPORTED_LANGUAGES = (ZH, EN)
@@ -477,7 +479,7 @@ def resolve_startup_language(cli_language: str = "") -> tuple[str, str]:
         if set_language(language_code, remember=False):
             return current_language, "命令行 --语言"
         print(f'⚠ 认不出语言「{cli_language}」，可选：zh / en（已按默认处理）')
-    environment = (_os.environ.get("YUBI_LANG") or _os.environ.get("驭臂_语言") or "").strip()
+    environment = env_config.read("YUBI_LANG").strip()
     if environment:
         if set_language(environment, remember=False):
             return current_language, "环境变量 YUBI_LANG"

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import env_config
 import sys
 
 SOFTWARE_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
@@ -58,7 +59,7 @@ def find_model() -> tuple[str, str]:
       ② 空场景（地面、灯光、背景；机器人由用户在模型库中主动选择）
       ③ 空场景文件缺失时，才回退到上次模型或项目模型
     """
-    if model := os.environ.get("驭臂_模型", "").strip():
+    if model := env_config.read("YUBI_MODEL").strip():
         return model, "命令行/环境变量指定"
     empty_scene = os.path.join(os.path.dirname(SOFTWARE_DIRECTORY), "模型", "空场景.xml")
     if os.path.exists(empty_scene):
@@ -137,7 +138,7 @@ def check_environment() -> int:
 
     # ⑤ 端口占用
     import socket
-    port = int(os.environ.get("驭臂_Web端口", "") or web_bridge.DEFAULT_PORT)
+    port = int(env_config.read("YUBI_WEB_PORT") or web_bridge.DEFAULT_PORT)
     with socket.socket() as s:
         if s.connect_ex(("127.0.0.1", port)) == 0:
             print(f"  ⚠ 端口 {port} 已被占用（可能已经有一个在跑；换端口用 --web口）")
@@ -165,7 +166,7 @@ def is_running(host: str, port: int) -> bool:
     try:
         with urllib.request.urlopen(f"http://{host}:{port}/api/status", timeout=1.5) as r:
             data = json.loads(r.read())
-            return isinstance(data, dict) and "启用" in data
+            return isinstance(data, dict) and "enabled" in data
     except Exception:                                                 # noqa: BLE001
         return False
 
@@ -197,14 +198,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.model:
-        os.environ["驭臂_模型"] = args.model
+        env_config.write("YUBI_MODEL", args.model)
     if args.web_port:
-        os.environ["驭臂_Web端口"] = str(args.web_port)
+        env_config.write("YUBI_WEB_PORT", str(args.web_port))
 
     if args.check_environment:
         return check_environment()
 
-    port = int(os.environ.get("驭臂_Web端口", "") or web_bridge.DEFAULT_PORT)
+    port = int(env_config.read("YUBI_WEB_PORT") or web_bridge.DEFAULT_PORT)
     url = f"http://127.0.0.1:{port}/"
 
     # ---- 0. 已经有一个在跑？那就别再起一个，直接把浏览器指过去 ----
@@ -229,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"✗ Web 服务起不来：{web_bridge.server_error(server)}", flush=True)
         print("  端口可能被别的程序占着。换个端口试试：--web口 8899", flush=True)
         return 1
-    url = web_bridge.health()["地址"]
+    url = web_bridge.health()["address"]
     has_frontend = os.path.exists(os.path.join(SOFTWARE_DIRECTORY, "web", "index.html"))
 
     print("=" * 74)
@@ -290,7 +291,7 @@ def main(argv: list[str] | None = None) -> int:
     registry = plugin_system.SafeRegistry(
         plugins, step_plugin=plugin_system.RealtimeFixedStep())
     config = plugin_system.viewer_protocol.ViewerConfig(
-        title=args.title, width=1200, height=800, gfx=os.environ.get("驭臂_gfx", ""))
+        title=args.title, width=1200, height=800, gfx=env_config.read("YUBI_GFX"))
 
     # 同步浏览器入口会在启动函数开头清理旧队列，因此把已校验的实验消息显式
     # 交给启动函数，让它在清理之后再预置；桌面入口则在“已就绪”后直接入队。

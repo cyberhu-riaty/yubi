@@ -74,7 +74,7 @@ if [ -z "$PKG_DIR" ] && [ -f "$RES_DIR/包路径.txt" ]; then
 fi
 # ② 环境变量（方便你自己指定）
 if [ -z "$PKG_DIR" ]; then
-  CAND="$(printenv '小软件_包路径')"
+  CAND="${YUBI_PACKAGE_PATH:-$(printenv '小软件_包路径')}"
   [ -n "$CAND" ] && [ -d "$CAND" ] && PKG_DIR="$CAND"
 fi
 # ③ 常见位置搜一遍（桌面 / 家目录 / 文档）
@@ -90,7 +90,7 @@ if [ -z "$PKG_DIR" ]; then
 fi
 
 if [ -z "$PKG_DIR" ]; then
-  osascript -e 'display dialog "找不到{app_name}的安装位置（含 .venv 的包文件夹）。\n\n请把整个包文件夹放到桌面，或设置环境变量 小软件_包路径 指向它。" buttons {{"好"}} default button 1 with icon stop' 2>/dev/null
+  osascript -e 'display dialog "找不到{app_name}的安装位置（含 .venv 的包文件夹）。\n\n请把整个包文件夹放到桌面，或设置环境变量 YUBI_PACKAGE_PATH 指向它。" buttons {{"好"}} default button 1 with icon stop' 2>/dev/null
   exit 1
 fi
 LOG="$PKG_DIR/启动日志.txt"

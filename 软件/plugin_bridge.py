@@ -46,13 +46,8 @@ class PluginCatalog(messages.Snapshot):
     description: str = ""
 
 
-# 插件类上我们认识的元信息（与 算法库/通用/我的控制律_模板.py 里的一致）
-METADATA_FIELDS = {
-    "name": "名称",
-    "version": "版本",
-    "description": "说明",
-    "author": "作者",
-}
+# 插件类上我们认识的元信息（与 算法库/通用/controller_template.py 里的一致）
+METADATA_FIELDS = {"name", "version", "description", "author"}
 
 
 def _read_class_attributes(path: str) -> dict[str, str]:
@@ -77,7 +72,7 @@ def _read_class_attributes(path: str) -> dict[str, str]:
                     continue
                 if isinstance(child.value, ast.Constant) and isinstance(child.value.value, str):
                     # 第一个带字面量值的类优先（一个文件里通常只有一个插件类）
-                    output.setdefault(METADATA_FIELDS[target.id], child.value.value)
+                    output.setdefault(target.id, child.value.value)
     return output
 
 
@@ -116,14 +111,14 @@ def get_plugin_catalog(package_root: str, current_algorithms: list[str] | None =
         name = str(items.get("plugin", ""))
         file = str(items.get("file", ""))
         metadata = _read_class_attributes(file) if file else {}
-        display_name = metadata.get("名称", name)
+        display_name = metadata.get("name", name)
         current_order = enabled_order.get(name, enabled_order.get(display_name, -1))
         output.append({
             "插件": name,
             "分组": str(items.get("group", "")),
-            "版本": metadata.get("版本", ""),
-            "说明": metadata.get("说明", ""),
-            "作者": metadata.get("作者", ""),
+            "版本": metadata.get("version", ""),
+            "说明": metadata.get("description", ""),
+            "作者": metadata.get("author", ""),
             "名称": display_name,
             "文件": str(items.get("relative", "")),
             "被项目使用": usage.get(name, []),

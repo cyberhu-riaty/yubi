@@ -6,10 +6,11 @@
 
 | 入口或配置 | 当前处理 |
 |---|---|
-| `输出/设置.json` 中的 `Windows主分栏V2`、`Windows右列分栏`、`上次项目`、`语言` | 保留已有键，继续读取用户保存的布局、上次项目和语言。 |
-| `驭臂_Web端口`、`驭臂_关Web`、`驭臂_模型`、`驭臂_语言` | 保留现有启动配置。命令行可用 `--web-port`、`--model`，语言也支持 `YUBI_LANG`。 |
-| `驭臂_宿主诊断`、`驭臂_当前模型`、`驭臂_gfx` | 保留当前调用链使用的环境变量。修改时要核对设置方和读取方。 |
-| macOS 启动器的 `小软件_包路径`、`Resources/包路径.txt` 和 `Resources/启动.sh` | 保留现有启动约定，供已有安装和新生成的启动器使用。 |
+| `输出/设置.json` 中的 `Windows主分栏V2`、`Windows右列分栏`、`last_project`、`语言` | 布局与语言键保留；上次项目新写入 `last_project`，读取兼容旧的 `上次项目`。 |
+| `YUBI_WEB_PORT`、`YUBI_DISABLE_WEB`、`YUBI_MODEL`、`YUBI_LANG` | 新的 ASCII 环境变量；读取兼容旧中文名（见下表），写入只使用新名。命令行可用 `--web-port`、`--model`、`--语言`。 |
+| `YUBI_DIAGNOSTIC`、`YUBI_CURRENT_MODEL`、`YUBI_CURRENT_PROJECT`、`YUBI_GFX` | 新的 ASCII 环境变量；设置方与读取方都已改用新名，旧名为只读兼容。 |
+| macOS 启动器的 `YUBI_PACKAGE_PATH`、`Resources/包路径.txt` 和 `Resources/启动.sh` | 新生成启动器优先读 `YUBI_PACKAGE_PATH`，仍回退旧的 `小软件_包路径`；包内 `包路径.txt` 优先。 |
+| 旧中文环境变量 | `驭臂_模型`、`驭臂_Web端口`、`驭臂_关Web`、`驭臂_语言`、`驭臂_宿主诊断`、`驭臂_当前模型`、`驭臂_当前项目`、`驭臂_gfx`、`小软件_包路径` 仅作为读取兼容，不再写入；迁移表在 `软件/env_config.py`。 |
 | 旧中文命令行选项 | 维护脚本以英文选项为主，保留已支持的中文选项作为别名。 |
 | v21 消息字段及旧配置、录制数据格式 | 由前后端协议批次统一处理。本批保留现有格式。 |
 

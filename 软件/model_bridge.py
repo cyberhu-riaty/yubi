@@ -401,8 +401,10 @@ class ProjectState(messages.Snapshot):
       （【Model library】关心前者，【Controller params】关心后者）。
       合成一条会让"只想知道算法列表"的面板每 2 Hz 收一堆无关字段。
 
-    `算法` 是 `插件系统.收集算法信息()` 的产物：
-        [{"名称": …, "版本": …, "英文名": …, "参数": {...}}, …]
+    `algorithms` 保持 v21 线上形状（中文键，前端适配层负责转英文）：
+        [{"名称": …, "版本": …, "英文名": …, "接管控制": …, "参数": {...}}, …]
+    内部元信息由 `plugin_system.collect_algorithm_info()` 以英文字段产生，
+    发布前经 `plugin_system.algorithm_info_wire()` 编码。
     """
 
     project: str = ""

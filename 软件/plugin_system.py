@@ -670,8 +670,9 @@ def collect_algorithm_info(plugins: list) -> list[dict]:
     所以录制出来的 `.meta.json` 里 `插件清单` 永远是空数组。
 
     返回形如：
-        [{"名称": "关节 PD 位置控制", "版本": "1.1", "英文名": "Joint PD position control",
-          "参数": {"KP": 200.0, "KD": 30.0}}, …]
+        [{"name": "关节 PD 位置控制", "version": "1.1",
+          "english_name": "Joint PD position control",
+          "takes_control": True, "parameters": {"KP": 200.0, "KD": 30.0}}, …]
 
     只收"插件自己声明过的可调参数"（`adjustable_parameters()` 的键），不 dump 整个 `__dict__` ——
     那里有 model/data 引用、numpy 数组、文件句柄，序列化不了也没意义。
@@ -680,27 +681,39 @@ def collect_algorithm_info(plugins: list) -> list[dict]:
     for plugin in plugins:
         name = str(getattr(plugin, "name", None) or type(plugin).__name__)
         entry = {
-            "名称": name,
-            "版本": str(getattr(plugin, "version", "-")),
-            "英文名": str(getattr(plugin, "english_name", "") or ""),
-            # ★ `接管控制` 必须一起带上：外壳要靠它判断"几个算法在抢同一个方向盘"
+            "name": name,
+            "version": str(getattr(plugin, "version", "-")),
+            "english_name": str(getattr(plugin, "english_name", "") or ""),
+            # ★ `takes_control` 必须一起带上：外壳要靠它判断"几个算法在抢同一个方向盘"
             #   （多个都写 ctrl[:] 时只有最后一个生效，被覆盖的等于没挂）。
             #   漏带这个键的后果实测过：会被当成"全都接管"，于是默认项目也误报冲突。
-            "接管控制": bool(getattr(plugin, "takes_control", True)),
-            "参数": {},
+            "takes_control": bool(getattr(plugin, "takes_control", True)),
+            "parameters": {},
         }
         get_parameters = getattr(plugin, "adjustable_parameters", None)
         if get_parameters is not None:
             try:
                 for parameter_name, info in (get_parameters() or {}).items():
                     try:
-                        entry["参数"][str(parameter_name)] = float(info.get("value"))
+                        entry["parameters"][str(parameter_name)] = float(info.get("value"))
                     except (TypeError, ValueError, AttributeError):
                         continue          # 不是数字的参数不进元信息（元信息要能 JSON 化）
             except Exception as exc:                                  # noqa: BLE001
                 print(f"⚠ 收集【{name}】的参数时出错（元信息里该算法的参数为空）：{exc}")
         result.append(entry)
     return result
+
+
+WIRE_ALGORITHM_KEYS = {
+    "name": "名称", "version": "版本", "english_name": "英文名",
+    "takes_control": "接管控制", "parameters": "参数",
+}
+
+
+def algorithm_info_wire(info: list[dict]) -> list[dict]:
+    """Encode English algorithm metadata for the frozen v21 wire payload."""
+    return [{WIRE_ALGORITHM_KEYS[key]: item[key] for key in WIRE_ALGORITHM_KEYS if key in item}
+            for item in (info or [])]
 
 
 # ---------------------------------------------------------------------------
@@ -744,5 +757,5 @@ __all__ = [
     "mujoco", "messages", "viewer_protocol", "ControlPlugin", "step_handler",
     "Priority", "FixedStep", "RealtimeFixedStep", "SafeRegistry", "get_registry",
     "check_version", "print_plugin_list", "notify_model_loaded",
-    "collect_algorithm_info", "slider_target", "print_plugin_status",
+    "collect_algorithm_info", "algorithm_info_wire", "slider_target", "print_plugin_status",
 ]

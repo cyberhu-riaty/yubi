@@ -60,12 +60,12 @@ def model_fingerprint(model, model_path: str = "") -> dict:
         ③ 尺寸信息（nq/nu/nbody，一眼看出是不是同一个模型）
     """
     fingerprint = {
-        "文件": os.path.basename(model_path) if model_path else "",
+        "file": os.path.basename(model_path) if model_path else "",
         "nq": int(model.nq), "nv": int(model.nv), "nu": int(model.nu),
         "nbody": int(model.nbody), "ngeom": int(model.ngeom),
     }
     if model_path and os.path.exists(model_path):
-        fingerprint["文件sha256"] = hashlib.sha256(open(model_path, "rb").read()).hexdigest()[:16]
+        fingerprint["file_sha256"] = hashlib.sha256(open(model_path, "rb").read()).hexdigest()[:16]
     h = hashlib.sha256()
     for array_name in ("body_mass", "body_inertia", "body_ipos", "dof_armature",
                    "geom_size", "geom_pos", "jnt_range", "actuator_ctrlrange"):
@@ -76,35 +76,37 @@ def model_fingerprint(model, model_path: str = "") -> dict:
             h.update(np.ascontiguousarray(np.asarray(array, dtype=np.float64)).tobytes())
         except Exception:                                        # noqa: BLE001
             continue
-    fingerprint["数值哈希"] = h.hexdigest()[:16]
+    fingerprint["numeric_hash"] = h.hexdigest()[:16]
     return fingerprint
 
 
 def _normalize_algorithm_info(raw) -> list[dict]:
     """把外壳给的算法信息统一成"可直接 JSON 化"的形状。
 
-    外壳给的是 `插件系统.收集算法信息()` 的产物（字典列表，含参数）；
+    外壳给的是 `plugin_system.collect_algorithm_info()` 的产物（英文字段，含参数）；
     老代码/别的调用方可能给插件**实例**列表 —— 那就退回"名称 + 版本"。
     两条路都通向同一个元信息字段，所以录制文件的格式不随调用方变化。
+    旧调用方仍可能给中文键；读取时兼容，写出的元信息统一用英文。
     """
     result: list[dict] = []
     for item in (raw or []):
         if isinstance(item, dict):
+            parameters = item.get("parameters", item.get("参数"))
             result.append({
-                "名称": str(item.get("名称", "?")),
-                "版本": str(item.get("版本", "-")),
-                "英文名": str(item.get("英文名", "") or ""),
-                "参数": {str(k): v for k, v in (item.get("参数") or {}).items()
-                         if isinstance(v, (int, float))},
+                "name": str(item.get("name", item.get("名称", "?"))),
+                "version": str(item.get("version", item.get("版本", "-"))),
+                "english_name": str(item.get("english_name", item.get("英文名", "")) or ""),
+                "parameters": {str(k): v for k, v in (parameters or {}).items()
+                               if isinstance(v, (int, float))},
             })
         else:
             name = getattr(item, "name", None)
             if name:
                 result.append({
-                    "名称": str(name),
-                    "版本": str(getattr(item, "version", "-")),
-                    "英文名": str(getattr(item, "english_name", "") or ""),
-                    "参数": {},
+                    "name": str(name),
+                    "version": str(getattr(item, "version", "-")),
+                    "english_name": str(getattr(item, "english_name", "") or ""),
+                    "parameters": {},
                 })
     return result
 
@@ -266,25 +268,27 @@ class DataRecorderPlugin:
         if not self.latest_file:
             return ""
         metadata = {
-            "录制文件": os.path.basename(self.latest_file),
-            "录制时间": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "备注": self.note,
-            "频率_Hz": self.frequency,
-            "采样行数": self.row_count,
-            "软件版本": {
+            "schema_version": 2,
+            "recording_file": os.path.basename(self.latest_file),
+            "recording_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "notes": self.note,
+            "frequency_hz": self.frequency,
+            "sample_rows": self.row_count,
+            "software_versions": {
                 "mujoco": getattr(mujoco, "__version__", "?"),
                 "python": sys.version.split()[0],
             },
-            "项目": str(self.project_name or "（未命名项目）"),
-            "模型": model_fingerprint(model, model_path),
-            "算法清单": _normalize_algorithm_info(algorithm_info if algorithm_info is not None else self.algorithm_info),
+            "project": str(self.project_name or "（未命名项目）"),
+            "model": model_fingerprint(model, model_path),
+            "algorithms": _normalize_algorithm_info(
+                algorithm_info if algorithm_info is not None else self.algorithm_info),
         }
         path = os.path.splitext(self.latest_file)[0] + ".meta.json"
         with open(path, "w", encoding="utf-8") as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
         self.latest_metadata = path
         print(f'   元信息 → {os.path.basename(path)}'
-              f"（项目 {metadata['项目']}、算法 {len(metadata['算法清单'])} 个）", flush=True)
+              f"（项目 {metadata['project']}、算法 {len(metadata['algorithms'])} 个）", flush=True)
         return path
 
     def _directory(self) -> str:

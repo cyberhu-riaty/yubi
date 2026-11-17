@@ -202,24 +202,24 @@ def generate_torque_variant(model_id: str, directory: str, info: dict, torque_li
         if transmission_type == mujoco.mjtTrn.mjTRN_JOINT:
             joint_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, target_id)
             limit = [float(x) for x in model.actuator_forcerange[i]]
-            actuators.append({"名称": actuator_name, "关节": joint_name, "上限": limit, "是关节": True})
+            actuators.append({"name": actuator_name, "joint": joint_name, "limit": limit, "is_joint": True})
         else:
-            actuators.append({"名称": actuator_name, "关节": None, "上限": None, "是关节": False})
+            actuators.append({"name": actuator_name, "joint": None, "limit": None, "is_joint": False})
 
-    joint_actuators = [e for e in actuators if e["是关节"]]
-    discarded_actuators = [e["名称"] for e in actuators if not e["是关节"]]
+    joint_actuators = [e for e in actuators if e["is_joint"]]
+    discarded_actuators = [e["name"] for e in actuators if not e["is_joint"]]
 
     # ---- 决定每个关节执行器的扭矩上限 ----
     torque_limits = []
     for e in joint_actuators:
-        lo, hi = e["上限"]
+        lo, hi = e["limit"]
         if abs(lo) < 1e-9 and abs(hi) < 1e-9:          # 模型没给 → 用补充表 / 命令行
             if torque_limit:
                 value = float(torque_limit[len(torque_limits)])
                 lo, hi = -abs(value), abs(value)
             else:
                 raise SystemExit(
-                    f"✗ {model_id} 的执行器「{e['名称']}」没有 forcerange（扭矩无限），"
+                    f"✗ {model_id} 的执行器「{e['name']}」没有 forcerange（扭矩无限），"
                     f"无法自动生成扭矩变体。\n"
                     f"  请在 工具/import_model.py 的 扭矩上限补充表 里为 {model_id} 补一组关节扭矩上限，"
                     f"或用 --扭矩上限 320,320,176,176,110,40,40 指定。")
@@ -228,12 +228,12 @@ def generate_torque_variant(model_id: str, directory: str, info: dict, torque_li
     # ---- 找出"电枢惯量为 0 且被我们驱动"的关节，准备补上默认值 ----
     armature_joints = []
     for e in joint_actuators:
-        joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, e["关节"])
+        joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, e["joint"])
         if joint_id < 0:
             continue
         dof_index = int(model.jnt_dofadr[joint_id])
         if dof_index >= 0 and float(model.dof_armature[dof_index]) < 1e-9:
-            armature_joints.append(e["关节"])
+            armature_joints.append(e["joint"])
 
     # ---- XML 手术：换掉 <actuator>，修好 <keyframe> ----
     #   insert_comments=True 保留原文件的注释（menagerie 的 XML 注释很有价值）
@@ -249,8 +249,8 @@ def generate_torque_variant(model_id: str, directory: str, info: dict, torque_li
 
     for e, limit in zip(joint_actuators, torque_limits):
         motor = ET.SubElement(actuator_node, "motor")
-        motor.set("name", str(e["名称"]))
-        motor.set("joint", str(e["关节"]))
+        motor.set("name", str(e["name"]))
+        motor.set("joint", str(e["joint"]))
         motor.set("gear", "1")
         # ctrlrange = 扭矩上限：MuJoCo 会把 ctrl 夹到这个范围内，等价于力矩限幅
         motor.set("ctrlrange", f"{-limit:g} {limit:g}")

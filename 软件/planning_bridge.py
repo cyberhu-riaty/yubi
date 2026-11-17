@@ -161,24 +161,27 @@ def _save_trajectory(report, package_root: str, project_name: str = "") -> str:
                header=",".join(columns), comments="", fmt="%.9g")
 
     metadata = {
-        "生成时间": _t.strftime("%Y-%m-%d %H:%M:%S"),
-        "来源": "驭臂 · 轨迹规划",
-        "采样": {"点数": int(t_.size), "总时长": float(report.duration_s), "网格数": int(report.grid_size)},
-        "路径": {"弧长": float(report.path_length), "航点数": int(report.waypoint_count)},
-        "校验": {
-            "最大关节速度": float(report.max_joint_velocity),
-            "最大关节加速度": float(report.max_joint_acceleration),
-            "最大关节加加速度": float(report.max_joint_jerk),
-            "速度余量": float(report.velocity_margin),
-            "加速度余量": float(report.acceleration_margin),
-            "加加速度余量": float(report.jerk_margin),
-            "终端速度": float(report.terminal_velocity),
-            "平滑偏差": float(report.smoothing_deviation),
-            "瓶颈": {"类型": str(report.bottleneck_type), "关节": int(report.bottleneck_joint),
-                     "位置s": float(report.bottleneck_position)},
+        "schema_version": 2,
+        "generated_at": _t.strftime("%Y-%m-%d %H:%M:%S"),
+        "source": "驭臂 · 轨迹规划",
+        "sampling": {"points": int(t_.size), "duration_s": float(report.duration_s),
+                     "grid_size": int(report.grid_size)},
+        "path": {"length": float(report.path_length), "waypoints": int(report.waypoint_count)},
+        "validation": {
+            "max_joint_velocity": float(report.max_joint_velocity),
+            "max_joint_acceleration": float(report.max_joint_acceleration),
+            "max_joint_jerk": float(report.max_joint_jerk),
+            "velocity_margin": float(report.velocity_margin),
+            "acceleration_margin": float(report.acceleration_margin),
+            "jerk_margin": float(report.jerk_margin),
+            "terminal_velocity": float(report.terminal_velocity),
+            "smoothing_deviation": float(report.smoothing_deviation),
+            "bottleneck": {"type": str(report.bottleneck_type),
+                           "joint": int(report.bottleneck_joint),
+                           "position_s": float(report.bottleneck_position)},
         },
-        "说明": ("加加速度本版只校验不整形：峰值出现在前后向扫描的切换点，"
-                 "要做 S 曲线整形才能真限住。"),
+        "notes": ("加加速度本版只校验不整形：峰值出现在前后向扫描的切换点，"
+                  "要做 S 曲线整形才能真限住。"),
     }
     with open(os.path.join(directory, "轨迹.meta.json"), "w", encoding="utf-8") as f:
         json.dump(metadata, f, ensure_ascii=False, indent=2)

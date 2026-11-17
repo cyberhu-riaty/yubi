@@ -164,3 +164,16 @@ Windows 的类、方法、导入及反射名称已同步改名并通过静态检
 - 验证：51 项 Python 单元测试、39 项契约检查、74 项项目检查、4 项运行内核检查、13 项实验注册检查通过；风格表自检 474 个颜色 + 168 个样式值通过；生成物 `--check` 一致；前端类型检查与生产构建通过。
 - 命名扫描：5,547 → 5,110；`json_key` 从 367 降到 **0**；剩余 5,073 处字符串键、27 个文件名、10 个目录名。基线待本批收尾时重建。
 - 说明：本次只把机器键改成英文；模型/风格/参数的显示值（中文名、说明）没有翻译。Windows 宿主仍未验证。
+
+
+## 2026-11-17：持久化元信息、内部元数据与环境变量（14:10 起）
+
+- 录制元信息改为版本 2 英文键（`recording_file / recording_time / frequency_hz / sample_rows / software_versions / project / model / algorithms`；模型指纹 `file / file_sha256 / numeric_hash`）。回放读取的是 CSV 控制量，不依赖元信息键；旧录制文件仍可回放。新元信息由实际无界面实验生成并核对。
+- 插件元信息内部结构改为英文（`name / version / english_name / description / author / plugin / file / class`）；`collect_algorithm_info()` 输出 `name / version / english_name / takes_control / parameters`。发布 `project.state.algorithms` 时经 `algorithm_info_wire()` 编码回 v21 中文键，前端适配层保持原行为。
+- 参数辨识结果、告警、部署清单等仍由 `legacy_wire` 声明保留 v21 中文键；新增说明而不是直接改线上字段。
+- 新增 `软件/env_config.py`：机器配置使用 `YUBI_MODEL / YUBI_WEB_PORT / YUBI_CURRENT_MODEL / YUBI_CURRENT_PROJECT / YUBI_DIAGNOSTIC / YUBI_DISABLE_WEB / YUBI_GFX / YUBI_LANG / YUBI_PACKAGE_PATH`；读取兼容旧中文名，写入只用新名。桌面/浏览器宿主、原生宿主、实验入口、自检脚本和 macOS 启动器模板同步更新。
+- Web 桥健康状态与运行错误字典内部键改英文；`/api/status` 的返回键随之变化，`web_app.is_running` 已同步。该接口属于本机诊断，不是 v21 仿真消息。
+- 规划离线元信息 `轨迹.meta.json` 改英文键（`generated_at / sampling / validation / bottleneck ...`）；URDF 转换器的覆盖参数段改 `joints / motors`，内部对账键改英文，读取兼容旧的 `关节 / 电机`。
+- 验证：55 项 Python 单元测试（新增环境变量兼容测试）、39 项契约检查、74 项项目检查、4 项运行内核检查、13 项实验注册检查、官方层自检 26/26、命令回执检查通过；无界面实验重新生成 v2 录制元信息并成功导出。
+- 命名扫描：5,110 → 4,956 处；剩余字符串键中约 3,100 处是明确的兼容别名表（`软件/设备`、各 `*桥` 转发模块）、约 830 处是界面本地化资源，约 450 处是 v21 线上形态/生成物/测试固定件；其余为原生宿主诊断键、参数/指标显示标签和测试样例。`json_key` 仍为 0，文件名 27、目录名 10 未动。
+- 原生宿主（`native_host.py`、`platform_adapters/windows*.py`）的视口统计字典键与 `desktop_app` 的 `viewport_slot` 键仍是中文。它们只在宿主进程内传递，但涉及 macOS/Windows 两端；本批未改，留给 Windows 真机批次复核。Windows 宿主仍未在 Windows 环境验证。

@@ -72,6 +72,7 @@ from __future__ import annotations
 
 import math
 import os
+import env_config
 import threading
 import time
 from typing import Any
@@ -185,7 +186,7 @@ def get_statistics() -> dict:
         output["3D就绪"] = False
     return output
 
-_diagnostic_path = os.environ.get("驭臂_宿主诊断", "")
+_diagnostic_path = env_config.read("YUBI_DIAGNOSTIC")
 _diagnostic_sequence = [0]
 
 
@@ -1587,7 +1588,7 @@ class HostApp(NSObject):
         self.splitter_dragging = False
         self.splitter_interaction_time = 0.0
         self._splitter_camera = None
-        self.current_model_path = os.environ.get("驭臂_当前模型", "")
+        self.current_model_path = env_config.read("YUBI_CURRENT_MODEL")
         self.pending_model_path = None
         self.pending_model_time = 0.0
         self.switch_label = None
@@ -2017,7 +2018,7 @@ class HostApp(NSObject):
             self.viewport.resize_canvas_for_viewport()
             content.addSubview_(self.viewport)
             viewport_slot["视口"] = self.viewport
-            model_path = os.environ.get("驭臂_当前模型", "")
+            model_path = env_config.read("YUBI_CURRENT_MODEL")
             self.current_model_path = model_path
             if model_path and os.path.exists(model_path):
                 self.viewport.prepare_viewport(model_path)

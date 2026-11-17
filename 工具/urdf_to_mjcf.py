@@ -26,7 +26,7 @@ urdf_to_mjcf.py —— 把 URDF 脚本化转成 MJCF，并把「URDF 表达不�
   {
     "joints": { "joint1": {"armature": 0.0015, "damping": 0.05, "frictionloss": 0.02} },
     "motors": { "joint1": {"gear": 9.0, "Kt": 0.945, "Ke": 0.945, "R": 0.85,
-                          "电压": 24.0, "堵转扭矩": 20.0, "空载转速rpm": 200.0} }
+                          "voltage": 24.0, "stall_torque": 20.0, "no_load_speed_rpm": 200.0} }
   }
 
 ⚠️ 已知限制（在 mujoco 3.13.0 / macOS / arm64 上实测）：
@@ -103,10 +103,10 @@ def read_urdf_summary(path: pathlib.Path) -> dict:
         if inert is not None and inert.find("mass") is not None:
             mass = float(inert.find("mass").get("value"))
         links[name] = {
-            "质量": mass,
-            "有惯性": inert is not None,
-            "有visual": link.find("visual") is not None,
-            "有collision": link.find("collision") is not None,
+            "mass": mass,
+            "has_inertial": inert is not None,
+            "has_visual": link.find("visual") is not None,
+            "has_collision": link.find("collision") is not None,
         }
     joints = {}
     for j in root.findall("joint"):
@@ -114,26 +114,26 @@ def read_urdf_summary(path: pathlib.Path) -> dict:
         lim = j.find("limit")
         dyn = j.find("dynamics")
         joints[j.get("name")] = {
-            "类型": jt,
-            "父": (j.find("parent").get("link") if j.find("parent") is not None else None),
-            "子": (j.find("child").get("link") if j.find("child") is not None else None),
-            "限位": (float(lim.get("lower")), float(lim.get("upper"))) if lim is not None and lim.get("lower") else None,
-            "力矩上限": float(lim.get("effort")) if lim is not None and lim.get("effort") else None,
-            "阻尼": float(dyn.get("damping")) if dyn is not None and dyn.get("damping") else None,
-            "干摩擦": float(dyn.get("friction")) if dyn is not None and dyn.get("friction") else None,
+            "type": jt,
+            "parent": (j.find("parent").get("link") if j.find("parent") is not None else None),
+            "child": (j.find("child").get("link") if j.find("child") is not None else None),
+            "limits": (float(lim.get("lower")), float(lim.get("upper"))) if lim is not None and lim.get("lower") else None,
+            "effort_limit": float(lim.get("effort")) if lim is not None and lim.get("effort") else None,
+            "damping": float(dyn.get("damping")) if dyn is not None and dyn.get("damping") else None,
+            "friction": float(dyn.get("friction")) if dyn is not None and dyn.get("friction") else None,
         }
     # URDF 有、MJCF 没有对应物的元素
     extras = {
         "transmission": len(root.findall("transmission")),
         "ros2_control": len(root.findall("ros2_control")),
         "gazebo": len(root.findall("gazebo")),
-        "mimic关节": sum(1 for j in root.findall("joint") if j.find("mimic") is not None),
+        "mimic_joints": sum(1 for j in root.findall("joint") if j.find("mimic") is not None),
     }
     return {"links": links, "joints": joints, "extras": extras}
 
 
 def find_root_link(summary: dict) -> str | None:
-    child = {v["子"] for v in summary["joints"].values() if v["子"]}
+    child = {v["child"] for v in summary["joints"].values() if v["child"]}
     for name in summary["links"]:
         if name not in child:
             return name
@@ -152,7 +152,7 @@ def convert(input_path: pathlib.Path, output_path: pathlib.Path, config: dict, p
         sys.stderr.write(f"MuJoCo 读入 URDF 失败：{type(e).__name__}: {e}\n")
         return 3
 
-    omissions = {"根连杆惯性": None, "关节armature": [], "执行器": 0}
+    omissions = {"root_link_inertia": None, "joint_armature": [], "actuators": 0}
     joint_count_before_compile = 0
 
     # ---------- 第 2 段：补 URDF 表达不了、或读入时丢掉的东西 ----------
@@ -166,7 +166,7 @@ def convert(input_path: pathlib.Path, output_path: pathlib.Path, config: dict, p
         cfg = joint_config.get(j.name, {})
         if cfg.get("armature") is not None:
             j.armature = float(cfg["armature"])
-            omissions["关节armature"].append(j.name)
+            omissions["joint_armature"].append(j.name)
         if cfg.get("damping") is not None:
             d = float(cfg["damping"])
             j.damping = [d, d, d]
@@ -184,9 +184,9 @@ def convert(input_path: pathlib.Path, output_path: pathlib.Path, config: dict, p
         Kt = cfg.get("Kt")
         Ke = cfg.get("Ke", Kt)
         R = cfg.get("R")
-        voltage = cfg.get("电压")
-        stall_torque = cfg.get("堵转扭矩")
-        no_load_rpm = cfg.get("空载转速rpm")
+        voltage = cfg.get("voltage", cfg.get("电压"))
+        stall_torque = cfg.get("stall_torque", cfg.get("堵转扭矩"))
+        no_load_rpm = cfg.get("no_load_speed_rpm", cfg.get("空载转速rpm"))
 
         # 先判断参数够不够，不够就不建执行器（避免建了再删）
         if Kt is None and None in (voltage, stall_torque, no_load_rpm):
@@ -250,10 +250,13 @@ def convert(input_path: pathlib.Path, output_path: pathlib.Path, config: dict, p
         for joint_name, cfg in motor_config.items():
             if cfg.get("R"):
                 notes.append(f"<!-- {joint_name}: 相电阻 R = {cfg['R']} Ω（mujoco 3.13.0 无法写入 dcmotor） -->")
-            if cfg.get("堵转扭矩") and cfg.get("空载转速rpm"):
+            stall_torque = cfg.get("stall_torque", cfg.get("堵转扭矩"))
+            no_load_rpm = cfg.get("no_load_speed_rpm", cfg.get("空载转速rpm"))
+            voltage = cfg.get("voltage", cfg.get("电压"))
+            if stall_torque and no_load_rpm:
                 notes.append(
-                    f"<!-- {joint_name}: 铭牌 电压={cfg.get('电压')}V 堵转={cfg['堵转扭矩']}N·m "
-                    f"空载={cfg['空载转速rpm']}rpm -->"
+                    f"<!-- {joint_name}: 铭牌 电压={voltage}V 堵转={stall_torque}N·m "
+                    f"空载={no_load_rpm}rpm -->"
                 )
         txt = txt.replace("<mujoco", "\n".join(notes) + "\n<mujoco", 1)
         output_path.write_text(txt, encoding="utf-8")
@@ -268,7 +271,7 @@ def convert(input_path: pathlib.Path, output_path: pathlib.Path, config: dict, p
         print("\n【URDF 原始内容】")
         print(f"  link 数          : {len(summary['links'])}")
         print(f"  joint 数         : {len(summary['joints'])}")
-        mass_links = [k for k, v in summary["links"].items() if v["质量"] is not None]
+        mass_links = [k for k, v in summary["links"].items() if v["mass"] is not None]
         print(f"  带质量信息的 link: {len(mass_links)} / {len(summary['links'])}  {mass_links}")
         print(f"  URDF 里 MUJOCO 读不懂的元素: {summary['extras']}")
 
@@ -280,7 +283,7 @@ def convert(input_path: pathlib.Path, output_path: pathlib.Path, config: dict, p
         print(f"  dof_armature: {m.dof_armature}")
         print(f"  dof_frictionloss: {m.dof_frictionloss}")
 
-        urdf_total_mass = sum(v["质量"] for v in summary["links"].values() if v["质量"])
+        urdf_total_mass = sum(v["mass"] for v in summary["links"].values() if v["mass"])
         print(f"\n【对账】URDF 总质量 {urdf_total_mass:.6g} kg  vs  MJCF 总质量 {m.body_subtreemass[0]:.6g} kg")
         if abs(urdf_total_mass - m.body_subtreemass[0]) > 1e-9:
             print("  ⚠️ 对不上。常见原因：根连杆的 <inertial> 被 MuJoCo 丢掉了")
@@ -288,8 +291,8 @@ def convert(input_path: pathlib.Path, output_path: pathlib.Path, config: dict, p
             print("     → 解决办法：在 URDF 里给根杆加一个 <link name='world'/> 作父级，")
             print("       或转换后手工把根杆重新包成 body，或直接改 MJCF。")
         print("\n【必须手工补的东西】")
-        if omissions["关节armature"]:
-            print(f"  已按 --参数 补 armature: {omissions['关节armature']}")
+        if omissions["joint_armature"]:
+            print(f"  已按 --参数 补 armature: {omissions['joint_armature']}")
         else:
             print("  · 关节 armature（转子折算惯量）：URDF 没有这个概念，本脚本未补 → 请用 --参数 给")
         print("  · 电气参数 Kt/Ke/R/L：URDF 里没有，只能从厂商 datasheet 或自己辨识填")

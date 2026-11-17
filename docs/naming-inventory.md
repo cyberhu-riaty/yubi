@@ -2,7 +2,7 @@
 
 由 `scripts/audit_naming.py` 从当前工作区生成。
 
-扫描 218 个源码与配置文件；非 ASCII 名称出现位置共 5110 处。次数表示位置数量，不是迁移完成百分比。
+扫描 220 个源码与配置文件；非 ASCII 名称出现位置共 4956 处。次数表示位置数量，不是迁移完成百分比。
 
 中文界面、普通字符串值、注释和文档不计为标识符。字符串键是人工确认项，可能是机器字段，也可能是显示标签；JSON 键列入迁移范围。
 
@@ -14,7 +14,7 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | --- | ---: |
 | `directory_name` | 10 |
 | `file_name` | 27 |
-| `string_key` | 5073 |
+| `string_key` | 4919 |
 
 ## 按文件迁移
 
@@ -33,6 +33,7 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `scripts/check_naming.py` | 0 | 0 | 0 | 2 |
 | `scripts/tests/test_connection.cjs` | 0 | 0 | 0 | 10 |
 | `scripts/tests/test_contract.py` | 0 | 0 | 0 | 21 |
+| `scripts/tests/test_env_config.py` | 0 | 0 | 0 | 3 |
 | `scripts/tests/test_frontend_state.cjs` | 0 | 0 | 0 | 9 |
 | `scripts/tests/test_model_import.py` | 0 | 0 | 0 | 3 |
 | `scripts/tests/test_official_api.py` | 0 | 0 | 0 | 3 |
@@ -42,8 +43,6 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `实验` | 0 | 1 | 0 | 0 |
 | `工具` | 0 | 1 | 0 | 0 |
 | `工具/generate_frontend_assets.py` | 0 | 0 | 0 | 30 |
-| `工具/import_model.py` | 0 | 0 | 0 | 17 |
-| `工具/urdf_to_mjcf.py` | 0 | 0 | 0 | 25 |
 | `工具/模型清单.json` | 0 | 1 | 0 | 0 |
 | `工具/示例_urdf转mjcf` | 0 | 1 | 0 | 0 |
 | `工具/示例_urdf转mjcf/示例_参数.json` | 0 | 1 | 0 | 0 |
@@ -51,18 +50,15 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `工具/验证` | 0 | 1 | 0 | 0 |
 | `工具/验证/command_receipt_selfcheck.py` | 0 | 0 | 0 | 13 |
 | `工具/验证/contract_selfcheck.py` | 0 | 0 | 0 | 11 |
-| `工具/验证/experiment_gui_selfcheck.py` | 0 | 0 | 0 | 1 |
-| `工具/验证/experiment_registry_selfcheck.py` | 0 | 0 | 0 | 1 |
 | `工具/验证/latency_sensitivity.py` | 0 | 0 | 0 | 8 |
 | `工具/验证/observation_selfcheck.py` | 0 | 0 | 0 | 2 |
 | `工具/验证/parameter_transaction_selfcheck.py` | 0 | 0 | 0 | 4 |
 | `工具/验证/project_selfcheck.py` | 0 | 0 | 0 | 2 |
-| `工具/验证/runtime_selfcheck.py` | 0 | 0 | 0 | 1 |
 | `工具/验证/theme_selfcheck.py` | 0 | 0 | 0 | 7 |
 | `算法库` | 0 | 1 | 0 | 0 |
 | `算法库/通用` | 0 | 1 | 0 | 0 |
 | `算法库/通用/controller_template.py` | 0 | 0 | 0 | 1 |
-| `算法库/通用/data_recorder.py` | 0 | 0 | 0 | 26 |
+| `算法库/通用/data_recorder.py` | 0 | 0 | 0 | 4 |
 | `算法库/通用/joint_pd_control.py` | 0 | 0 | 0 | 8 |
 | `算法库/通用/joint_pd_gravity_ff.py` | 0 | 0 | 0 | 3 |
 | `算法库/通用/joint_pd_plain.py` | 0 | 0 | 0 | 2 |
@@ -77,37 +73,32 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `软件` | 0 | 1 | 0 | 0 |
 | `软件/Web桥.py` | 0 | 1 | 0 | 130 |
 | `软件/ascii_text.py` | 0 | 0 | 0 | 48 |
-| `软件/command_bridge.py` | 0 | 0 | 0 | 8 |
+| `软件/command_bridge.py` | 0 | 0 | 0 | 6 |
 | `软件/contract.py` | 0 | 0 | 0 | 31 |
 | `软件/deployment_bridge.py` | 0 | 0 | 0 | 13 |
-| `软件/desktop_app.py` | 0 | 0 | 0 | 8 |
+| `软件/desktop_app.py` | 0 | 0 | 0 | 4 |
 | `软件/devices/connection_bridge.py` | 0 | 0 | 0 | 4 |
 | `软件/devices/safety.py` | 0 | 0 | 0 | 9 |
 | `软件/devices/tracking_loop.py` | 0 | 0 | 0 | 8 |
 | `软件/diagnostics_bridge.py` | 0 | 0 | 0 | 5 |
-| `软件/experiment_cli.py` | 0 | 0 | 0 | 1 |
 | `软件/i18n.py` | 0 | 0 | 0 | 208 |
 | `软件/model_bridge.py` | 0 | 0 | 0 | 1 |
 | `软件/native_host.py` | 0 | 0 | 0 | 28 |
 | `软件/observation_core.py` | 0 | 0 | 0 | 19 |
 | `软件/official_interface_inventory.py` | 0 | 0 | 0 | 1 |
-| `软件/planning_bridge.py` | 0 | 0 | 0 | 23 |
 | `软件/platform_adapters/macos.py` | 0 | 0 | 0 | 1 |
 | `软件/platform_adapters/windows.py` | 0 | 0 | 0 | 11 |
 | `软件/platform_adapters/windows_runtime_info.py` | 0 | 0 | 0 | 1 |
 | `软件/platform_adapters/windows_viewport.py` | 0 | 0 | 0 | 13 |
-| `软件/plugin_assembler.py` | 0 | 0 | 0 | 21 |
 | `软件/plugin_bridge.py` | 0 | 0 | 0 | 21 |
-| `软件/plugin_system.py` | 0 | 0 | 0 | 14 |
+| `软件/plugin_system.py` | 0 | 0 | 0 | 8 |
 | `软件/project_registry.py` | 0 | 0 | 0 | 9 |
 | `软件/project_schema.py` | 0 | 0 | 0 | 15 |
 | `软件/run_experiment.py` | 0 | 0 | 0 | 4 |
-| `软件/runloop_timers.py` | 0 | 0 | 0 | 8 |
-| `软件/runtime_engine.py` | 0 | 0 | 0 | 8 |
+| `软件/runtime_engine.py` | 0 | 0 | 0 | 2 |
 | `软件/simulation_control.py` | 0 | 0 | 0 | 3 |
 | `软件/ui_bridge.py` | 0 | 0 | 0 | 3 |
-| `软件/web_app.py` | 0 | 0 | 0 | 3 |
-| `软件/web_bridge.py` | 0 | 0 | 0 | 43 |
+| `软件/web_bridge.py` | 0 | 0 | 0 | 27 |
 | `软件/参数辨识.py` | 0 | 1 | 0 | 79 |
 | `软件/命令桥.py` | 0 | 1 | 0 | 17 |
 | `软件/契约.py` | 0 | 1 | 0 | 36 |

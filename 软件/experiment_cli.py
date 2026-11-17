@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import env_config
 
 from experiment_registry import Experiment, experiment_registry
 
@@ -22,7 +23,7 @@ def apply_experiment(args) -> Experiment | None:
     experiment = experiment_registry.create(name)
     args.model = str(experiment.model_path)
     args.project = experiment.project
-    os.environ["驭臂_模型"] = str(experiment.model_path)
+    env_config.write("YUBI_MODEL", str(experiment.model_path))
     os.environ["YUBI_CURRENT_EXPERIMENT"] = experiment.key
     return experiment
 
