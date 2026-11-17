@@ -5,7 +5,7 @@ package_macos_app.py —— 生成 macOS 的 .app（双击即启动）
     macOS 的 .app 本质就是一个"有固定目录结构的文件夹"：
         驭臂.app/Contents/Info.plist           ← 名字/版本/版权声明（XML）
         驭臂.app/Contents/MacOS/驭臂            ← **原生 arm64 启动器**（编译出来的小可执行文件）
-        驭臂.app/Contents/Resources/启动.sh      ← 启动逻辑（bash 脚本，真正干活的那个）
+        驭臂.app/Contents/Resources/launch.sh      ← 启动逻辑（bash 脚本，真正干活的那个）
     ★ Contents/MacOS/ 里只放 Mach-O，不放脚本 —— 这样整个 .app 才能被签名，
       也避免系统在判断架构时看到"非 Mach-O 的可执行文件"而产生歧义。
     PyInstaller 会试图把整个 Python 环境和 mujoco 的 16 个 .so 一起打包，
@@ -68,8 +68,8 @@ APP_CONTENTS="$(cd "$RES_DIR/.." && pwd)"       # …/X.app/Contents
 PKG_DIR=""
 
 # ① 应用包内配置（打包时写入，最准）
-if [ -z "$PKG_DIR" ] && [ -f "$RES_DIR/包路径.txt" ]; then
-  CAND="$(head -1 "$RES_DIR/包路径.txt" | tr -d '\\r\\n')"
+if [ -z "$PKG_DIR" ] && [ -f "$RES_DIR/package_path.txt" ]; then
+  CAND="$(head -1 "$RES_DIR/package_path.txt" | tr -d '\\r\\n')"
   [ -n "$CAND" ] && [ -d "$CAND" ] && PKG_DIR="$CAND"
 fi
 # ② 环境变量（方便你自己指定）
@@ -162,7 +162,7 @@ done
 NATIVE_LAUNCHER_SOURCE = r"""// {app_name} 原生 arm64 启动器（由 tools/package_macos_app.py 生成，勿手改）
 //
 // 存在意义：让 macOS 认出 .app 是原生 arm64 应用，不提示安装 Rosetta。
-// 做法：算出自己的绝对路径 → 上一级的 Resources/启动.sh → 转发全部参数。
+// 做法：算出自己的绝对路径 → 上一级的 Resources/launch.sh → 转发全部参数。
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -191,7 +191,7 @@ int main(int argc, char** argv) {
   *slash = '\0';
 
   char script_path[PATH_MAX];
-  if (snprintf(script_path, sizeof(script_path), "%s/../Resources/启动.sh", resolved_path) >= (int)sizeof(script_path)) {
+  if (snprintf(script_path, sizeof(script_path), "%s/../Resources/launch.sh", resolved_path) >= (int)sizeof(script_path)) {
     fprintf(stderr, "{app_name}: 路径过长\n");
     return 1;
   }
@@ -237,7 +237,7 @@ def compile_native_launcher(target_path: str, app_name: str, build_dir: str) -> 
     compiler = shutil.which("cc") or shutil.which("clang")
     if compiler is None:
         return False, "找不到 cc / clang（需要 Xcode 命令行工具：xcode-select --install）"
-    source_file = os.path.join(build_dir, "启动器.c")
+    source_file = os.path.join(build_dir, "launcher.c")
     with open(source_file, "w", encoding="utf-8") as f:
         f.write(NATIVE_LAUNCHER_SOURCE.replace("{app_name}", app_name))
     # -arch arm64：明确只要 arm64 切片，让 macOS 一眼看出是原生应用
@@ -263,14 +263,14 @@ def build_app(package_root: str, app_name: str, entry_path: str, bundle_id: str 
     # 图标：把 .icns 复制进 Resources，并在 Info.plist 里声明 CFBundleIconFile
     icon_name = ""
     if icon and os.path.exists(icon):
-        shutil.copyfile(icon, os.path.join(resources_dir, "图标.icns"))
+        shutil.copyfile(icon, os.path.join(resources_dir, "icon.icns"))
         icon_name = "icon"
     else:
         print("  ℹ 没找到 .icns 图标（可先跑 tools/generate_app_icon.py），本次不设图标")
 
     # ---- ① 先写 bash 启动脚本（启动逻辑）----
     #      放在 Resources/ 而不是 MacOS/：MacOS/ 里只留 Mach-O，整个 .app 才能签名
-    script_path = os.path.join(resources_dir, "启动.sh")
+    script_path = os.path.join(resources_dir, "launch.sh")
     package_dir_name = os.path.basename(os.path.normpath(package_root))
     # ★ 用 replace 而不是 str.format：启动器里有大量 shell 的 ${变量} 和 {{ }}，
     #   用 format 会把它们当占位符（实测报 KeyError: '驭臂_包路径'）。
@@ -309,10 +309,10 @@ def build_app(package_root: str, app_name: str, entry_path: str, bundle_id: str 
         print(f"  ⚠ 原生启动器编译失败，退回脚本启动器：{detail}")
         print("     → 副作用：双击时 macOS 可能提示安装 Rosetta（软件本身其实全是 arm64 原生）")
         print("     → 修好编译环境后重跑本脚本即可解决")
-        executable = "启动"
-        with open(legacy_script, "w", encoding="utf-8", newline="\n") as f:
-            f.write('#!/bin/bash\nexec /bin/bash "$(dirname "$0")/../Resources/启动.sh" "$@"\n')
-        os.chmod(legacy_script, os.stat(legacy_script).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        executable = "launch"
+        with open(os.path.join(app, "Contents", "MacOS", executable), "w", encoding="utf-8", newline="\n") as f:
+            f.write('#!/bin/bash\nexec /bin/bash "$(dirname "$0")/../Resources/launch.sh" "$@"\n')
+        os.chmod(os.path.join(app, "Contents", "MacOS", executable), 0o755)
 
     # ---- ③ Bundle Identifier：显式 > 沿用已有的 > 按名字自动派生 ----
     #     为什么重要：两个 .app 用同一个 id 会互相干扰（实测踩过：
@@ -359,7 +359,7 @@ def build_app(package_root: str, app_name: str, entry_path: str, bundle_id: str 
         plistlib.dump(plist_info, f)
 
     # 把"包根"写进应用包，启动器优先读它 —— 这样 .app 放到哪里都能找到代码
-    with open(os.path.join(resources_dir, "包路径.txt"), "w", encoding="utf-8") as f:
+    with open(os.path.join(resources_dir, "package_path.txt"), "w", encoding="utf-8") as f:
         f.write(package_root + "\n")
 
     # ---- ⑤ 对 .app 做 ad-hoc 签名 ----

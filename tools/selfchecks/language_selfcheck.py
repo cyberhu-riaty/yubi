@@ -16,8 +16,8 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-panel_dir = os.path.join(ROOT, "软件", "面板")
-for p in (os.path.join(ROOT, "软件"), panel_dir):
+panel_dir = os.path.join(ROOT, "runtime", "面板")
+for p in (os.path.join(ROOT, "runtime"), panel_dir):
     if p not in sys.path:
         sys.path.insert(0, p)
 
@@ -180,7 +180,7 @@ def main() -> int:
             files += [os.path.join(panel_dir, f)
                      for f in sorted(os.listdir(panel_dir)) if f.endswith(".py")]
         for options in ("菜单栏.py",):
-            candidates = os.path.join(ROOT, "软件", options)
+            candidates = os.path.join(ROOT, "runtime", options)
             if os.path.exists(candidates):
                 files.append(candidates)
         violations = []

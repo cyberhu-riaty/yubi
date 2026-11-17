@@ -1,7 +1,7 @@
 /**
  * AppearanceView.tsx —— 皮肤与语言。
  *
- * 皮肤不是"另写一套颜色"：列表直接来自 `生成/themes.ts`（← `软件/theme_table.json`），
+ * 皮肤不是"另写一套颜色"：列表直接来自 `生成/themes.ts`（← `runtime/theme_table.json`），
  * 点一下就把 `data-theme` 写到 `<html>` 上并记住（`生成/appearance.ts`）。
  * 所以这里**没有**第二份风格名单 —— 风格表再加一套，这一格自动多一行。
  */

@@ -6,7 +6,7 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parent
-LEGACY_RUNTIME = ROOT / "软件"
+LEGACY_RUNTIME = ROOT / "runtime"
 if str(LEGACY_RUNTIME) not in sys.path:
     sys.path.insert(0, str(LEGACY_RUNTIME))
 

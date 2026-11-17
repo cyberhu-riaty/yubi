@@ -2,7 +2,7 @@
 
 由 `scripts/audit_naming.py` 从当前工作区生成。
 
-扫描 221 个源码与配置文件；非 ASCII 名称出现位置共 4921 处。次数表示位置数量，不是迁移完成百分比。
+扫描 224 个源码与配置文件；非 ASCII 名称出现位置共 4862 处。次数表示位置数量，不是迁移完成百分比。
 
 中文界面、普通字符串值、注释和文档不计为标识符。字符串键是人工确认项，可能是机器字段，也可能是显示标签；JSON 键列入迁移范围。
 
@@ -12,9 +12,7 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 
 | 类别 | 出现位置 |
 | --- | ---: |
-| `directory_name` | 3 |
-| `file_name` | 23 |
-| `string_key` | 4895 |
+| `string_key` | 4862 |
 
 ## 按文件迁移
 
@@ -43,6 +41,46 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `frontend/src/views/DeploymentView.tsx` | 0 | 0 | 0 | 8 |
 | `frontend/src/views/i18n.ts` | 0 | 0 | 0 | 623 |
 | `frontend/tests/fake_backend.py` | 0 | 0 | 0 | 138 |
+| `runtime/ascii_text.py` | 0 | 0 | 0 | 48 |
+| `runtime/command_bridge.py` | 0 | 0 | 0 | 6 |
+| `runtime/contract.py` | 0 | 0 | 0 | 31 |
+| `runtime/deployment_bridge.py` | 0 | 0 | 0 | 13 |
+| `runtime/devices/connection_bridge.py` | 0 | 0 | 0 | 4 |
+| `runtime/diagnostics_bridge.py` | 0 | 0 | 0 | 5 |
+| `runtime/i18n.py` | 0 | 0 | 0 | 207 |
+| `runtime/legacy/ascii_text.py` | 0 | 0 | 0 | 46 |
+| `runtime/legacy/command_bridge.py` | 0 | 0 | 0 | 17 |
+| `runtime/legacy/console_support.py` | 0 | 0 | 0 | 1 |
+| `runtime/legacy/contract.py` | 0 | 0 | 0 | 36 |
+| `runtime/legacy/deployment_bridge.py` | 0 | 0 | 0 | 88 |
+| `runtime/legacy/devices/connection_bridge.py` | 0 | 0 | 0 | 388 |
+| `runtime/legacy/devices/contract.py` | 0 | 0 | 0 | 388 |
+| `runtime/legacy/devices/safety.py` | 0 | 0 | 0 | 388 |
+| `runtime/legacy/devices/simulated_backend.py` | 0 | 0 | 0 | 388 |
+| `runtime/legacy/devices/tracking_loop.py` | 0 | 0 | 0 | 388 |
+| `runtime/legacy/diagnostics_bridge.py` | 0 | 0 | 0 | 84 |
+| `runtime/legacy/highlight_bridge.py` | 0 | 0 | 0 | 64 |
+| `runtime/legacy/i18n.py` | 0 | 0 | 0 | 88 |
+| `runtime/legacy/identification_bridge.py` | 0 | 0 | 0 | 48 |
+| `runtime/legacy/observation_core.py` | 0 | 0 | 0 | 226 |
+| `runtime/legacy/official_api.py` | 0 | 0 | 0 | 10 |
+| `runtime/legacy/parameter_identification.py` | 0 | 0 | 0 | 79 |
+| `runtime/legacy/plugin_bridge.py` | 0 | 0 | 0 | 74 |
+| `runtime/legacy/recording_bridge.py` | 0 | 0 | 0 | 8 |
+| `runtime/legacy/skeleton/official_interface_inventory.py` | 0 | 0 | 0 | 96 |
+| `runtime/legacy/ui_bridge.py` | 0 | 0 | 0 | 4 |
+| `runtime/legacy/web_bridge.py` | 0 | 0 | 0 | 130 |
+| `runtime/legacy_imports.py` | 0 | 0 | 0 | 25 |
+| `runtime/observation_core.py` | 0 | 0 | 0 | 19 |
+| `runtime/official_interface_inventory.py` | 0 | 0 | 0 | 1 |
+| `runtime/plugin_bridge.py` | 0 | 0 | 0 | 21 |
+| `runtime/project_registry.py` | 0 | 0 | 0 | 9 |
+| `runtime/project_schema.py` | 0 | 0 | 0 | 15 |
+| `runtime/run_experiment.py` | 0 | 0 | 0 | 4 |
+| `runtime/runtime_engine.py` | 0 | 0 | 0 | 2 |
+| `runtime/simulation_control.py` | 0 | 0 | 0 | 3 |
+| `runtime/ui_bridge.py` | 0 | 0 | 0 | 3 |
+| `runtime/web_bridge.py` | 0 | 0 | 0 | 27 |
 | `scripts/check_naming.py` | 0 | 0 | 0 | 2 |
 | `scripts/tests/test_connection.cjs` | 0 | 0 | 0 | 10 |
 | `scripts/tests/test_contract.py` | 0 | 0 | 0 | 21 |
@@ -61,55 +99,6 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `tools/selfchecks/parameter_transaction_selfcheck.py` | 0 | 0 | 0 | 4 |
 | `tools/selfchecks/project_selfcheck.py` | 0 | 0 | 0 | 2 |
 | `tools/selfchecks/theme_selfcheck.py` | 0 | 0 | 0 | 7 |
-| `软件` | 0 | 1 | 0 | 0 |
-| `软件/Web桥.py` | 0 | 1 | 0 | 130 |
-| `软件/ascii_text.py` | 0 | 0 | 0 | 48 |
-| `软件/command_bridge.py` | 0 | 0 | 0 | 6 |
-| `软件/contract.py` | 0 | 0 | 0 | 31 |
-| `软件/deployment_bridge.py` | 0 | 0 | 0 | 13 |
-| `软件/desktop_app.py` | 0 | 0 | 0 | 4 |
-| `软件/devices/connection_bridge.py` | 0 | 0 | 0 | 4 |
-| `软件/diagnostics_bridge.py` | 0 | 0 | 0 | 5 |
-| `软件/i18n.py` | 0 | 0 | 0 | 207 |
-| `软件/native_host.py` | 0 | 0 | 0 | 28 |
-| `软件/observation_core.py` | 0 | 0 | 0 | 19 |
-| `软件/official_interface_inventory.py` | 0 | 0 | 0 | 1 |
-| `软件/platform_adapters/macos.py` | 0 | 0 | 0 | 1 |
-| `软件/platform_adapters/windows.py` | 0 | 0 | 0 | 11 |
-| `软件/platform_adapters/windows_runtime_info.py` | 0 | 0 | 0 | 1 |
-| `软件/platform_adapters/windows_viewport.py` | 0 | 0 | 0 | 13 |
-| `软件/plugin_bridge.py` | 0 | 0 | 0 | 21 |
-| `软件/project_registry.py` | 0 | 0 | 0 | 9 |
-| `软件/project_schema.py` | 0 | 0 | 0 | 15 |
-| `软件/run_experiment.py` | 0 | 0 | 0 | 4 |
-| `软件/runtime_engine.py` | 0 | 0 | 0 | 2 |
-| `软件/simulation_control.py` | 0 | 0 | 0 | 3 |
-| `软件/ui_bridge.py` | 0 | 0 | 0 | 3 |
-| `软件/web_bridge.py` | 0 | 0 | 0 | 27 |
-| `软件/参数辨识.py` | 0 | 1 | 0 | 79 |
-| `软件/命令桥.py` | 0 | 1 | 0 | 17 |
-| `软件/契约.py` | 0 | 1 | 0 | 36 |
-| `软件/官方层.py` | 0 | 1 | 0 | 10 |
-| `软件/录制桥.py` | 0 | 1 | 0 | 8 |
-| `软件/控制台.py` | 0 | 1 | 0 | 1 |
-| `软件/插件桥.py` | 0 | 1 | 0 | 74 |
-| `软件/文案.py` | 0 | 1 | 0 | 88 |
-| `软件/界面文字.py` | 0 | 1 | 0 | 46 |
-| `软件/界面桥.py` | 0 | 1 | 0 | 4 |
-| `软件/观测核心.py` | 0 | 1 | 0 | 226 |
-| `软件/设备` | 0 | 1 | 0 | 0 |
-| `软件/设备/契约.py` | 0 | 1 | 0 | 388 |
-| `软件/设备/安全层.py` | 0 | 1 | 0 | 388 |
-| `软件/设备/模拟后端.py` | 0 | 1 | 0 | 388 |
-| `软件/设备/跟踪回路.py` | 0 | 1 | 0 | 388 |
-| `软件/设备/连接桥.py` | 0 | 1 | 0 | 388 |
-| `软件/诊断桥.py` | 0 | 1 | 0 | 84 |
-| `软件/辨识桥.py` | 0 | 1 | 0 | 48 |
-| `软件/部署桥.py` | 0 | 1 | 0 | 88 |
-| `软件/验证参数辨识.py` | 0 | 1 | 0 | 0 |
-| `软件/骨架` | 0 | 1 | 0 | 0 |
-| `软件/骨架/官方接口清单.py` | 0 | 1 | 0 | 96 |
-| `软件/高亮桥.py` | 0 | 1 | 0 | 64 |
 
 ## 下一步
 

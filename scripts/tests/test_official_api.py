@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNTIME = ROOT / "软件"
+RUNTIME = ROOT / "runtime"
 
 
 def load_source(path: Path, name: str):
@@ -113,7 +113,7 @@ class OfficialApiTests(unittest.TestCase):
         adapter, _, imported, importer = self.load_adapter()
         before = list(imported)
         with patch.dict("sys.modules", {"official_api": adapter}):
-            legacy = load_source(RUNTIME / "官方层.py", "legacy_adapter_under_test")
+            legacy = load_source(RUNTIME / "legacy/official_api.py", "legacy_adapter_under_test")
             with patch.dict("sys.modules", {"官方层": legacy}):
                 namespace = {}
                 exec("from 官方层 import messages, 自检, MUJOCO版本要求", namespace)

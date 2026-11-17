@@ -9,7 +9,7 @@ import unittest
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 ROOT = SCRIPTS.parent
-SOFTWARE = ROOT / "软件"
+SOFTWARE = ROOT / "runtime"
 if str(SOFTWARE) not in sys.path:
     sys.path.insert(0, str(SOFTWARE))
 

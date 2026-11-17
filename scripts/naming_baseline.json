@@ -3,7 +3,7 @@
   "scope": {
     "version": 1,
     "source_roots": [
-      "软件",
+      "runtime",
       "controllers",
       "tools",
       "frontend",
@@ -16,7 +16,8 @@
       "项目",
       "实验",
       "工具",
-      "前端"
+      "前端",
+      "软件"
     ],
     "exclude_directories": [
       "node_modules",
@@ -27,7 +28,7 @@
       "dist"
     ],
     "exclude_paths": [
-      "软件/web"
+      "runtime/web"
     ],
     "source_extensions": [
       ".py",
@@ -55,162 +56,5 @@
       "string_keys": "Non-ASCII literal object/dictionary keys need human classification: some are machine fields, others are user-visible labels. They are reported separately and do not fail the incremental gate."
     }
   },
-  "entries": [
-    {
-      "path": "软件",
-      "category": "directory_name",
-      "name": "软件",
-      "count": 1
-    },
-    {
-      "path": "软件/Web桥.py",
-      "category": "file_name",
-      "name": "Web桥.py",
-      "count": 1
-    },
-    {
-      "path": "软件/参数辨识.py",
-      "category": "file_name",
-      "name": "参数辨识.py",
-      "count": 1
-    },
-    {
-      "path": "软件/命令桥.py",
-      "category": "file_name",
-      "name": "命令桥.py",
-      "count": 1
-    },
-    {
-      "path": "软件/契约.py",
-      "category": "file_name",
-      "name": "契约.py",
-      "count": 1
-    },
-    {
-      "path": "软件/官方层.py",
-      "category": "file_name",
-      "name": "官方层.py",
-      "count": 1
-    },
-    {
-      "path": "软件/录制桥.py",
-      "category": "file_name",
-      "name": "录制桥.py",
-      "count": 1
-    },
-    {
-      "path": "软件/控制台.py",
-      "category": "file_name",
-      "name": "控制台.py",
-      "count": 1
-    },
-    {
-      "path": "软件/插件桥.py",
-      "category": "file_name",
-      "name": "插件桥.py",
-      "count": 1
-    },
-    {
-      "path": "软件/文案.py",
-      "category": "file_name",
-      "name": "文案.py",
-      "count": 1
-    },
-    {
-      "path": "软件/界面文字.py",
-      "category": "file_name",
-      "name": "界面文字.py",
-      "count": 1
-    },
-    {
-      "path": "软件/界面桥.py",
-      "category": "file_name",
-      "name": "界面桥.py",
-      "count": 1
-    },
-    {
-      "path": "软件/观测核心.py",
-      "category": "file_name",
-      "name": "观测核心.py",
-      "count": 1
-    },
-    {
-      "path": "软件/设备",
-      "category": "directory_name",
-      "name": "设备",
-      "count": 1
-    },
-    {
-      "path": "软件/设备/契约.py",
-      "category": "file_name",
-      "name": "契约.py",
-      "count": 1
-    },
-    {
-      "path": "软件/设备/安全层.py",
-      "category": "file_name",
-      "name": "安全层.py",
-      "count": 1
-    },
-    {
-      "path": "软件/设备/模拟后端.py",
-      "category": "file_name",
-      "name": "模拟后端.py",
-      "count": 1
-    },
-    {
-      "path": "软件/设备/跟踪回路.py",
-      "category": "file_name",
-      "name": "跟踪回路.py",
-      "count": 1
-    },
-    {
-      "path": "软件/设备/连接桥.py",
-      "category": "file_name",
-      "name": "连接桥.py",
-      "count": 1
-    },
-    {
-      "path": "软件/诊断桥.py",
-      "category": "file_name",
-      "name": "诊断桥.py",
-      "count": 1
-    },
-    {
-      "path": "软件/辨识桥.py",
-      "category": "file_name",
-      "name": "辨识桥.py",
-      "count": 1
-    },
-    {
-      "path": "软件/部署桥.py",
-      "category": "file_name",
-      "name": "部署桥.py",
-      "count": 1
-    },
-    {
-      "path": "软件/验证参数辨识.py",
-      "category": "file_name",
-      "name": "验证参数辨识.py",
-      "count": 1
-    },
-    {
-      "path": "软件/骨架",
-      "category": "directory_name",
-      "name": "骨架",
-      "count": 1
-    },
-    {
-      "path": "软件/骨架/官方接口清单.py",
-      "category": "file_name",
-      "name": "官方接口清单.py",
-      "count": 1
-    },
-    {
-      "path": "软件/高亮桥.py",
-      "category": "file_name",
-      "name": "高亮桥.py",
-      "count": 1
-    }
-  ]
+  "entries": []
 }

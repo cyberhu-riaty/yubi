@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 import unittest
 
-SOFTWARE = Path(__file__).resolve().parents[2] / "软件"
+SOFTWARE = Path(__file__).resolve().parents[2] / "runtime"
 if str(SOFTWARE) not in sys.path:
     sys.path.insert(0, str(SOFTWARE))
 

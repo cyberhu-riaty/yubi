@@ -54,7 +54,7 @@ class JointPDController(ControlPlugin):
 
     # ------------------------------------------------------------------
     # 兼容性预检：外壳换模型时会先问一句"这个模型你能跑吗"
-    #   （契约见 软件/plugin_system.py 的 `ControlPlugin`）
+    #   （契约见 runtime/plugin_system.py 的 `ControlPlugin`）
     # ------------------------------------------------------------------
     def check_model_compatibility(self, model) -> str:
         """要求"每个关节都有自己的力矩执行器"，也就是 nu == nq（扭矩模型）。
@@ -148,7 +148,7 @@ class JointPDController(ControlPlugin):
     def metrics(self) -> dict:
         if self.target is None:
             return {}
-        # ★ 「饱和关节数」是给**病态检出**用的（见 软件/观测核心.py）：
+        # ★ 「饱和关节数」是给**病态检出**用的（见 runtime/观测核心.py）：
         #   力矩顶在执行器上限时，再加增益不会有任何改善 —— 这是最容易被
         #   误读成"还不够用力"的状态。数出来比看曲线可靠。
         #   口径：|ctrl| ≥ 98% 的上限算饱和；模型没声明 ctrlrange 就报 0

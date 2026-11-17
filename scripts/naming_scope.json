@@ -1,17 +1,53 @@
 {
   "version": 1,
   "source_roots": [
-    "软件", "controllers", "tools", "frontend", "projects", "experiments", "scripts",
-    "src", "tests", "算法库", "项目", "实验", "工具", "前端"
+    "runtime",
+    "controllers",
+    "tools",
+    "frontend",
+    "projects",
+    "experiments",
+    "scripts",
+    "src",
+    "tests",
+    "算法库",
+    "项目",
+    "实验",
+    "工具",
+    "前端",
+    "软件"
   ],
   "exclude_directories": [
-    "node_modules", ".venv", "__pycache__", ".git", ".pnpm-store", "dist"
+    "node_modules",
+    ".venv",
+    "__pycache__",
+    ".git",
+    ".pnpm-store",
+    "dist"
   ],
-  "exclude_paths": ["软件/web"],
-  "source_extensions": [".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".sh", ".css"],
-  "config_extensions": [".json"],
-  "exclude_files": ["package-lock.json"],
-  "advisory_categories": ["string_key"],
+  "exclude_paths": [
+    "runtime/web"
+  ],
+  "source_extensions": [
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
+    ".sh",
+    ".css"
+  ],
+  "config_extensions": [
+    ".json"
+  ],
+  "exclude_files": [
+    "package-lock.json"
+  ],
+  "advisory_categories": [
+    "string_key"
+  ],
   "notes": {
     "scope": "Application-owned source, tests, tools, configuration, and root launchers; both current and planned English directories are covered.",
     "assets": "Models, fonts, archives, reports, ur10 upstream code, and compiled web bundles are excluded. Frontend generated source is included and must be fixed through its generator.",

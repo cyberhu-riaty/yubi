@@ -11,7 +11,7 @@
 ## 代码与资源
 
 - 内部模块、类、函数、变量及机器接口使用英文 ASCII；界面文案、注释和教程可以使用中文。具体命名约定见 [命名规范](docs/naming-policy.md)。
-- 提交前运行 `python scripts/check_naming.py`。检查覆盖源码、前端、工具、测试和配置；现有问题已登记基线，PR 不应增加新的中文内部命名。
+- 提交前运行 `python scripts/check_naming.py`。检查覆盖源码、前端、工具、测试和配置；当前为严格门禁，历史基线为空；PR 不应增加中文内部命名。
 - 历史迁移记录不代表全仓完成；剩余项见 [自动清单](docs/naming-inventory.md) 和 [迁移计划](docs/naming-migration-plan.md)。生成源码需要修改生成器后重建。不要通过自动刷新基线掩盖新增问题。
 - 控制算法放在 `controllers/common/`，可以从 `controllers/common/controller_template.py` 开始。
 - 新模型请保留来源和许可证，并通过 `tools/import_model.py --索引` 重新生成 `模型/模型库.json`。

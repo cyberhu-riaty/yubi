@@ -23,7 +23,7 @@ import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PACKAGE_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-SOFTWARE_DIR = os.path.join(PACKAGE_ROOT, "软件")
+SOFTWARE_DIR = os.path.join(PACKAGE_ROOT, "runtime")
 FIXTURE_DIR = os.path.join(SCRIPT_DIR, "夹具")
 if SOFTWARE_DIR not in sys.path:
     sys.path.insert(0, SOFTWARE_DIR)
@@ -280,5 +280,5 @@ if __name__ == "__main__":
 #   结果：消息类写好了、处理器也接上了，但 Web 白名单里没有它 → 页面上永远不出现，
 #   排查时还以为是发送端坏了（白花了不少时间）。
 #
-#   这条检查反过来看：扫 软件/*桥.py，找出所有 `messages.Snapshot`（及 messages.Message）
+#   这条检查反过来看：扫 runtime/*桥.py，找出所有 `messages.Snapshot`（及 messages.Message）
 #   的子类，逐个核对"类名是否在契约里出现过"。漏登记立刻报出来。

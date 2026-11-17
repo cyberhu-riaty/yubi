@@ -5,7 +5,7 @@
  *   仓库那份是**后端状态**（项目/模型/参数/辨识/曲线/连接），皮肤是**纯本地偏好**，
  *   两者生命周期完全不同（换肤不该惊动任何数据订阅者）。
  *
- * 数据源只有一个：`生成/themes.ts` 的 `风格表`（← `软件/theme_table.json`）。
+ * 数据源只有一个：`生成/themes.ts` 的 `风格表`（← `runtime/theme_table.json`）。
  * 这里**不维护第二份风格名单**，否则加了第 6 套皮肤前端就漏了。
  */
 import { useSyncExternalStore } from "react";

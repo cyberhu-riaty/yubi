@@ -95,7 +95,7 @@ export function Panel() { return <button data-状态={标题}>开始运行</butt
     def test_scope_includes_root_files_but_excludes_assets_and_dependencies(self):
         self.write("run_demo.py", "目标 = 1\n")
         self.write("ur10/example.py", "not valid Python!")
-        self.write("软件/web/bundle.js", "not valid JavaScript!")
+        self.write("runtime/web/bundle.js", "not valid JavaScript!")
         self.write("frontend/node_modules/invalid.ts", "not valid TypeScript!")
         self.write("tools/新脚本.py", "print('中文文案')\n")
         report = self.findings()

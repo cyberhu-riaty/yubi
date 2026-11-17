@@ -50,13 +50,13 @@ PUBLIC_MODULES = (
 MIGRATED_FILES = (
     "run_yubi.py",
     "run_yubi_web.py",
-    "软件/desktop_app.py",
-    "软件/web_app.py",
-    "软件/controller_registry.py",
-    "软件/experiment_registry.py",
-    "软件/experiment_cli.py",
-    "软件/trajectory_runtime.py",
-    "软件/run_experiment.py",
+    "runtime/desktop_app.py",
+    "runtime/web_app.py",
+    "runtime/controller_registry.py",
+    "runtime/experiment_registry.py",
+    "runtime/experiment_cli.py",
+    "runtime/trajectory_runtime.py",
+    "runtime/run_experiment.py",
     "controllers/common/joint_pd_plain.py",
     "controllers/common/joint_pid_plain.py",
     "controllers/common/joint_pd_gravity_ff.py",
@@ -100,17 +100,17 @@ ASCII_IDENTIFIER_FILES = (
     "tools/selfchecks/contract_selfcheck.py",
     "frontend/tests/fake_backend.py",
     "frontend/tests/browser_smoke.py",
-    "软件/contract.py",
-    "软件/契约.py",
-    "软件/official_api.py",
-    "软件/官方层.py",
+    "runtime/contract.py",
+    "runtime/legacy/contract.py",
+    "runtime/official_api.py",
+    "runtime/legacy/official_api.py",
     "tools/selfchecks/official_api_selfcheck.py",
     "tools/selfchecks/platform_selfcheck.py",
-    "软件/plugin_system.py",
-    "软件/plugin_assembler.py",
-    "软件/runtime_engine.py",
-    "软件/desktop_app.py",
-    "软件/web_app.py",
+    "runtime/plugin_system.py",
+    "runtime/plugin_assembler.py",
+    "runtime/runtime_engine.py",
+    "runtime/desktop_app.py",
+    "runtime/web_app.py",
 )
 HAN = re.compile(r"[\u4e00-\u9fff]")
 
@@ -150,9 +150,9 @@ def imported_modules(path: Path) -> list[tuple[int, str]]:
 def check_migration_boundary() -> int:
     errors: list[str] = []
     for module in REMOVED_LEGACY_MODULES:
-        removed_path = ROOT / "软件" / f"{module}.py"
+        removed_path = ROOT / "runtime" / f"{module}.py"
         if removed_path.exists():
-            errors.append(f"removed legacy module still exists: 软件/{module}.py")
+            errors.append(f"removed legacy module still exists: runtime/{module}.py")
     from audit_naming import SCOPE_FILE, discover_files, read_json
     for path in discover_files(ROOT, read_json(SCOPE_FILE)):
         if path.suffix != ".py":
@@ -167,7 +167,7 @@ def check_migration_boundary() -> int:
                     f"{path.relative_to(ROOT)}:{line} imports compatibility module {module}; "
                     f"use {replacement}")
     for name in PUBLIC_MODULES:
-        path = ROOT / "软件" / name
+        path = ROOT / "runtime" / name
         if not path.is_file():
             errors.append(f"missing English public module: {path.relative_to(ROOT)}")
     for relative in MIGRATED_FILES:
@@ -193,10 +193,10 @@ def check_migration_boundary() -> int:
             errors.append(f"non-ASCII algorithm filename: {path.relative_to(ROOT)}")
 
     parameter_api_paths = (
-        ROOT / "软件" / "plugin_system.py",
-        ROOT / "软件" / "parameter_bridge.py",
-        ROOT / "软件" / "control_bridge.py",
-        ROOT / "软件" / "experiment_bridge.py",
+        ROOT / "runtime" / "plugin_system.py",
+        ROOT / "runtime" / "parameter_bridge.py",
+        ROOT / "runtime" / "control_bridge.py",
+        ROOT / "runtime" / "experiment_bridge.py",
         *algorithm_directory.glob("*.py"),
     )
     for path in parameter_api_paths:
@@ -263,7 +263,7 @@ def main() -> int:
     if status:
         return status
     from audit_naming import main as audit_main
-    return audit_main()
+    return audit_main(["--strict"])
 
 
 if __name__ == "__main__":
