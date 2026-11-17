@@ -19,6 +19,7 @@ generate_frontend_assets.py —— 把 Python 侧的**单一事实来源**生成
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import sys
@@ -322,10 +323,45 @@ def generate_theme_typescript() -> str:
 # 主流程
 # ---------------------------------------------------------------------------
 # 名 → (内容生成函数, 目标目录)。TS 走构建期目录，CSS 走运行时目录。
+def generate_wire_fields_typescript() -> str:
+    """Derive field aliases without importing optional runtime dependencies."""
+    import contract
+
+    classes: dict[str, dict[str, str]] = {}
+    for directory, subdirectories, files in os.walk(SOFTWARE_DIR):
+        subdirectories[:] = [name for name in subdirectories if name not in {"web", "__pycache__"}]
+        for filename in sorted(files):
+            if not filename.endswith(".py"):
+                continue
+            with open(os.path.join(directory, filename), encoding="utf-8") as source:
+                tree = ast.parse(source.read())
+            for node in tree.body:
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                for decorator in node.decorator_list:
+                    if not (isinstance(decorator, ast.Call)
+                            and isinstance(decorator.func, ast.Name)
+                            and decorator.func.id == "legacy_wire"):
+                        continue
+                    legacy_name = ast.literal_eval(decorator.args[0])
+                    fields = ast.literal_eval(decorator.args[1])
+                    aliases = {wire: english for english, wire in fields.items() if wire != english}
+                    classes[node.name] = classes[legacy_name] = aliases
+    line = ["// Generated from Python legacy_wire declarations. Do not edit.", ""]
+    for topics, name in ((contract.OUTBOUND_TOPICS, "serverFieldAliases"),
+                         (contract.INBOUND_TOPICS, "clientFieldAliases")):
+        aliases = {topic.name: classes.get(topic.class_name, {}) for topic in topics}
+        line.append(f"export const {name}: Record<string, Record<string, string>> = "
+                    + json.dumps(aliases, ensure_ascii=False, indent=2) + ";")
+        line.append("")
+    return "\n".join(line)
+
+
 OUTPUTS = {
     "contract.ts": (generate_contract_typescript, TS_OUTPUT_DIR),
     "themes.ts": (generate_theme_typescript, TS_OUTPUT_DIR),
     "theme.css": (generate_theme_css, TS_OUTPUT_DIR),
+    "wire_fields.ts": (generate_wire_fields_typescript, TS_OUTPUT_DIR),
 }
 
 

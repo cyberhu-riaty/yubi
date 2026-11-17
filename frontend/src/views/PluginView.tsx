@@ -27,7 +27,7 @@ export function PluginView() {
   const project = useStore((s) => s.project.data);
   const incompatibilityReport = (project?.report ?? []).filter((row) => row.includes("不兼容"));
 
-  const items = directory?.插件 ?? [];
+  const items = directory?.plugins ?? [];
 
   return (
     <div className="space-y-2">
@@ -48,18 +48,18 @@ export function PluginView() {
         {items.length ? (
           <ul className="mt-2 space-y-1">
             {items.map((x) => {
-              const name = x.插件 ?? "";
-              const displayName = x.名称 || name;
-              const enabled = !!x.当前启用;
+              const name = x.plugin ?? "";
+              const displayName = x.name || name;
+              const enabled = !!x.enabled;
               const incompatible = incompatibilityReport.some((row) => row.includes(displayName) || (name && row.includes(name)));
               return (
                 <li key={name} className="panel p-2">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="min-w-0 flex-1 truncate" style={{ fontWeight: 600 }} title={x.文件 ? `${t("插件.文件")}: ${x.文件}` : undefined}>
+                    <span className="min-w-0 flex-1 truncate" style={{ fontWeight: 600 }} title={x.file ? `${t("插件.文件")}: ${x.file}` : undefined}>
                       {displayName}
                     </span>
                     <span className="flex-none text-[0.8em] text-dim monospace">
-                      {x.版本 ? `v${x.版本}` : t("插件.未标注")}
+                      {x.version ? `v${x.version}` : t("插件.未标注")}
                     </span>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -68,11 +68,11 @@ export function PluginView() {
                     {incompatible ? <Tag tone="error">! {t("定义.算法状态.不兼容")}</Tag> : null}
                   </div>
                   <div className="mt-1 text-[0.85em] text-dim">
-                    {x.说明 || t("插件.无说明")}
+                    {x.description || t("插件.无说明")}
                   </div>
-                  {x.被项目使用?.length ? (
+                  {x.used_by_projects?.length ? (
                     <div className="mt-1 text-[0.8em] text-dim">
-                      {`${t("插件.被使用")}: ${x.被项目使用.join(" / ")}`}
+                      {`${t("插件.被使用")}: ${x.used_by_projects.join(" / ")}`}
                     </div>
                   ) : (
                     <div className="mt-1 text-[0.8em] text-dim">{t("插件.未被任何项目使用")}</div>
@@ -81,14 +81,14 @@ export function PluginView() {
                     <div className="mt-1 text-[0.8em]" style={{ color: "var(--danger)" }}>{t("插件.不兼容说明")}</div>
                   ) : null}
                   <div className="mt-1 flex items-center gap-2">
-                    {x.作者 ? <span className="text-[0.8em] text-dim">{`${t("插件.作者")}: ${x.作者}`}</span> : null}
+                    {x.author ? <span className="text-[0.8em] text-dim">{`${t("插件.作者")}: ${x.author}`}</span> : null}
                   </div>
                 </li>
               );
             })}
           </ul>
         ) : (
-          <div className="mt-2 text-dim">{directory?.说明 || t("插件.空")}</div>
+          <div className="mt-2 text-dim">{directory?.description || t("插件.空")}</div>
         )}
       </CollapsibleSection>
     </div>

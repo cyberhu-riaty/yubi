@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { loadFrontendModule } = require("./frontend_test_loader.cjs");
 const root = path.resolve(__dirname, "../..");
 const ts = require(process.env.YUBI_TYPESCRIPT_PATH || path.join(root, "frontend/node_modules/typescript"));
 const compile = (source) => ts.transpileModule(source, {
@@ -31,13 +32,13 @@ for (const [stored, expected] of [
 }
 
 const nativeMessages = [];
-const logExports = {};
-const logSource = fs.readFileSync(path.join(root, "frontend/src/data/logs.ts"), "utf8");
-vm.runInNewContext(compile(logSource), {
-  exports: logExports, require: () => ({}), Date: { now: () => 123456 }, queueMicrotask,
-  window: { webkit: { messageHandlers: { "驭臂日志": { postMessage: (message) => nativeMessages.push(message) } } } },
+const logExports = loadFrontendModule("data/logs.ts", {
+  globals: { Date: { now: () => 123456 }, queueMicrotask,
+    window: { webkit: { messageHandlers: { "驭臂日志": { postMessage: (message) => nativeMessages.push(message) } } } },
+  },
+  mocks: { react: {}, "./store": {}, "./toasts": {}, "../views/i18n": {} },
 });
-logExports.logInfo("控制台", "Test entry", "test.topic");
+logExports.logInfo("console", "Test entry", "test.topic");
 assert.deepEqual(JSON.parse(JSON.stringify(nativeMessages[0])), {
   "墙钟": 123456, "等级": "信息", "来源": "控制台", "文本": "Test entry",
   "细节": "", "模块": "", "插件": "", "关节": null,

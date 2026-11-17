@@ -1,4 +1,5 @@
-import type { WireHandshake } from "../data/connection";
+import { decodeNativeLogLevel, legacyLogLevel, legacyLogSource } from "../data/wire_compatibility";
+import type { Handshake } from "../data/connection";
 /**
  * Console.tsx —— 底部三页签：输出 / 事件 / 问题。
  *
@@ -44,27 +45,27 @@ export interface ConsoleProps {
 
 /** 等级 → 颜色。颜色只来自主题语义色；文字里同时有符号和等级名。 */
 const LEVEL_COLORS: Record<LogLevel, string> = {
-  信息: "var(--info)",
-  注意: "var(--warn)",
-  错误: "var(--danger)",
+  info: "var(--info)",
+  warning: "var(--warn)",
+  error: "var(--danger)",
 };
 
-const LEVEL_SYMBOLS: Record<LogLevel, string> = { 信息: "●", 注意: "!", 错误: "✗" };
+const LEVEL_SYMBOLS: Record<LogLevel, string> = { info: "●", warning: "!", error: "✗" };
 const levelKey: Record<LogLevel, "控制台.等级.信息" | "控制台.等级.注意" | "控制台.等级.错误"> = {
-  信息: "控制台.等级.信息",
-  注意: "控制台.等级.注意",
-  错误: "控制台.等级.错误",
+  info: "控制台.等级.信息",
+  warning: "控制台.等级.注意",
+  error: "控制台.等级.错误",
 };
 
 const sourceKey: Record<string, "控制台.来源.连接" | "控制台.来源.握手" | "控制台.来源.回执" | "控制台.来源.错误" | "控制台.来源.前端" | "控制台.来源.控制台" | "控制台.来源.规划" | "控制台.来源.诊断"> = {
-  连接: "控制台.来源.连接",
-  握手: "控制台.来源.握手",
-  回执: "控制台.来源.回执",
-  错误: "控制台.来源.错误",
-  前端: "控制台.来源.前端",
-  控制台: "控制台.来源.控制台",
-  规划: "控制台.来源.规划",
-  诊断: "控制台.来源.诊断",
+  connection: "控制台.来源.连接",
+  handshake: "控制台.来源.握手",
+  receipt: "控制台.来源.回执",
+  error: "控制台.来源.错误",
+  frontend: "控制台.来源.前端",
+  console: "控制台.来源.控制台",
+  planning: "控制台.来源.规划",
+  diagnostics: "控制台.来源.诊断",
 };
 
 /** 等级筛选："全部" 或某个等级 */
@@ -104,7 +105,7 @@ function rowText(l: LogRow): string {
     l.plugins ? `插件=${l.plugins}` : "",
     l.joint !== undefined ? `J${l.joint}` : "",
   ].filter(Boolean).join(" ");
-  const header = `${formatTime(l.timestamp)}\t${l.level}\t${l.source}${l.topic ? `\t${l.topic}` : ""}${context ? `\t${context}` : ""}`;
+  const header = `${formatTime(l.timestamp)}\t${legacyLogLevel(l.level)}\t${legacyLogSource(l.source)}${l.topic ? `\t${l.topic}` : ""}${context ? `\t${context}` : ""}`;
   return `${header}\n${l.text}${l.details ? `\n${l.details}` : ""}`;
 }
 
@@ -141,8 +142,8 @@ export function Console({ tab: tab, onTabChange: onTabChange, onCollapse: onColl
     const listener = (e: Event) => {
       const d = (e as CustomEvent<{ type?: string; value?: string }>).detail;
       if (d?.type === "筛选") {
-        const value = d.value;
-        if (value === "全部" || value === "信息" || value === "注意" || value === "错误") {
+        const value = decodeNativeLogLevel(d.value ?? "");
+        if (value === "全部" || value === "info" || value === "warning" || value === "error") {
           setLevelFilter(value);
         }
       } else if (d?.type === "清空") {
@@ -194,7 +195,7 @@ export function Console({ tab: tab, onTabChange: onTabChange, onCollapse: onColl
   }, [snapshot.row, levelFilter, sourceFilter, pluginFilter, topicFilter, timeFilter, tick]);
 
   const eventRow = useMemo(
-    () => rows.filter((l) => l.source === "连接" || l.source === "握手" || l.source === "回执"),
+    () => rows.filter((l) => l.source === "connection" || l.source === "handshake" || l.source === "receipt"),
     [rows],
   );
 
@@ -202,8 +203,8 @@ export function Console({ tab: tab, onTabChange: onTabChange, onCollapse: onColl
   // 原生面板上的筛选/清空再通过上面的 `驭臂.日志操作` 回到这里。
   useEffect(() => {
     const summary = [
-      levelFilter !== "全部" ? `等级 ${levelFilter}` : "",
-      sourceFilter !== "全部" ? `来源 ${sourceFilter}` : "",
+      levelFilter !== "全部" ? `等级 ${legacyLogLevel(levelFilter)}` : "",
+      sourceFilter !== "全部" ? `来源 ${legacyLogSource(sourceFilter)}` : "",
       pluginFilter !== "全部" ? `插件 ${pluginFilter}` : "",
       topicFilter !== "全部" ? `主题 ${topicFilter}` : "",
       timeFilter !== "全部" ? `时间 ${timeFilter}` : "",
@@ -216,12 +217,12 @@ export function Console({ tab: tab, onTabChange: onTabChange, onCollapse: onColl
   const problems = useProblems(connection, error, handshake, snapshot.row, project);
   const tabs: ConsoleTab[] = ["输出", "事件", "问题", "诊断"];
   const currentRow = tab === "事件" ? eventRow : tab === "诊断" ? [] : rows;
-  const hasErrors = problems.some((p) => p.level === "错误");
+  const hasErrors = problems.some((p) => p.level === "error");
   const diagnosticError =
     !!diagnosticReport &&
-    !diagnosticReport.运行中 &&
-    (!!diagnosticReport.出错 ||
-      ((diagnosticReport.总数 ?? 0) > 0 && (diagnosticReport.通过 ?? 0) < (diagnosticReport.总数 ?? 0)));
+    !diagnosticReport.running &&
+    (!!diagnosticReport.errors ||
+      ((diagnosticReport.total ?? 0) > 0 && (diagnosticReport.passed ?? 0) < (diagnosticReport.total ?? 0)));
   const filterEmpty = tab === "输出" && rows.length === 0 && snapshot.row.length > 0;
 
   // 新日志到达时跟随到底部；用户向上滚动后暂停，避免抢滚动条。
@@ -251,7 +252,7 @@ export function Console({ tab: tab, onTabChange: onTabChange, onCollapse: onColl
     }
     const success = await copyText(currentRow.map(rowText).join("\n\n"));
     displayAction(
-      success ? t("控制台.复制成功", { 数量: currentRow.length }) : t("控制台.复制失败"),
+      success ? t("控制台.复制成功", { count: currentRow.length }) : t("控制台.复制失败"),
       success,
     );
   };
@@ -275,7 +276,7 @@ export function Console({ tab: tab, onTabChange: onTabChange, onCollapse: onColl
       chain.click();
       document.body.removeChild(chain);
       window.setTimeout(() => URL.revokeObjectURL(address), 1000);
-      displayAction(t("控制台.导出成功", { 数量: currentRow.length }), true);
+      displayAction(t("控制台.导出成功", { count: currentRow.length }), true);
     } catch {
       displayAction(t("控制台.复制失败"), false);
     }
@@ -300,10 +301,10 @@ export function Console({ tab: tab, onTabChange: onTabChange, onCollapse: onColl
                 : p === "事件"
                   ? eventRow.length
                   : p === "诊断"
-                    ? diagnosticReport?.运行中
+                    ? diagnosticReport?.running
                       ? "…"
                       : diagnosticReport
-                        ? `${diagnosticReport.通过 ?? 0}/${diagnosticReport.总数 ?? 0}`
+                        ? `${diagnosticReport.passed ?? 0}/${diagnosticReport.total ?? 0}`
                         : ""
                     : rows.length;
             return (
@@ -377,9 +378,9 @@ export function Console({ tab: tab, onTabChange: onTabChange, onCollapse: onColl
             onChange={(e) => setLevelFilter(e.target.value as LevelFilter)}
           >
             <option value="全部">{t("控制台.筛选.全部等级")}</option>
-            <option value="信息">{t("控制台.等级.信息")}</option>
-            <option value="注意">{t("控制台.等级.注意")}</option>
-            <option value="错误">{t("控制台.等级.错误")}</option>
+            <option value="info">{t("控制台.等级.信息")}</option>
+            <option value="warning">{t("控制台.等级.注意")}</option>
+            <option value="error">{t("控制台.等级.错误")}</option>
           </select>
         </label>
         <label className="filter">
@@ -580,7 +581,7 @@ function LogList({ row: row, filterEmpty: filterEmpty = false }: { row: LogRow[]
                   </span>
                 ) : null}
                 {l.plugins ? (
-                  <span className="log-plugin" title={t("控制台.日志.插件", { 名: l.plugins })}>
+                  <span className="log-plugin" title={t("控制台.日志.插件", { name: l.plugins })}>
                     {l.plugins}
                   </span>
                 ) : null}
@@ -589,7 +590,7 @@ function LogList({ row: row, filterEmpty: filterEmpty = false }: { row: LogRow[]
                     role="button"
                     tabIndex={0}
                     className="log-joint"
-                    title={t("控制台.日志.高亮关节", { 关节: l.joint })}
+                    title={t("控制台.日志.高亮关节", { joint: l.joint })}
                     onClick={(e) => {
                       e.stopPropagation();
                       void highlighted(l.joint as number);
@@ -629,22 +630,22 @@ interface ProblemItem {
 function useProblems(
   connection: string,
   error: string | null,
-  handshake: WireHandshake | null,
+  handshake: Handshake | null,
   row: LogRow[],
   project: ProjectState | null,
 ): ProblemItem[] {
   const t = useTranslation();
   const output: ProblemItem[] = [];
 
-  if (connection !== "已连接") {
+  if (connection !== "connected") {
     output.push({
       key: "连接",
-      level: "注意",
+      level: "warning",
       description: t("问题.未连接"),
       evidence: (
         <span>
           {t("问题.未连接.说明", {
-            状态: t(connectionTranslationKeys[connection as keyof typeof connectionTranslationKeys] ?? "连接.连接中"),
+            state: t(connectionTranslationKeys[connection as keyof typeof connectionTranslationKeys] ?? "连接.连接中"),
           })}
         </span>
       ),
@@ -654,7 +655,7 @@ function useProblems(
   if (error && error.includes("协议版本")) {
     output.push({
       key: "协议",
-      level: "错误",
+      level: "error",
       description: t("问题.协议不符"),
       evidence: <span className="break-all">{error}</span>,
     });
@@ -663,24 +664,24 @@ function useProblems(
   if (error && error.includes("非 JSON")) {
     output.push({
       key: "非JSON",
-      level: "注意",
+      level: "warning",
       description: t("问题.非JSON"),
       evidence: <span>{t("问题.非JSON.说明")}</span>,
     });
   }
 
   // 握手承诺过、但**一帧都没到过**的广播主题（命令回执 / 问候帧不算广播）
-  if (handshake?.可用主题?.length) {
+  if (handshake?.available_topics?.length) {
     const reached = new Set(getLogs().rate.map((r) => r.topic));
-    const missing = handshake.可用主题.filter(
+    const missing = handshake.available_topics.filter(
       (Main) => !Main.startsWith("__") && !Main.startsWith("命令.") && !reached.has(Main),
     );
     if (missing.length) {
       output.push({
         key: "主题",
-        level: "注意",
+        level: "warning",
         description: t("问题.契约缺主题"),
-        evidence: <div className="break-all">{t("问题.契约缺主题.说明", { 主题: missing.join(" · ") })}</div>,
+        evidence: <div className="break-all">{t("问题.契约缺主题.说明", { topic: missing.join(" · ") })}</div>,
       });
     }
   }
@@ -689,7 +690,7 @@ function useProblems(
   if (incompatible.length) {
     output.push({
       key: "兼容性",
-      level: "错误",
+      level: "error",
       description: t("问题.兼容性"),
       evidence: (
         <ul className="space-y-0.5">
@@ -703,11 +704,11 @@ function useProblems(
     });
   }
 
-  const failed = row.filter((l) => l.source === "回执" && l.level === "错误");
+  const failed = row.filter((l) => l.source === "receipt" && l.level === "error");
   if (failed.length) {
     output.push({
       key: "命令",
-      level: "错误",
+      level: "error",
       description: t("问题.命令失败"),
       evidence: (
         <ul className="space-y-0.5">
@@ -721,11 +722,11 @@ function useProblems(
     });
   }
 
-  const frontendError = row.filter((l) => l.source === "前端" && l.level === "错误");
+  const frontendError = row.filter((l) => l.source === "frontend" && l.level === "error");
   if (frontendError.length) {
     output.push({
       key: "前端",
-      level: "错误",
+      level: "error",
       description: t("问题.前端异常"),
       evidence: (
         <ul className="space-y-0.5">
@@ -757,8 +758,8 @@ function ProblemsPanel({ problems: problems }: { problems: ProblemItem[] }) {
       <div className="mb-1 text-dim">{t("控制台.问题.标题")}</div>
       <ul className="space-y-2">
         {problems.map((p) => {
-          const tone = p.level === "错误" ? "error" : p.level === "注意" ? "warning" : "neutral";
-          const symbol = p.level === "错误" ? "✗" : p.level === "注意" ? "!" : "·";
+          const tone = p.level === "error" ? "error" : p.level === "warning" ? "warning" : "neutral";
+          const symbol = p.level === "error" ? "✗" : p.level === "warning" ? "!" : "·";
           return (
             <li key={p.key} className="problem-item">
               <div className="flex items-start gap-1.5">
@@ -781,10 +782,10 @@ function DiagnosticsPanel({ report: report }: { report: DiagnosticReport | null 
   const t = useTranslation();
   const connection = useStore((s) => s.connection);
   const [busy, setBusy] = useState(false);
-  const running = !!report?.运行中;
-  const canSend = connection === "已连接";
-  const passed = report?.通过 ?? 0;
-  const totalCount = report?.总数 ?? 0;
+  const running = !!report?.running;
+  const canSend = connection === "connected";
+  const passed = report?.passed ?? 0;
+  const totalCount = report?.total ?? 0;
   const allPassed = !!report && !running && totalCount > 0 && passed === totalCount;
 
   const run = async () => {
@@ -803,10 +804,10 @@ function DiagnosticsPanel({ report: report }: { report: DiagnosticReport | null 
         {report ? (
           <>
             <Tag tone={running ? "emphasis" : allPassed ? "success" : "error"}>
-              {running ? t("控制台.诊断.运行中") : t("控制台.诊断.通过", { 通过: passed, 总数: totalCount })}
+              {running ? t("控制台.诊断.运行中") : t("控制台.诊断.通过", { passed: passed, total: totalCount })}
             </Tag>
             <span className="monospace text-[0.78em] text-dim">
-              {`${report.时间 ?? ""} · ${report.耗时秒 ?? "--"}s`}
+              {`${report.time ?? ""} · ${report.elapsed_seconds ?? "--"}s`}
             </span>
           </>
         ) : (
@@ -827,24 +828,24 @@ function DiagnosticsPanel({ report: report }: { report: DiagnosticReport | null 
         </button>
       </div>
       <p className="mt-1 text-[0.78em] text-dim">{t("控制台.诊断.说明")}</p>
-      {report?.出错 ? (
+      {report?.errors ? (
         <div className="mt-1 text-[0.82em]" style={{ color: "var(--danger)" }}>
-          {report.出错}
+          {report.errors}
         </div>
       ) : null}
-      {report?.项?.length ? (
+      {report?.items?.length ? (
         <ul className="mt-1.5 space-y-0.5">
-          {report.项.map((x, i) => (
-            <li key={`${x.名 ?? "项"}-${i}`} className="flex items-baseline gap-1.5 text-[0.82em]">
-              <span style={{ flex: "none", color: x.通过 ? "var(--ok)" : "var(--danger)" }}>
-                {x.通过 ? "✓" : "✗"}
+          {report.items.map((x, i) => (
+            <li key={`${x.name ?? "项"}-${i}`} className="flex items-baseline gap-1.5 text-[0.82em]">
+              <span style={{ flex: "none", color: x.passed ? "var(--ok)" : "var(--danger)" }}>
+                {x.passed ? "✓" : "✗"}
               </span>
-              <span className="w-[5.6em] flex-none">{x.名}</span>
-              <span className="min-w-0 flex-1 truncate text-dim monospace" title={x.说明}>
-                {x.说明}
+              <span className="w-[5.6em] flex-none">{x.name}</span>
+              <span className="min-w-0 flex-1 truncate text-dim monospace" title={x.description}>
+                {x.description}
               </span>
               <span className="w-[3.2em] flex-none text-right text-dim monospace">
-                {x.秒 === undefined ? "" : `${x.秒.toFixed(2)}s`}
+                {x.seconds === undefined ? "" : `${x.seconds.toFixed(2)}s`}
               </span>
             </li>
           ))}
@@ -869,13 +870,13 @@ export function ConsoleRecall({ onExpand: onExpand }: { onExpand: () => void }) 
   const project = useStore((s) => s.project.data);
   const diagnosticReport = useStore((s) => s.diagnostics.data);
   const problems = useProblems(connection, error, handshake, snapshot.row, project);
-  const errorCount = problems.filter((p) => p.level === "错误").length;
-  const warningCount = problems.filter((p) => p.level === "注意").length;
+  const errorCount = problems.filter((p) => p.level === "error").length;
+  const warningCount = problems.filter((p) => p.level === "warning").length;
   const diagnosticError =
     !!diagnosticReport &&
-    !diagnosticReport.运行中 &&
-    (!!diagnosticReport.出错 ||
-      ((diagnosticReport.总数 ?? 0) > 0 && (diagnosticReport.通过 ?? 0) < (diagnosticReport.总数 ?? 0)));
+    !diagnosticReport.running &&
+    (!!diagnosticReport.errors ||
+      ((diagnosticReport.total ?? 0) > 0 && (diagnosticReport.passed ?? 0) < (diagnosticReport.total ?? 0)));
 
   return (
     <button
@@ -888,17 +889,17 @@ export function ConsoleRecall({ onExpand: onExpand }: { onExpand: () => void }) 
       <span className="flex-none">▴ {t("控制台.标题")}</span>
       {errorCount ? (
         <span className="console-recall-badge" style={{ color: "var(--danger)" }}>
-          ✗ {t("控制台.召回.错误", { 数量: errorCount })}
+          ✗ {t("控制台.召回.错误", { count: errorCount })}
         </span>
       ) : null}
       {warningCount ? (
         <span className="console-recall-badge" style={{ color: "var(--warn)" }}>
-          ! {t("控制台.召回.注意", { 数量: warningCount })}
+          ! {t("控制台.召回.注意", { count: warningCount })}
         </span>
       ) : null}
       {diagnosticError ? (
         <span className="console-recall-badge" style={{ color: "var(--danger)" }}>
-          ✗ {`诊断 ${diagnosticReport?.通过 ?? 0}/${diagnosticReport?.总数 ?? 0}`}
+          ✗ {`诊断 ${diagnosticReport?.passed ?? 0}/${diagnosticReport?.total ?? 0}`}
         </span>
       ) : null}
       {!errorCount && !warningCount && !diagnosticError ? (

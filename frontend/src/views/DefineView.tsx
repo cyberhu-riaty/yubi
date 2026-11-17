@@ -110,19 +110,19 @@ export function DefineView() {
     },
   });
 
-  const backendTargetKey = (control?.目标 ?? []).join("|");
+  const backendTargetKey = (control?.target ?? []).join("|");
   useEffect(() => {
-    setTargetDraft((control?.目标 ?? []).map((value) => Number(value).toFixed(4)));
+    setTargetDraft((control?.target ?? []).map((value) => Number(value).toFixed(4)));
   }, [backendTargetKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const useCurrentPosition = () => {
-    setTargetDraft((control?.当前位置 ?? []).map((value) => Number(value).toFixed(4)));
+    setTargetDraft((control?.current_position ?? []).map((value) => Number(value).toFixed(4)));
   };
 
   const submitControlTarget = async () => {
     const values = targetDraft.map((value) => Number(value));
     if (!values.length || values.some((value) => !Number.isFinite(value))) {
-      logWarning("控制台", t("定义.控制目标.数值错误"));
+      logWarning("console", t("定义.控制目标.数值错误"));
       return;
     }
     setTargetBusy(true);
@@ -138,8 +138,8 @@ export function DefineView() {
 
   // ★ GUI → MuJoCo 的算法配置先放在本地「待选集」里；只有点应用/保存才发给后端。
   //   这里以插件模块名为准，显示名只用于给人看，避免把显示名误当成文件名。
-  const pluginItems = pluginCatalog?.插件 ?? [];
-  const activeOrder = pluginItems.filter((item) => item.当前启用 && item.插件).map((item) => item.插件 as string);
+  const pluginItems = pluginCatalog?.plugins ?? [];
+  const activeOrder = pluginItems.filter((item) => item.enabled && item.plugin).map((item) => item.plugin as string);
   const [pendingSelection, setPendingSelection] = useState<Set<string>>(() => new Set());
 
   // ★ MuJoCo → GUI：后端完成装配后会重发插件目录；这时才同步真实生效结果。
@@ -150,9 +150,9 @@ export function DefineView() {
   }, [pluginFrameId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeSet = new Set(activeOrder);
-  const pendingOrder = pluginItems.flatMap((item) => item.插件 && pendingSelection.has(item.插件) ? [item.插件] : []);
+  const pendingOrder = pluginItems.flatMap((item) => item.plugin && pendingSelection.has(item.plugin) ? [item.plugin] : []);
   const algorithmsChanged = pluginItems.some((item) => {
-    const name = item.插件 ?? "";
+    const name = item.plugin ?? "";
     return !!name && pendingSelection.has(name) !== activeSet.has(name);
   });
 
@@ -202,7 +202,7 @@ export function DefineView() {
   const submitModelChange = async () => {
     const clean = path.trim();
     if (!clean) {
-      logWarning("控制台", t("定义.换模型.要路径"));
+      logWarning("console", t("定义.换模型.要路径"));
       return;
     }
     await requestModelChange(clean, displayName.trim());
@@ -317,7 +317,7 @@ export function DefineView() {
               <Tag tone="success">✓ {t("定义.兼容性.通过")}</Tag>
             ) : null}
             <span className="monospace text-[0.78em] text-dim" title={t("定义.算法数")}>
-              {project ? t("定义.算法数.短", { 数量: project.algorithms?.length ?? 0 }) : ""}
+              {project ? t("定义.算法数.短", { count: project.algorithms?.length ?? 0 }) : ""}
             </span>
           </span>
         }
@@ -380,15 +380,15 @@ export function DefineView() {
         {...controlSection("控制")}
         badge={
           <span className="flex items-center gap-1.5">
-            <span className="monospace text-[0.78em]">{control?.关节名?.length ?? 0} DoF</span>
+            <span className="monospace text-[0.78em]">{control?.joint_names?.length ?? 0} DoF</span>
             {project?.active_controller ? <Tag tone="success">{project.active_controller}</Tag> : <Tag tone="warning">{t("定义.控制目标.无算法")}</Tag>}
           </span>
         }
       >
-        {control?.关节名?.length ? (
+        {control?.joint_names?.length ? (
           <>
             <div className="mb-2 text-[0.8em] text-dim">
-              {t("定义.控制目标.说明")} · {t("定义.控制目标.来源", { 来源: control.目标来源 ?? "--" })}
+              {t("定义.控制目标.说明")} · {t("定义.控制目标.来源", { source: control.target_source ?? "--" })}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-[0.82em]">
@@ -400,10 +400,10 @@ export function DefineView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {control.关节名.map((name, i) => (
+                  {control.joint_names.map((name, i) => (
                     <tr key={`${name}-${i}`}>
                       <td className="border-b px-1 py-1 truncate" title={name}>{name}</td>
-                      <td className="border-b px-1 py-1 text-right monospace">{control.当前位置?.[i]?.toFixed(4) ?? "--"}</td>
+                      <td className="border-b px-1 py-1 text-right monospace">{control.current_position?.[i]?.toFixed(4) ?? "--"}</td>
                       <td className="border-b px-1 py-1 text-right">
                         <input
                           className="input monospace w-[7.5em] text-right"
@@ -428,16 +428,16 @@ export function DefineView() {
               <Button
                 size="small"
                 variant="primary"
-                disabled={targetBusy || connectionState !== "已连接" || targetDraft.length !== control.关节名.length}
+                disabled={targetBusy || connectionState !== "connected" || targetDraft.length !== control.joint_names.length}
                 onPress={() => void submitControlTarget()}
               >
                 {targetBusy ? "…" : t("定义.控制目标.应用")}
               </Button>
-              <span className="text-[0.78em] text-dim">{control.说明}</span>
+              <span className="text-[0.78em] text-dim">{control.description}</span>
             </div>
             {targetReceipt ? (
-              <div className="mt-1 text-[0.8em] monospace" style={{ color: targetReceipt.通过 ? "var(--ok)" : "var(--danger)" }}>
-                {targetReceipt.通过 ? "✓" : "✗"} {targetReceipt.说明 || t("日志.无说明")}
+              <div className="mt-1 text-[0.8em] monospace" style={{ color: targetReceipt.passed ? "var(--ok)" : "var(--danger)" }}>
+                {targetReceipt.passed ? "✓" : "✗"} {targetReceipt.description || t("日志.无说明")}
               </div>
             ) : null}
           </>
@@ -468,7 +468,7 @@ export function DefineView() {
                     size="small"
                     className="w-full"
                     disabled={busy || isCurrent}
-                    title={isCurrent ? t("定义.资产库.带星") : t("定义.资产库.点选", { 名: item.display_name ?? "?" })}
+                    title={isCurrent ? t("定义.资产库.带星") : t("定义.资产库.点选", { name: item.display_name ?? "?" })}
                     onPress={() => {
                       if (!item.path) return;
                       void requestModelChange(item.path, item.display_name ?? "");
@@ -512,12 +512,12 @@ export function DefineView() {
           <>
             <ul className="mt-2 space-y-1">
               {pluginItems.map((item) => {
-                const name = item.插件 ?? "";
+                const name = item.plugin ?? "";
                 const applied = activeSet.has(name);
                 const selected = pendingSelection.has(name);
                 const pendingEnable = selected && !applied;
                 const pendingDisable = !selected && applied;
-                const displayName = item.名称 || name;
+                const displayName = item.name || name;
                 const incompatible = incompatibilityRow.some((row) => row.includes(displayName) || (!!name && row.includes(name)));
                 return (
                   <li key={name} className="panel p-2">
@@ -526,20 +526,20 @@ export function DefineView() {
                         type="checkbox"
                         className="mt-0.5 flex-none accent-[var(--accent)]"
                         checked={selected}
-                        disabled={!!algorithmsBusy || connectionState !== "已连接"}
+                        disabled={!!algorithmsBusy || connectionState !== "connected"}
                         onChange={(e) => updateSelection(name, e.target.checked)}
                       />
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-1.5">
                           <span className="break-all font-semibold">{displayName}</span>
-                          {item.版本 ? <span className="monospace text-[0.8em] text-dim">v{item.版本}</span> : null}
+                          {item.version ? <span className="monospace text-[0.8em] text-dim">v{item.version}</span> : null}
                           {applied ? <Tag tone="success">{t("定义.算法库.已生效")}</Tag> : null}
                           {pendingEnable ? <Tag tone="warning">{t("定义.算法库.待启用")}</Tag> : null}
                           {pendingDisable ? <Tag tone="warning">{t("定义.算法库.待停用")}</Tag> : null}
                           {incompatible ? <Tag tone="error">! {t("定义.算法状态.不兼容")}</Tag> : null}
                         </span>
                         <span className="mt-0.5 block break-all text-[0.8em] text-dim">
-                          {[item.分组, name && name !== displayName ? name : ""].filter(Boolean).join(" · ")}
+                          {[item.group, name && name !== displayName ? name : ""].filter(Boolean).join(" · ")}
                         </span>
                       </span>
                     </label>
@@ -552,7 +552,7 @@ export function DefineView() {
               <Button
                 variant="primary"
                 size="small"
-                disabled={!!algorithmsBusy || connectionState !== "已连接" || !algorithmsChanged}
+                disabled={!!algorithmsBusy || connectionState !== "connected" || !algorithmsChanged}
                 title={t("定义.算法库.临时应用说明")}
                 onPress={() => void submitAlgorithms(false)}
               >
@@ -563,7 +563,7 @@ export function DefineView() {
                 size="small"
                 disabled={
                   !!algorithmsBusy
-                  || connectionState !== "已连接"
+                  || connectionState !== "connected"
                   || !project?.project
                   || (!algorithmsChanged && project.saved !== false)
                 }
@@ -591,9 +591,9 @@ export function DefineView() {
                   : t("定义.算法库.已同步说明")}
             </div>
             {algorithmReceipt ? (
-              <div className="mt-1 text-[0.82em]" style={{ color: algorithmReceipt.通过 ? "var(--ok)" : "var(--danger)" }}>
+              <div className="mt-1 text-[0.82em]" style={{ color: algorithmReceipt.passed ? "var(--ok)" : "var(--danger)" }}>
                 <span className="monospace">
-                  {algorithmReceipt.通过 ? "✓" : "✗"} {algorithmReceipt.说明 || t("日志.无说明")}
+                  {algorithmReceipt.passed ? "✓" : "✗"} {algorithmReceipt.description || t("日志.无说明")}
                 </span>
               </div>
             ) : null}
@@ -634,9 +634,9 @@ export function DefineView() {
             {busy ? "…" : t("定义.换模型.提交")}
           </Button>
           {ReceiptBar ? (
-            <div className="text-[0.9em]" style={{ color: ReceiptBar.通过 ? "var(--ok)" : "var(--danger)" }}>
+            <div className="text-[0.9em]" style={{ color: ReceiptBar.passed ? "var(--ok)" : "var(--danger)" }}>
               <span className="monospace">
-                {ReceiptBar.主题}：{ReceiptBar.通过 ? "ok" : "fail"} —— {ReceiptBar.说明 || t("日志.无说明")}
+                {ReceiptBar.topic}：{ReceiptBar.passed ? "ok" : "fail"} —— {ReceiptBar.description || t("日志.无说明")}
               </span>
             </div>
           ) : null}

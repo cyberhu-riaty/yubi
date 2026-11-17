@@ -2,7 +2,7 @@
 
 由 `scripts/audit_naming.py` 从当前工作区生成。
 
-扫描 212 个源码与配置文件；非 ASCII 名称出现位置共 6086 处。次数表示位置数量，不是迁移完成百分比。
+扫描 216 个源码与配置文件；非 ASCII 名称出现位置共 5813 处。次数表示位置数量，不是迁移完成百分比。
 
 中文界面、普通字符串值、注释和文档不计为标识符。字符串键是人工确认项，可能是机器字段，也可能是显示标签；JSON 键列入迁移范围。
 
@@ -15,8 +15,7 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `directory_name` | 10 |
 | `file_name` | 37 |
 | `json_key` | 578 |
-| `string_key` | 4937 |
-| `typescript_identifier` | 524 |
+| `string_key` | 5188 |
 
 ## 按文件迁移
 
@@ -24,31 +23,21 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 
 | 文件或目录 | 代码标识符 | 路径/导入 | JSON 键 | 字符串键待确认 |
 | --- | ---: | ---: | ---: | ---: |
-| `frontend/src/components/CollapsibleSection.tsx` | 2 | 0 | 0 | 0 |
-| `frontend/src/data/connection.ts` | 56 | 0 | 0 | 0 |
-| `frontend/src/data/logs.ts` | 68 | 0 | 0 | 0 |
-| `frontend/src/data/store.ts` | 139 | 0 | 0 | 0 |
+| `frontend/src/data/wire_compatibility.ts` | 0 | 0 | 0 | 80 |
 | `frontend/src/generated/contract.ts` | 0 | 0 | 0 | 91 |
+| `frontend/src/generated/wire_fields.ts` | 0 | 0 | 0 | 91 |
 | `frontend/src/shell/App.tsx` | 0 | 0 | 0 | 3 |
-| `frontend/src/shell/Console.tsx` | 61 | 0 | 0 | 0 |
-| `frontend/src/shell/StatusBar.tsx` | 1 | 0 | 0 | 1 |
-| `frontend/src/views/AboutView.tsx` | 7 | 0 | 0 | 0 |
-| `frontend/src/views/DefineView.tsx` | 36 | 0 | 0 | 0 |
-| `frontend/src/views/DeploymentView.tsx` | 48 | 0 | 0 | 5 |
-| `frontend/src/views/DiagnosticsView.tsx` | 27 | 0 | 0 | 0 |
-| `frontend/src/views/IdentificationView.tsx` | 22 | 0 | 0 | 0 |
-| `frontend/src/views/MonitorView.tsx` | 29 | 0 | 0 | 0 |
-| `frontend/src/views/PlanningView.tsx` | 2 | 0 | 0 | 0 |
-| `frontend/src/views/PluginView.tsx` | 14 | 0 | 0 | 0 |
-| `frontend/src/views/ValidateView.tsx` | 9 | 0 | 0 | 0 |
-| `frontend/src/views/i18n.ts` | 3 | 0 | 0 | 618 |
+| `frontend/src/shell/StatusBar.tsx` | 0 | 0 | 0 | 1 |
+| `frontend/src/views/DeploymentView.tsx` | 0 | 0 | 0 | 8 |
+| `frontend/src/views/i18n.ts` | 0 | 0 | 0 | 618 |
 | `frontend/tests/fake_backend.py` | 0 | 0 | 0 | 138 |
 | `scripts/check_naming.py` | 0 | 0 | 0 | 2 |
-| `scripts/tests/test_connection.cjs` | 0 | 0 | 0 | 14 |
+| `scripts/tests/test_connection.cjs` | 0 | 0 | 0 | 10 |
 | `scripts/tests/test_contract.py` | 0 | 0 | 0 | 21 |
 | `scripts/tests/test_frontend_state.cjs` | 0 | 0 | 0 | 9 |
 | `scripts/tests/test_model_import.py` | 0 | 0 | 0 | 7 |
 | `scripts/tests/test_official_api.py` | 0 | 0 | 0 | 3 |
+| `scripts/tests/test_wire_compatibility.cjs` | 0 | 0 | 0 | 81 |
 | `scripts/tests/test_wire_compatibility.py` | 0 | 0 | 0 | 5 |
 | `实验` | 0 | 1 | 0 | 0 |
 | `工具` | 0 | 1 | 0 | 0 |

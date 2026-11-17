@@ -41,7 +41,7 @@ if SOFTWARE_DIR not in sys.path:
     sys.path.insert(0, SOFTWARE_DIR)
 
 # 端口可用环境变量改：真后端正在 8712 上跑时，冒烟测试不要抢它的端口。
-PORT = int(os.environ.get("驭臂_测试端口", "8712"))
+PORT = int(os.environ.get("YUBI_TEST_PORT", os.environ.get("驭臂_测试端口", "8712")))
 BROADCAST_INTERVAL = 0.05
 
 # ★ 契约版本必须与产品同源，否则前端会正确地拒绝连接（协议版本守卫）。

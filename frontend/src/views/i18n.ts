@@ -8,7 +8,7 @@
  *   这份管浏览器（字体齐全，中文随便画）。两边共享的只有"叫法"：
  *   模型库、算法库、参数辨识、物理总闸… 这些词两边必须一样，否则同一个人看到两套名词。
  *
- * 模板写法：`{名}`。`取("键", { 名: 值 })` 做替换；缺参数时原样保留 `{名}`，
+ * 模板写法：`{name}`。`取("键", { 名: 值 })` 做替换；缺参数时原样保留 `{name}`，
  * 一眼能看出是漏了参数，而不是悄悄画出一个空字符串。
  */
 import { useSyncExternalStore } from "react";
@@ -84,11 +84,11 @@ const messages = {
   "通用.是": ["是", "yes"],
   "通用.否": ["否", "no"],
   "通用.个": [" 个", ""],
-  "通用.秒": ["{值} 秒", "{值} s"],
-  "通用.毫秒": ["{值} ms", "{值} ms"],
+  "通用.秒": ["{value} 秒", "{value} s"],
+  "通用.毫秒": ["{value} ms", "{value} ms"],
   "通用.无": ["（无）", "(none)"],
   "通用.无数据": ["暂无数据", "no data yet"],
-  "通用.计数": ["{值} 帧", "{值} frames"],
+  "通用.计数": ["{value} 帧", "{value} frames"],
   "通用.每格": ["每格", "each"],
   "通用.复制": ["复制", "Copy"],
   "通用.关闭": ["关闭", "Close"],
@@ -129,9 +129,9 @@ const messages = {
   "规划.规划中": ["规划中…", "Planning…"],
   "规划.清空": ["清空航点", "Clear"],
   "规划.已记录": ["已记录航点", "waypoints"],
-  "规划.航点计数": ["{数量} 航点", "{数量} wp"],
+  "规划.航点计数": ["{count} 航点", "{count} wp"],
   "规划.尚无航点": ["尚无航点", "no waypoints"],
-  "规划.高亮瓶颈": ["在 3D 中高亮 J{关节}", "Highlight J{关节} in 3D"],
+  "规划.高亮瓶颈": ["在 3D 中高亮 J{joint}", "Highlight J{joint} in 3D"],
   "规划.需要航点": [
     "先记录至少 2 个航点，才能规划；「记录当前姿态」每点一次记一条。",
     "Record at least 2 waypoints before planning; “Record pose” adds one per click.",
@@ -287,7 +287,7 @@ const messages = {
     "The checks live in 工具/验证/ and are executed by the backend as subprocesses; command and process details are developer diagnostics.",
   ],
   "诊断.未运行": ["未运行", "not run"],
-  "诊断.已用时": ["已用时 {秒} s", "elapsed {秒} s"],
+  "诊断.已用时": ["已用时 {seconds} s", "elapsed {seconds} s"],
   "诊断.导出": ["导出报告", "Export report"],
   "诊断.开始": ["开始检查", "Run checks"],
   "诊断.运行中": ["检查中…", "Running…"],
@@ -302,7 +302,7 @@ const messages = {
     "这些是软件根据已标定规则给出的实时筛查：当前可靠判断持续跟踪超差和执行器饱和。振荡/发散要等逐关节有符号信号，暂不从聚合峰值猜测。没检出不等于没有问题。",
     "These are real-time checks based on calibrated rules. Persistent tracking error and actuator saturation are currently supported. Oscillation/divergence require signed per-joint signals and are not inferred from aggregate peaks. No alert does not prove that everything is healthy.",
   ],
-  "监控.告警.计数": ["{活动} 条活动 · {严重} 条严重", "{活动} active · {严重} severe"],
+  "监控.告警.计数": ["{active} 条活动 · {severe} 条严重", "{active} active · {severe} severe"],
   "监控.告警.走势": ["走势（最近）", "Trend (last)"],
   "监控.告警.经验": [
     "建议是按经验规则给的，不是自动整定；改完请再看一段曲线确认。",
@@ -374,8 +374,8 @@ const messages = {
   // ---- 可折叠区块 ----
   "区块.展开": ["展开", "Expand"],
   "区块.收起": ["收起", "Collapse"],
-  "区块.展开名": ["展开「{名}」", "Expand “{名}”"],
-  "区块.收起名": ["收起「{名}」", "Collapse “{名}”"],
+  "区块.展开名": ["展开「{name}」", "Expand “{name}”"],
+  "区块.收起名": ["收起「{name}」", "Collapse “{name}”"],
 
   // ---- 中区（3D 视口占位） ----
   "中区.标题": ["三维视口", "3D viewport"],
@@ -393,7 +393,7 @@ const messages = {
     "The frontend does not recompute forward kinematics from the URDF — that drifts from the physics and falls apart the moment a model has free joints.",
   ],
   "中区.浮层": ["模型与关节状态", "Model and joint state"],
-  "中区.接口就绪": ["视口接口已就位：{值}", "Viewport hook ready: {值}"],
+  "中区.接口就绪": ["视口接口已就位：{value}", "Viewport hook ready: {value}"],
   "中区.视口接口未就绪": ["视口接口尚未出现", "No viewport hook in the contract yet"],
   "仿真控制.标题": ["仿真控制", "Simulation controls"],
   "仿真控制.实验": ["实验", "Experiment"],
@@ -444,11 +444,11 @@ const messages = {
     "Auto-scroll on new lines; scrolling up pauses it, click to resume.",
   ],
   "控制台.召回.提示": ["展开控制台（快捷键 ;）；徽标来自真实问题计数", "Expand console (shortcut ;); badges come from real problem counts"],
-  "控制台.日志.插件": ["插件 {名}", "plugin {名}"],
-  "控制台.日志.高亮关节": ["在 3D 中高亮 J{关节}", "Highlight J{关节} in 3D"],
-  "控制台.日志.高亮失败": ["高亮命令失败：{说明}", "Highlight command failed: {说明}"],
-  "控制台.召回.错误": ["错误 {数量}", "{数量} errors"],
-  "控制台.召回.注意": ["注意 {数量}", "{数量} warnings"],
+  "控制台.日志.插件": ["插件 {name}", "plugin {name}"],
+  "控制台.日志.高亮关节": ["在 3D 中高亮 J{joint}", "Highlight J{joint} in 3D"],
+  "控制台.日志.高亮失败": ["高亮命令失败：{description}", "Highlight command failed: {description}"],
+  "控制台.召回.错误": ["错误 {count}", "{count} errors"],
+  "控制台.召回.注意": ["注意 {count}", "{count} warnings"],
   "控制台.召回.无问题": ["无问题", "no problems"],
   "控制台.诊断.未运行": ["未运行", "not run"],
   "控制台.诊断.说明": ["真跑本机检查脚本，结果来自后端。", "Runs local checks; results come from the backend."],
@@ -456,7 +456,7 @@ const messages = {
   "控制台.诊断.运行中": ["检查中…", "running…"],
   "控制台.诊断.完整": ["打开完整诊断", "Open full diagnostics"],
   "控制台.诊断.空": ["还没有跑过诊断。", "No diagnostics run yet."],
-  "控制台.诊断.通过": ["{通过}/{总数} 项通过", "{通过}/{总数} passed"],
+  "控制台.诊断.通过": ["{passed}/{total} 项通过", "{passed}/{total} passed"],
   "控制台.筛选.全部": ["全部来源", "All sources"],
   "控制台.筛选.说明": ["只留下选中的来源", "Show only the selected sources"],
   "控制台.筛选.等级": ["等级", "Level"],
@@ -474,9 +474,9 @@ const messages = {
   "控制台.时间.15": ["最近 15 分钟", "Last 15 min"],
   "控制台.复制": ["复制可见", "Copy"],
   "控制台.导出": ["导出", "Export"],
-  "控制台.复制成功": ["已复制 {数量} 行日志", "Copied {数量} log lines"],
+  "控制台.复制成功": ["已复制 {count} 行日志", "Copied {count} log lines"],
   "控制台.复制失败": ["复制失败：浏览器不允许访问剪贴板", "Copy failed: clipboard access was blocked"],
-  "控制台.导出成功": ["已导出 {数量} 行日志", "Exported {数量} log lines"],
+  "控制台.导出成功": ["已导出 {count} 行日志", "Exported {count} log lines"],
   "控制台.收起": ["收起控制台", "Collapse console"],
   "控制台.展开": ["展开控制台", "Expand console"],
   "控制台.速率.开关": ["主题速率", "Topic rates"],
@@ -505,7 +505,7 @@ const messages = {
     "Only topics that **actually arrived** are listed; contracted topics that never arrive show up under “Problems”.",
   ],
   "控制台.速率.空": ["还没有收到任何帧。", "No frames received yet."],
-  "控制台.速率.归零": ["{值}（{时长} 秒前有帧）", "{值} (last frame {时长}s ago)"],
+  "控制台.速率.归零": ["{value}（{duration} 秒前有帧）", "{value} (last frame {duration}s ago)"],
   "控制台.问题.等级": ["等级", "Level"],
   "控制台.问题.项": ["检查项", "Check"],
   "控制台.问题.证据": ["证据（真实的那些行）", "Evidence (the real lines)"],
@@ -519,19 +519,19 @@ const messages = {
   // ---- 问题检查项 ----
   "问题.未连接": ["与后端未连接", "Not connected to the backend"],
   "问题.未连接.说明": [
-    "当前状态：{状态}。没有连接就没有任何真实数据，所有视图都会是空的。",
-    "Current state: {状态}. Without a link there is no real data; every view stays empty.",
+    "当前状态：{state}。没有连接就没有任何真实数据，所有视图都会是空的。",
+    "Current state: {state}. Without a link there is no real data; every view stays empty.",
   ],
   "问题.协议不符": ["协议版本不一致", "Protocol version mismatch"],
   "问题.契约缺主题": ["契约登记的主题从未到达", "Contracted topics that never arrived"],
   "问题.契约缺主题.说明": [
-    "握手承诺了这些主题，但一帧都没收到：{主题}。可能是后端还没开始广播，也可能是链路被挡。",
-    "The handshake promised these topics but not a single frame arrived: {主题}. The backend may not be broadcasting yet, or the link is blocked.",
+    "握手承诺了这些主题，但一帧都没收到：{topic}。可能是后端还没开始广播，也可能是链路被挡。",
+    "The handshake promised these topics but not a single frame arrived: {topic}. The backend may not be broadcasting yet, or the link is blocked.",
   ],
   "问题.命令失败": ["有命令被拒 / 失败", "A command was rejected / failed"],
   "问题.命令失败.说明": [
-    "最近 {数量} 条失败回执，见「输出」页签（等级 = 错误）。失败的命令**没有生效**。",
-    "The latest {数量} failed receipt(s) are in the Output tab (level = error). A failed command **did not take effect**.",
+    "最近 {count} 条失败回执，见「输出」页签（等级 = 错误）。失败的命令**没有生效**。",
+    "The latest {count} failed receipt(s) are in the Output tab (level = error). A failed command **did not take effect**.",
   ],
   "问题.前端异常": ["前端自身报过错", "The frontend itself reported an error"],
   "问题.前端异常.说明": [
@@ -565,7 +565,7 @@ const messages = {
   "状态栏.物理.关": ["已暂停", "paused"],
   "状态栏.物理.未知": ["--", "--"],
   "状态栏.语言": ["语言", "Language"],
-  "状态栏.切到": ["切到 {语}", "Switch to {语}"],
+  "状态栏.切到": ["切到 {language}", "Switch to {language}"],
   "状态栏.皮肤": ["皮肤", "Skin"],
   "状态栏.提示.项目": ["当前项目名（来自 项目状态）", "Current project name (from project state)"],
   "状态栏.提示.模型": ["当前模型（来自 模型状态）", "Current model (from model state)"],
@@ -627,7 +627,7 @@ const messages = {
   "定义.当前项目": ["当前项目", "Current project"],
   "定义.控制目标": ["关节控制目标", "Joint control target"],
   "定义.控制目标.说明": ["输入期望关节位置（转动关节单位 rad），再点击应用；目标由当前控制算法跟踪，界面不会直接写控制力。", "Enter desired joint positions (rad for revolute joints), then apply. The active controller tracks the target; the UI does not write actuator forces directly."],
-  "定义.控制目标.来源": ["目标来源：{来源}", "Target source: {来源}"],
+  "定义.控制目标.来源": ["目标来源：{source}", "Target source: {source}"],
   "定义.控制目标.关节": ["关节 / 坐标", "Joint / coordinate"],
   "定义.控制目标.当前位置": ["当前位置", "Current"],
   "定义.控制目标.目标": ["目标（rad）", "Target (rad)"],
@@ -639,7 +639,7 @@ const messages = {
   "定义.项目名": ["项目", "Project"],
   "定义.算法组": ["挂载的算法", "Mounted algorithms"],
   "定义.算法数": ["算法数量", "Algorithm count"],
-  "定义.算法数.短": ["{数量} 个算法", "{数量} algos"],
+  "定义.算法数.短": ["{count} 个算法", "{count} algos"],
   "定义.控盘": ["在写 ctrl 的算法", "Writing ctrl"],
   "定义.被覆盖": ["输出被覆盖", "Outputs masked"],
   "定义.已存盘": ["算法组已写回项目文件", "Algorithm set saved to the project file"],
@@ -678,7 +678,7 @@ const messages = {
     "The backend reported no assets — the model inventory may not be loaded, or no models are imported.",
   ],
   "定义.资产库.带星": ["当前加载", "loaded"],
-  "定义.资产库.点选": ["加载这台：{名}", "Load {名}"],
+  "定义.资产库.点选": ["加载这台：{name}", "Load {name}"],
   "定义.资产库.待接入": [
     "模型库列表**还没进契约**：`软件/契约.py` 里只有「当前模型」，没有可浏览的模型清单。",
     "The model library is **not in the contract yet**: the contract carries only the current model, not a browsable list.",
@@ -748,8 +748,8 @@ const messages = {
     "Curves come from metrics pushed by the backend; each name is declared by the algorithm (format: algorithm·metric). The frontend neither post-processes nor extrapolates.",
   ],
   "验证.最近更新": [
-    "最近收到指标：{秒} 秒前",
-    "Last metric: {秒} s ago",
+    "最近收到指标：{seconds} 秒前",
+    "Last metric: {seconds} s ago",
   ],
   "验证.采集已暂停": ["仿真已暂停：曲线保留，不再增加点", "Simulation paused: curve retained; no new points"],
   "验证.从未收到": ["还没有收到任何指标帧", "No metric frame received yet"],
@@ -761,7 +761,7 @@ const messages = {
   ],
   "验证.窗口": ["时间窗", "Window"],
   "验证.窗口.标签": ["时间窗", "Window"],
-  "验证.窗口.值": ["当前保留最近 {值} 秒", "showing the last {值} s"],
+  "验证.窗口.值": ["当前保留最近 {value} 秒", "showing the last {value} s"],
   "验证.选中": ["显示", "Show"],
   "验证.全选": ["全选", "All"],
   "验证.全不选": ["全不选", "None"],
@@ -779,14 +779,14 @@ const messages = {
   "验证.暂停中": ["暂停中（鼠标在图上）", "paused (pointer over the plot)"],
   "验证.取消选中": ["这条没在显示", "hidden"],
   "验证.超出窗口": [
-    "{条} 条曲线的数据点早于当前时间窗（后端没再发新帧）。",
-    "{条} series have points older than the current window (the backend stopped sending frames).",
+    "{count} 条曲线的数据点早于当前时间窗（后端没再发新帧）。",
+    "{count} series have points older than the current window (the backend stopped sending frames).",
   ],
   "曲线.空": ["尚无指标帧", "No metric frames yet"],
   "曲线.空提示": ["等待后端推送指标；或到「插件」检查算法是否实现指标。", "Waiting for metrics; or check under Plugins whether the algorithm implements metrics."],
   "曲线.轴值": ["指标值（单位由算法声明）", "value (unit declared by algorithm)"],
   "曲线.轴时间": ["墙钟（秒，0 = 最新一点）", "wall clock (s, 0 = newest point)"],
-  "曲线.放大提示": ["滚轮缩放时间窗（{值} 秒）", "wheel zooms the window ({值} s)"],
+  "曲线.放大提示": ["滚轮缩放时间窗（{value} 秒）", "wheel zooms the window ({value} s)"],
   "曲线.说明": ["横轴用**墙钟**而不是仿真时间：物理暂停时仿真时间不动，曲线会挤成一坨。", "The x axis uses **wall clock**, not sim time: when physics is paused sim time freezes and the curve collapses into a spike."],
 
   // ---- 验证：参数表 ----
@@ -804,9 +804,9 @@ const messages = {
     "Blue border = uncommitted change; red = invalid or out of range. After a successful commit it waits for the backend value before returning to the normal style.",
   ],
   "验证.参数.编辑提示": ["Enter 提交 · Esc 取消", "Enter to commit · Esc to cancel"],
-  "验证.参数.范围提示": ["允许范围 {最小} ~ {最大}", "Allowed range {最小} – {最大}"],
+  "验证.参数.范围提示": ["允许范围 {min} ~ {max}", "Allowed range {min} – {max}"],
   "验证.参数.无效": ["不是有效数字", "not a valid number"],
-  "验证.参数.超范围": ["超出范围 {最小} ~ {最大}", "outside {最小} – {最大}"],
+  "验证.参数.超范围": ["超出范围 {min} ~ {max}", "outside {min} – {max}"],
   "验证.参数.未接受": ["后端没有接受这次修改", "the backend rejected this change"],
   "验证.参数.空": ["当前没有可调参数：可能没有挂载算法，或算法没有声明参数。", "No tunables right now: perhaps no algorithm is mounted, or none declares parameters."],
   "验证.参数.插件": ["插件", "Plugin"],
@@ -818,7 +818,7 @@ const messages = {
   "验证.参数.说明列": ["说明", "Note"],
   "验证.参数.值缺": ["（没报值）", "(no value)"],
   "验证.参数.取值表头": ["这一项后端没按标准形状报，原样列出：", "This entry does not follow the standard shape; listed verbatim:"],
-  "验证.参数.范围条": ["{值} ∈ [{最小}, {最大}]", "{值} ∈ [{最小}, {最大}]"],
+  "验证.参数.范围条": ["{value} ∈ [{min}, {max}]", "{value} ∈ [{min}, {max}]"],
 
   // ---- 辨识 ----
   "辨识.标题": ["参数辨识", "System identification"],
@@ -891,15 +891,15 @@ const messages = {
   // ---- 外观视图 ----
   "外观.皮肤": ["皮肤", "Skin"],
   "外观.皮肤说明": [
-    "{数量} 套界面皮肤。点一下立即应用，下次打开仍会保留。",
-    "{数量} interface skins. One click applies immediately and the choice is remembered next time.",
+    "{count} 套界面皮肤。点一下立即应用，下次打开仍会保留。",
+    "{count} interface skins. One click applies immediately and the choice is remembered next time.",
   ],
   "外观.高级": ["高级信息（开发者）", "Advanced (developer)"],
   "外观.高级说明": [
     "皮肤定义来自 软件/风格表.json，生成前端主题；选择写在浏览器本地存储里。普通使用不需要看这些。",
     "Skin definitions live in 软件/风格表.json and are generated into the frontend theme; the choice is stored in browser local storage. Normal use does not need this.",
   ],
-  "外观.语言当前": ["当前界面语言：{语}", "Current UI language: {语}"],
+  "外观.语言当前": ["当前界面语言：{language}", "Current UI language: {language}"],
   "外观.当前": ["当前", "current"],
   "外观.语言": ["语言", "Language"],
   "外观.语言说明": [
@@ -930,8 +930,8 @@ const messages = {
   "关于.上行": ["上行命令", "Uplink commands"],
   "关于.握手": ["握手", "Handshake"],
   "关于.握手.有": [
-    "已握手：后端承诺 {可用} 条主题，广播间隔 {间隔} 秒，契约版本 {版本}。",
-    "Handshaken: the backend promises {可用} topics, a {间隔} s broadcast interval, contract version {版本}.",
+    "已握手：后端承诺 {available} 条主题，广播间隔 {interval} 秒，契约版本 {version}。",
+    "Handshaken: the backend promises {available} topics, a {interval} s broadcast interval, contract version {version}.",
   ],
   "关于.握手.无": ["尚未握手。（握手消息不在契约里 —— 它是连接层的问候帧。）", "No handshake yet. (The handshake is not in the contract — it is the transport's greeting frame.)"],
   "关于.帧号": ["最新帧序号", "Newest frame seq"],
@@ -954,27 +954,27 @@ const messages = {
   "日志.已连接": ["已连接到后端", "Connected to the backend"],
   "日志.已断开": ["与后端断开，正在按退避重连", "Disconnected from the backend, retrying with backoff"],
   "日志.握手": [
-    "握手成功：{主题数} 条下行主题，广播间隔 {间隔} s{契约}",
-    "Handshake ok: {主题数} downlink topics, {间隔} s broadcast interval{契约}",
+    "握手成功：{topicCount} 条下行主题，广播间隔 {interval} s{contract}",
+    "Handshake ok: {topicCount} downlink topics, {interval} s broadcast interval{contract}",
   ],
-  "日志.握手契约": ["，契约版本 {版本}", ", contract version {版本}"],
-  "日志.回执简单通过": ["{主题}：回执通过", "{主题}: receipt ok"],
-  "日志.回执通过": ["{主题} 已受理（{耗时} ms）", "{主题} accepted ({耗时} ms)"],
-  "日志.回执失败": ["{主题} 被拒 / 失败：{说明}", "{主题} rejected / failed: {说明}"],
+  "日志.握手契约": ["，契约版本 {version}", ", contract version {version}"],
+  "日志.回执简单通过": ["{topic}：回执通过", "{topic}: receipt ok"],
+  "日志.回执通过": ["{topic} 已受理（{elapsed} ms）", "{topic} accepted ({elapsed} ms)"],
+  "日志.回执失败": ["{topic} 被拒 / 失败：{description}", "{topic} rejected / failed: {description}"],
   "日志.无说明": ["（无说明）", "(no reason given)"],
-  "日志.耗时": ["耗时 {值} ms", "took {值} ms"],
+  "日志.耗时": ["耗时 {value} ms", "took {value} ms"],
   "日志.后端错误细节": ["后端报错 —— 数据可能已经不是最新的", "Backend error — the data may no longer be current"],
-  "日志.未捕获": ["未捕获异常：{信息}", "Uncaught exception: {信息}"],
+  "日志.未捕获": ["未捕获异常：{message}", "Uncaught exception: {message}"],
   "日志.无信息": ["（无信息）", "(no message)"],
-  "日志.未处理拒绝": ["未处理的 Promise 拒绝：{原因}", "Unhandled promise rejection: {原因}"],
-  "日志.行号": ["行 {值}", "line {值}"],
-  "日志.规划失败": ["规划失败：{原因}", "Planning failed: {原因}"],
-  "日志.规划估算": ["规划使用估算限位（{来源}）；瓶颈关节 {关节}", "Planning used estimated limits ({来源}); bottleneck joint {关节}"],
-  "日志.诊断未通过": ["诊断 {通过}/{总数} 未通过", "Diagnostics {通过}/{总数} failed"],
-  "日志.诊断出错": ["诊断出错：{说明}", "Diagnostics error: {说明}"],
+  "日志.未处理拒绝": ["未处理的 Promise 拒绝：{reason}", "Unhandled promise rejection: {reason}"],
+  "日志.行号": ["行 {value}", "line {value}"],
+  "日志.规划失败": ["规划失败：{reason}", "Planning failed: {reason}"],
+  "日志.规划估算": ["规划使用估算限位（{source}）；瓶颈关节 {joint}", "Planning used estimated limits ({source}); bottleneck joint {joint}"],
+  "日志.诊断未通过": ["诊断 {passed}/{total} 未通过", "Diagnostics {passed}/{total} failed"],
+  "日志.诊断出错": ["诊断出错：{description}", "Diagnostics error: {description}"],
 
   // ---- 命令失败提示 ----
-  "提示.命令失败": ["{主题} 失败", "{主题} failed"],
+  "提示.命令失败": ["{topic} 失败", "{topic} failed"],
   "提示.没有说明": ["后端没有给出说明", "the backend gave no reason"],
   "提示.换模型受理": ["换模型命令已受理", "Switch-model command accepted"],
   "提示.辨识受理": ["辨识命令已受理", "Identification command accepted"],
@@ -991,19 +991,19 @@ export type TranslationKey = keyof typeof messages;
 /**
  * 连接状态 → 文案键。
  * 为什么要这么一层：`取()` 的键是**字面量联合**（写错键名 `tsc` 就报错），
- * 而模板字符串拼出来的 `` `连接.${状态}` `` 推不出字面量。
+ * 而模板字符串拼出来的 `` `连接.${state}` `` 推不出字面量。
  * 与其到处 `as const` 硬转（那等于把类型检查关掉），不如把映射写在这里一次说清。
  */
 export const connectionTranslationKeys = {
-  连接中: "连接.连接中",
-  已连接: "连接.已连接",
-  已断开: "连接.已断开",
+  connecting: "连接.连接中",
+  connected: "连接.已连接",
+  disconnected: "连接.已断开",
 } as const satisfies Record<string, TranslationKey>;
 
 /**
  * 取文案。
  * @param key 文案键（由 `表` 约束，写错键名 `tsc` 直接报错）
- * @param parameters 模板参数：`{名}` → 值
+ * @param parameters 模板参数：`{name}` → 值
  */
 export function translate(key: TranslationKey, parameters?: Record<string, string | number>): string {
   const template = messages[key][currentLanguage === "zh" ? 0 : 1];

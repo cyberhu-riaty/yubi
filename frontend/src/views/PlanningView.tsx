@@ -38,7 +38,7 @@ export function PlanningView() {
   const [velocityLimit, setVelocityLimit] = useState("");
   const [accelerationLimit, setAccelerationLimit] = useState("");
   const fileInput = useRef<HTMLInputElement | null>(null);
-  const canSend = connection === "已连接";
+  const canSend = connection === "connected";
 
   /** 选文件 → 解析 → 直接把航点送去规划（不落盘、不占权限面） */
   const readFile = async (file: File | undefined) => {
@@ -191,7 +191,7 @@ export function PlanningView() {
           succeeded ? <Tag tone="success">{`${planning?.duration_s?.toFixed(2) ?? "?"}s`}</Tag>
           : failed ? <Tag tone="error">{t("规划.失败")}</Tag>
           : planningBusy ? <Tag tone="emphasis">{t("规划.规划中")}</Tag>
-          : waypointCount > 0 ? <Tag>{t("规划.航点计数", { 数量: waypointCount })}</Tag>
+          : waypointCount > 0 ? <Tag>{t("规划.航点计数", { count: waypointCount })}</Tag>
           : <Tag>{t("规划.尚无航点")}</Tag>
         }
       >
@@ -306,7 +306,7 @@ export function PlanningView() {
         {planning?.bottleneck_joint !== undefined && planning.bottleneck_joint >= 0 ? (
           <div className="mt-1">
             <Button variant="ghost" size="small" onPress={() => void highlightBottleneck()}>
-              {t("规划.高亮瓶颈", { 关节: planning.bottleneck_joint })}
+              {t("规划.高亮瓶颈", { joint: planning.bottleneck_joint })}
             </Button>
           </div>
         ) : null}

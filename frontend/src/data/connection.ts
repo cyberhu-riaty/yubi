@@ -10,46 +10,25 @@
  *     所以 `发命令` 返回一个 Promise，由 `__回执__` 兑现。
  *  ④ 协议版本不一致要**明说**，而不是静默显示错数据。
  */
-import { PROTOCOL_VERSION, type ServerTopic } from "@generated/contract";
+import { PROTOCOL_VERSION, type ClientTopic } from "@generated/contract";
 
-/** 后端下发的一帧 */
-export interface WireFrame {
-  协议: number;
-  主题: string;
-  序号?: number;
-  墙钟?: number;
-  数据: Record<string, unknown>;
-}
-
-export interface WireHandshake {
-  可用主题: string[];
-  广播间隔: number;
-  契约?: {
-    版本: number;
-    下行: { 名: string; 类名: string; 种类: string; 摘要: string }[];
-    上行: { 名: string; 类名: string; 种类: string; 摘要: string }[];
-  };
-}
-
-export interface CommandReceipt {
-  /** 与发出命令一一对应；旧后端可能没有，所以保持可选。 */
-  请求?: string;
-  主题: string;
-  通过: boolean;
-  说明: string;
-}
+import {
+  decodeFrame, decodeHandshake, decodeReceipt, decodeServerPayload, encodeCommand,
+  type MessageFrame, type Handshake, type CommandReceipt,
+} from "./wire_compatibility";
+export type { MessageFrame, Handshake, CommandReceipt } from "./wire_compatibility";
 
 interface PendingCommand {
   topic: string;
   resolve: (r: CommandReceipt) => void;
 }
 
-export type ConnectionState = "连接中" | "已连接" | "已断开";
+export type ConnectionState = "connecting" | "connected" | "disconnected";
 
 export interface ConnectionEvent {
   state?: ConnectionState;
-  frame?: WireFrame;
-  handshake?: WireHandshake;
+  frame?: MessageFrame;
+  handshake?: Handshake;
   receipt?: CommandReceipt;
   error?: string;
 }
@@ -103,13 +82,13 @@ export class BackendConnection {
   private failPendingCommands(description: string): void {
     for (const [requestId, item] of this.pendingCommands) {
       this.pendingCommands.delete(requestId);
-      item.resolve({ 请求: requestId, 主题: item.topic, 通过: false, 说明: description });
+      item.resolve({ request_id: requestId, topic: item.topic, passed: false, description: description });
     }
   }
 
   connect(): void {
     this.closed = false;
-    this.publish({ state: "连接中" });
+    this.publish({ state: "connecting" });
     let ws: WebSocket;
     try {
       ws = new WebSocket(this.address);
@@ -122,45 +101,51 @@ export class BackendConnection {
 
     ws.onopen = () => {
       this.retryCount = 0;
-      this.publish({ state: "已连接" });
+      this.publish({ state: "connected" });
     };
 
     ws.onmessage = (event) => {
-      let frame: WireFrame;
+      let frame: MessageFrame;
       try {
-        frame = JSON.parse(event.data as string) as WireFrame;
+        frame = decodeFrame(JSON.parse(event.data as string));
       } catch {
         this.publish({ error: "收到非 JSON 消息（已忽略）" });
         return;
       }
-      if (typeof frame.协议 === "number" && frame.协议 !== PROTOCOL_VERSION) {
+      if (typeof frame.protocol === "number" && frame.protocol !== PROTOCOL_VERSION) {
         this.publish({
-          error: `协议版本不一致：后端 ${frame.协议} / 前端 ${PROTOCOL_VERSION} —— 请刷新页面`,
+          error: `协议版本不一致：后端 ${frame.protocol} / 前端 ${PROTOCOL_VERSION} —— 请刷新页面`,
         });
         return;
       }
-      if (frame.主题 === "__问候__") {
-        const d = frame.数据 as unknown as WireHandshake;
-        this.publish({ handshake: d });
+      try {
+        if (frame.topic === "__问候__") {
+          const d = decodeHandshake(frame.data);
+          this.publish({ handshake: d });
+          return;
+        }
+        if (frame.topic === "__回执__") {
+          const r = decodeReceipt(frame.data);
+          let key = typeof r.request_id === "string" && r.request_id ? r.request_id : "";
+          // 兼容旧后端：没有请求号时，只能按发送顺序找同主题的第一条。
+          if (!key) {
+            key = Array.from(this.pendingCommands.entries()).find(([, item]) => item.topic === r.topic)?.[0] ?? "";
+          }
+          const pending = key ? this.pendingCommands.get(key) : undefined;
+          if (pending) {
+            this.pendingCommands.delete(key);
+            pending.resolve(r);
+          }
+          this.publish({ receipt: r });
+          return;
+        }
+        frame.data = decodeServerPayload(frame.topic, frame.data);
+      } catch (error) {
+        this.publish({ error: `收到无效消息（已忽略）：${String(error)}` });
         return;
       }
-      if (frame.主题 === "__回执__") {
-        const r = frame.数据 as unknown as CommandReceipt;
-        let key = typeof r.请求 === "string" && r.请求 ? r.请求 : "";
-        // 兼容旧后端：没有请求号时，只能按发送顺序找同主题的第一条。
-        if (!key) {
-          key = Array.from(this.pendingCommands.entries()).find(([, item]) => item.topic === r.主题)?.[0] ?? "";
-        }
-        const pending = key ? this.pendingCommands.get(key) : undefined;
-        if (pending) {
-          this.pendingCommands.delete(key);
-          pending.resolve(r);
-        }
-        this.publish({ receipt: r });
-        return;
-      }
-      this.counts[frame.主题] = (this.counts[frame.主题] ?? 0) + 1;
-      this.sequence = frame.序号 ?? this.sequence;
+      this.counts[frame.topic] = (this.counts[frame.topic] ?? 0) + 1;
+      this.sequence = frame.sequence ?? this.sequence;
       this.publish({ frame: frame });
     };
 
@@ -169,7 +154,7 @@ export class BackendConnection {
       // 旧连接上的命令不可能再收到回执；立即失败比让每条命令各等 4 秒更诚实。
       this.failPendingCommands("连接已断开，命令没有收到回执");
       if (!this.closed) {
-        this.publish({ state: "已断开" });
+        this.publish({ state: "disconnected" });
         this.scheduleReconnect();
       }
     };
@@ -204,18 +189,18 @@ export class BackendConnection {
   }
 
   /** 发一条命令，等回执（超时算失败 —— 不能无限等） */
-  sendCommand(topic: ServerTopic | string, data: Record<string, unknown>, timeoutMs = 4000): Promise<CommandReceipt> {
+  sendCommand(topic: ClientTopic | string, data: Record<string, unknown>, timeoutMs = 4000): Promise<CommandReceipt> {
     return new Promise((resolve) => {
       this.requestSequence += 1;
       const requestId = `${Date.now().toString(36)}-${this.requestSequence.toString(36)}`;
       const ws = this.socket;
       if (!ws || ws.readyState !== WebSocket.OPEN) {
-        resolve({ 请求: requestId, 主题: topic, 通过: false, 说明: "还没连上后端" });
+        resolve({ request_id: requestId, topic: topic, passed: false, description: "还没连上后端" });
         return;
       }
       const timeout = window.setTimeout(() => {
         if (this.pendingCommands.delete(requestId)) {
-          resolve({ 请求: requestId, 主题: topic, 通过: false, 说明: "等回执超时（后端可能没在转发命令）" });
+          resolve({ request_id: requestId, topic: topic, passed: false, description: "等回执超时（后端可能没在转发命令）" });
         }
       }, timeoutMs);
       this.pendingCommands.set(requestId, {
@@ -226,11 +211,11 @@ export class BackendConnection {
         },
       });
       try {
-        ws.send(JSON.stringify({ 请求: requestId, 主题: topic, 数据: data }));
+        ws.send(encodeCommand(requestId, topic, data));
       } catch (error) {
         window.clearTimeout(timeout);
         this.pendingCommands.delete(requestId);
-        resolve({ 请求: requestId, 主题: topic, 通过: false, 说明: `发送失败：${String(error)}` });
+        resolve({ request_id: requestId, topic: topic, passed: false, description: `发送失败：${String(error)}` });
       }
     });
   }

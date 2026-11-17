@@ -1,11 +1,5 @@
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
-
-const root = path.resolve(__dirname, "../..");
-const ts = require(process.env.YUBI_TYPESCRIPT_PATH || path.join(root, "frontend/node_modules/typescript"));
-const source = fs.readFileSync(path.join(root, "frontend/src/data/connection.ts"), "utf8");
+const { loadFrontendModule } = require("./frontend_test_loader.cjs");
 const sockets = [];
 const timers = new Map();
 let nextTimer = 1;
@@ -28,12 +22,7 @@ const schedule = (callback, milliseconds) => {
   timers.set(id, { callback, milliseconds });
   return id;
 };
-const javascript = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-vm.runInNewContext(javascript, {
-  exports: exportsObject,
-  require: () => ({ PROTOCOL_VERSION: 21 }),
+const loaded = loadFrontendModule("data/connection.ts", { globals: {
   WebSocket: FakeSocket,
   window: {
     setTimeout: schedule, setInterval: schedule,
@@ -41,7 +30,8 @@ vm.runInNewContext(javascript, {
   },
   Date: { now: () => 100000 },
   console,
-});
+} });
+Object.assign(exportsObject, loaded);
 
 async function main() {
   const connection = new exportsObject.BackendConnection("ws://localhost/");
@@ -62,11 +52,11 @@ async function main() {
   emit("__回执__", receipt("255s-2", "pause"));
   emit("__回执__", receipt("255s-1", "run"));
   const results = await Promise.all([first, second]);
-  assert.equal(results[0]["说明"], "run");
-  assert.equal(results[1]["说明"], "pause");
+  assert.equal(results[0].description, "run");
+  assert.equal(results[1].description, "pause");
 
   emit("__问候__", { "可用主题": ["metrics"], "广播间隔": 0.05 });
-  assert.equal(events.at(-1).handshake["广播间隔"], 0.05);
+  assert.equal(events.at(-1).handshake.broadcast_interval, 0.05);
   emit("metrics", { value: 1 }, 7);
   assert.equal(connection.counts.metrics, 1);
   assert.equal(connection.latestSequence, 7);
@@ -76,7 +66,7 @@ async function main() {
 
   const pending = connection.sendCommand("command.simulation", { action: "reset" });
   connection.close();
-  assert.equal((await pending)["通过"], false);
+  assert.equal((await pending).passed, false);
   assert.equal(timers.size, 0);
   console.log("Connection regression passed: v21 wire bytes, receipt order, handshake, protocol guard and cleanup.");
 }

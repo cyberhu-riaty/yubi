@@ -16,13 +16,20 @@
  *   （用墙钟而不是仿真时间：物理暂停时仿真时间不动，曲线会挤成一坨）。
  */
 import { useSyncExternalStore } from "react";
-import { BackendConnection, guessBackendUrl, type CommandReceipt, type WireFrame, type WireHandshake, type ConnectionState, type SamplePoint } from "./connection";
+import { BackendConnection, guessBackendUrl, type CommandReceipt, type MessageFrame, type Handshake, type ConnectionState, type SamplePoint } from "./connection";
+
+export interface ProjectAlgorithm extends Record<string, unknown> {
+  name?: string;
+  version?: string;
+  takes_control?: boolean;
+  description?: string;
+}
 
 export interface ProjectState {
   project?: string;
   model_path?: string;
   model_display_name?: string;
-  algorithms?: Record<string, unknown>[];
+  algorithms?: ProjectAlgorithm[];
   report?: string[];
   algorithm_library?: string[];
   saved?: boolean;
@@ -46,14 +53,14 @@ export interface AssetItem {
 
 /** 运行期系统指标（来自 `系统桥`，1 Hz 一条） */
 export interface SystemState {
-  仿真时间?: number;
-  墙钟?: number;
+  simulation_time?: number;
+  wall_clock?: number;
   RTF?: number;
-  步频?: number;
-  仿真步长?: number;
-  内存MB?: number;
-  插件数?: number;
-  出错?: string;
+  step_rate?: number;
+  timestep?: number;
+  memory_mb?: number;
+  plugin_count?: number;
+  errors?: string;
 }
 
 /** Run / Pause / Reset 后由仿真侧确认的状态；不根据按钮点击自行猜。 */
@@ -94,92 +101,92 @@ export interface ExperimentState {
 
 /** 关节目标输入区的权威状态：当前位置来自 MjData，目标来自后端确认。 */
 export interface ControlState {
-  关节名?: string[];
-  当前位置?: number[];
-  当前速度?: number[];
-  当前控制?: number[];
-  目标?: number[];
-  目标来源?: string;
-  说明?: string;
+  joint_names?: string[];
+  current_position?: number[];
+  current_velocity?: number[];
+  current_control?: number[];
+  target?: number[];
+  target_source?: string;
+  description?: string;
 }
 
 /** 自检里的一项 */
 export interface DiagnosticItem {
-  名?: string;
-  通过?: boolean;
-  说明?: string;
-  秒?: number;
+  name?: string;
+  passed?: boolean;
+  description?: string;
+  seconds?: number;
 }
 
 /** 自检报告（来自 `诊断桥`，真跑 工具/验证 下的脚本） */
 export interface DiagnosticReport {
-  运行中?: boolean;
-  通过?: number;
-  总数?: number;
-  耗时秒?: number;
-  时间?: string;
-  项?: DiagnosticItem[];
-  出错?: string;
+  running?: boolean;
+  passed?: number;
+  total?: number;
+  elapsed_seconds?: number;
+  time?: string;
+  items?: DiagnosticItem[];
+  errors?: string;
 }
 
 /** 算法库里的一个插件（来自 `插件桥.取插件目录()`） */
 export interface PluginItem {
-  插件?: string;
-  分组?: string;
-  名称?: string;
-  版本?: string;
-  说明?: string;
-  作者?: string;
-  文件?: string;
-  被项目使用?: string[];
-  当前启用?: boolean;
+  plugin?: string;
+  group?: string;
+  name?: string;
+  version?: string;
+  description?: string;
+  author?: string;
+  file?: string;
+  used_by_projects?: string[];
+  enabled?: boolean;
   /** 当前控制链里的执行序号；顺序会影响后写入 data.ctrl 的算法 */
-  当前顺序?: number | null;
+  order?: number | null;
 }
 
 export interface PluginCatalog {
-  数量?: number;
-  插件?: PluginItem[];
-  说明?: string;
+  count?: number;
+  plugins?: PluginItem[];
+  description?: string;
 }
 
 /** 设备链路状态（来自 `设备/连接桥`） */
 export interface DeviceConnection {
-  后端?: string;
-  已连接?: boolean;
-  安全状态?: string;
-  模式?: string;
-  自由度?: number;
-  延迟毫秒?: number;
-  抖动毫秒?: number;
-  丢包率?: number;
-  编码器分辨率?: number;
-  实测平均延迟?: number;
-  实测最大延迟?: number;
-  丢包数?: number;
-  错序数?: number;
-  拒绝数?: number;
-  最近位置?: number[];
-  审计?: { 时刻?: number; 类别?: string; 内容?: string; 错误码?: string }[];
-  说明?: string;
+  backend?: string;
+  connected?: boolean;
+  safety_state?: string;
+  mode?: string;
+  dof?: number;
+  latency_ms?: number;
+  jitter_ms?: number;
+  packet_loss_rate?: number;
+  encoder_resolution?: number;
+  measured_mean_latency?: number;
+  measured_max_latency?: number;
+  dropped_packets?: number;
+  out_of_order_packets?: number;
+  rejected_count?: number;
+  latest_position?: number[];
+  audit?: { timestamp?: number; category?: string; content?: string; error_code?: string }[];
+  description?: string;
 }
 
 /** 一条病态告警（来自 `观测核心`） */
 export interface AlertItem {
-  类型?: string;
-  严重度?: string;
-  信号?: string;
-  开始秒?: number;
-  结束秒?: number;
-  证据?: string;
-  建议?: string;
-  曲线?: number[];
-  曲线t?: number[];
+  kind?: string;
+  severity?: string;
+  signal?: string;
+  start_seconds?: number;
+  end_seconds?: number;
+  evidence?: string;
+  recommendation?: string;
+  curve?: number[];
+  curve_times?: number[];
 }
 
 export interface AlertTable {
-  活动?: AlertItem[];
-  已检出?: number;
+  active?: AlertItem[];
+  detected_count?: number;
 }
 
 /** Trajectory planning result published by ``planning_bridge``. */
@@ -226,20 +233,20 @@ export interface PlanningResult {
 }
 
 export interface DeploymentItem {
-  文件?: string;
-  说明?: string;
-  字节?: number;
+  file?: string;
+  description?: string;
+  bytes?: number;
 }
 
 export interface DeploymentState {
-  状态?: string;
-  目录?: string;
-  文件数?: number;
-  字节?: number;
-  时间?: string;
-  清单?: DeploymentItem[];
-  说明?: string;
-  出错?: string;
+  state?: string;
+  directory?: string;
+  file_count?: number;
+  bytes?: number;
+  time?: string;
+  manifest?: DeploymentItem[];
+  description?: string;
+  errors?: string;
 }
 
 export interface AssetLibrary {
@@ -275,13 +282,13 @@ export interface ParameterItem {
 }
 
 export interface IdentificationState {
-  状态?: string;
-  进度?: string;
-  采样步数?: number;
-  结果?: Record<string, unknown>[];
-  拟合?: Record<string, unknown>;
-  耗时?: number;
-  日志?: string[];
+  state?: string;
+  progress?: string;
+  sample_count?: number;
+  results?: Record<string, unknown>[];
+  fit?: Record<string, unknown>;
+  elapsed_time?: number;
+  log?: string[];
 }
 
 export interface SnapshotDomain<T> {
@@ -293,7 +300,7 @@ export interface SnapshotDomain<T> {
 export interface UIState {
   connection: ConnectionState;
   error: string | null;
-  handshake: WireHandshake | null;
+  handshake: Handshake | null;
   topicCounts: Record<string, number>;
   topicRates: Record<string, number>;
   project: SnapshotDomain<ProjectState>;
@@ -341,7 +348,7 @@ const CHART_WINDOW_SECONDS = 120;
 const emptySnapshot: SnapshotDomain<never> = { data: null, frameId: 0, timestamp: 0 };
 
 let state: UIState = {
-  connection: "连接中",
+  connection: "connecting",
   error: null,
   handshake: null,
   topicCounts: {},
@@ -423,38 +430,38 @@ export function startConnection(): () => void {
   };
 }
 
-function receiveFrame(frame: WireFrame): void {
-  const timestamp = (frame.墙钟 ?? Date.now() / 1000) as number;
-  switch (frame.主题) {
+function receiveFrame(frame: MessageFrame): void {
+  const timestamp = (frame.timestamp ?? Date.now() / 1000) as number;
+  switch (frame.topic) {
     case "model.library":
-      updateState((s) => ({ ...s, assets: { data: frame.数据 as AssetLibrary, frameId: frame.序号 ?? 0, timestamp: timestamp } }));
+      updateState((s) => ({ ...s, assets: { data: frame.data as AssetLibrary, frameId: frame.sequence ?? 0, timestamp: timestamp } }));
       return;
     case "设备连接":
-      updateState((s) => ({ ...s, device: { data: frame.数据 as DeviceConnection, frameId: frame.序号 ?? 0, timestamp: timestamp } }));
+      updateState((s) => ({ ...s, device: { data: frame.data as DeviceConnection, frameId: frame.sequence ?? 0, timestamp: timestamp } }));
       return;
     case "告警":
-      updateState((s) => ({ ...s, alerts: { data: frame.数据 as AlertTable, frameId: frame.序号 ?? 0, timestamp: timestamp } }));
+      updateState((s) => ({ ...s, alerts: { data: frame.data as AlertTable, frameId: frame.sequence ?? 0, timestamp: timestamp } }));
       return;
     case "planning.result":
       updateState((s) => ({
         ...s,
-        planning: { data: frame.数据 as PlanningResult, frameId: frame.序号 ?? 0, timestamp: timestamp },
+        planning: { data: frame.data as PlanningResult, frameId: frame.sequence ?? 0, timestamp: timestamp },
       }));
       return;
     case "部署":
-      updateState((s) => ({ ...s, deployment: { data: frame.数据 as DeploymentState, frameId: frame.序号 ?? 0, timestamp: timestamp } }));
+      updateState((s) => ({ ...s, deployment: { data: frame.data as DeploymentState, frameId: frame.sequence ?? 0, timestamp: timestamp } }));
       return;
     case "插件目录":
-      updateState((s) => ({ ...s, plugins: { data: frame.数据 as PluginCatalog, frameId: frame.序号 ?? 0, timestamp: timestamp } }));
+      updateState((s) => ({ ...s, plugins: { data: frame.data as PluginCatalog, frameId: frame.sequence ?? 0, timestamp: timestamp } }));
       return;
     case "诊断":
-      updateState((s) => ({ ...s, diagnostics: { data: frame.数据 as DiagnosticReport, frameId: frame.序号 ?? 0, timestamp: timestamp } }));
+      updateState((s) => ({ ...s, diagnostics: { data: frame.data as DiagnosticReport, frameId: frame.sequence ?? 0, timestamp: timestamp } }));
       return;
     case "系统":
-      updateState((s) => ({ ...s, system: { data: frame.数据 as SystemState, frameId: frame.序号 ?? 0, timestamp: timestamp } }));
+      updateState((s) => ({ ...s, system: { data: frame.data as SystemState, frameId: frame.sequence ?? 0, timestamp: timestamp } }));
       return;
     case "simulation.state": {
-      const nextState = frame.数据 as SimulationState;
+      const nextState = frame.data as SimulationState;
       updateState((s) => {
         const previousState = s.simulation.data;
         const resetOccurred = typeof previousState?.reset_count === "number"
@@ -466,7 +473,7 @@ function receiveFrame(frame: WireFrame): void {
         const resetCharts = resetOccurred || timeReversed;
         return {
           ...s,
-          simulation: { data: nextState, frameId: frame.序号 ?? 0, timestamp: timestamp },
+          simulation: { data: nextState, frameId: frame.sequence ?? 0, timestamp: timestamp },
           // Reset 是新的实验段：不把复位前后两个不连续状态连成假的竖线。
           charts: resetCharts ? {} : s.charts,
           chartFrameCount: resetCharts ? 0 : s.chartFrameCount,
@@ -477,34 +484,34 @@ function receiveFrame(frame: WireFrame): void {
     case "experiment.state":
       updateState((s) => ({
         ...s,
-        experiment: { data: frame.数据 as ExperimentState, frameId: frame.序号 ?? 0, timestamp: timestamp },
+        experiment: { data: frame.data as ExperimentState, frameId: frame.sequence ?? 0, timestamp: timestamp },
       }));
       return;
     case "控制状态":
-      updateState((s) => ({ ...s, control: { data: frame.数据 as ControlState, frameId: frame.序号 ?? 0, timestamp: timestamp } }));
+      updateState((s) => ({ ...s, control: { data: frame.data as ControlState, frameId: frame.sequence ?? 0, timestamp: timestamp } }));
       return;
     case "project.state":
-      updateState((s) => ({ ...s, project: { data: frame.数据 as ProjectState, frameId: frame.序号 ?? 0, timestamp: timestamp } }));
+      updateState((s) => ({ ...s, project: { data: frame.data as ProjectState, frameId: frame.sequence ?? 0, timestamp: timestamp } }));
       return;
     case "model.state":
-      updateState((s) => ({ ...s, model: { data: frame.数据 as ModelState, frameId: frame.序号 ?? 0, timestamp: timestamp } }));
+      updateState((s) => ({ ...s, model: { data: frame.data as ModelState, frameId: frame.sequence ?? 0, timestamp: timestamp } }));
       return;
     case "parameter.table":
       updateState((s) => ({
         ...s,
         parameters: {
-          data: frame.数据 as { parameters?: Record<string, ParameterItem> },
-          frameId: frame.序号 ?? 0,
+          data: frame.data as { parameters?: Record<string, ParameterItem> },
+          frameId: frame.sequence ?? 0,
           timestamp: timestamp,
         },
       }));
       return;
     case "辨识状态":
-      updateState((s) => ({ ...s, identification: { data: frame.数据 as IdentificationState, frameId: frame.序号 ?? 0, timestamp: timestamp } }));
+      updateState((s) => ({ ...s, identification: { data: frame.data as IdentificationState, frameId: frame.sequence ?? 0, timestamp: timestamp } }));
       return;
     case "指标": {
-      const values = (frame.数据.数值 ?? {}) as Record<string, number>;
-      const t = (frame.数据.墙钟 as number) ?? timestamp;
+      const values = (frame.data.values ?? {}) as Record<string, number>;
+      const t = (frame.data.wall_clock as number) ?? timestamp;
       if (!Object.keys(values).length) return;
       updateState((s) => {
         const charts = { ...s.charts };
@@ -599,17 +606,17 @@ export const commands = {
     });
   },
   deviceAction(action: string, parameters?: Record<string, number>) {
-    return backend.sendCommand("命令.设备", { 动作: action, ...(parameters ?? {}) });
+    return backend.sendCommand("命令.设备", { action: action, ...(parameters ?? {}) });
   },
   exportDeployment() {
-    return backend.sendCommand("命令.部署", { 动作: "导出" });
+    return backend.sendCommand("命令.部署", { action: "导出" });
   },
   runDiagnostics() {
-    return backend.sendCommand("命令.诊断", { 动作: "运行" });
+    return backend.sendCommand("命令.诊断", { action: "运行" });
   },
   /** 在原生 3D 里高亮一个关节（视觉诊断；后端夹到 0..60s） */
   highlightJoint(joint: number, seconds = 8) {
-    return backend.sendCommand("命令.高亮", { 关节: joint, 秒: seconds });
+    return backend.sendCommand("命令.高亮", { joint: joint, seconds: seconds });
   },
   switchModel(path: string, displayName = "") {
     return backend.sendCommand("command.model", { path, display_name: displayName });
@@ -626,16 +633,16 @@ export const commands = {
     });
   },
   startIdentification(durationSeconds = 10) {
-    return backend.sendCommand("命令.辨识", { 动作: "开始", 时长: durationSeconds });
+    return backend.sendCommand("命令.辨识", { action: "开始", duration: durationSeconds });
   },
   stopIdentification() {
-    return backend.sendCommand("命令.辨识", { 动作: "停止", 时长: 0 });
+    return backend.sendCommand("命令.辨识", { action: "停止", duration: 0 });
   },
   startRecording(frequency = 100, note = "") {
-    return backend.sendCommand("命令.录制", { 动作: "开始", 频率: frequency, 备注: note });
+    return backend.sendCommand("命令.录制", { action: "开始", frequency: frequency, note: note });
   },
   stopRecording() {
-    return backend.sendCommand("命令.录制", { 动作: "停止", 频率: 100, 备注: "" });
+    return backend.sendCommand("命令.录制", { action: "停止", frequency: 100, note: "" });
   },
 };
 

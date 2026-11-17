@@ -1,3 +1,4 @@
+import { encodeNativeLog, encodeNativeLogState, postNativeLog } from "./wire_compatibility";
 /**
  * logs.ts —— 控制台**真实**数据的唯一来源。
  *
@@ -22,8 +23,8 @@ import type { CommandReceipt } from "./connection";
 import { showError } from "./toasts";
 import { translate } from "../views/i18n";
 
-export type LogLevel = "信息" | "注意" | "错误";
-export type LogSource = "连接" | "握手" | "回执" | "错误" | "前端" | "控制台" | "规划" | "诊断";
+export type LogLevel = "info" | "warning" | "error";
+export type LogSource = "connection" | "handshake" | "receipt" | "error" | "frontend" | "console" | "planning" | "diagnostics";
 
 export interface LogRow {
   id: number;
@@ -108,49 +109,12 @@ export function getLogs(): LogSnapshot {
 
 /** 订阅日志（快照按引用比较，没变就不会白重画） */
 /** 把一行日志转成原生面板能直接渲染的字段。 */
-function nativeRow(l: LogRow): Record<string, unknown> {
-  return {
-    墙钟: l.timestamp,
-    等级: l.level,
-    来源: l.source,
-    文本: l.text,
-    细节: l.details ?? "",
-    模块: l.module ?? "",
-    插件: l.plugins ?? "",
-    关节: l.joint ?? null,
-  };
+function sendNative(entry: LogRow): void {
+  postNativeLog(encodeNativeLog(entry));
 }
 
-function publishNative(content: Record<string, unknown>): void {
-  try {
-    const w = window as unknown as {
-      webkit?: { messageHandlers?: { 驭臂日志?: { postMessage?: (x: unknown) => void } } };
-    };
-    w.webkit?.messageHandlers?.驭臂日志?.postMessage?.(content);
-  } catch {
-    /* 镜像失败不影响 Web 控制台 */
-  }
-}
-
-/** 把单行日志镜像给原生宿主（有 WKWebView 的 messageHandler 时才发；浏览器里是 no-op）。 */
-function sendNative(l: LogRow): void {
-  publishNative(nativeRow(l));
-}
-
-/** 把**当前主日志的完整筛选结果**发给原生面板；面板的计数/筛选/清空都以它为准。 */
-export function sendNativeState(
-  row: LogRow[],
-  totalCount: number,
-  filter: string,
-  level: LogLevel | "全部",
-): void {
-  publishNative({
-    类型: "日志状态",
-    行: row.slice(-500).map(nativeRow),
-    总数: totalCount,
-    筛选: filter,
-    等级: level,
-  });
+export function sendNativeState(entries: LogRow[], total: number, filter: string, level: LogLevel | "全部"): void {
+  postNativeLog(encodeNativeLogState(entries, total, filter, level));
 }
 
 export function useLogs(): LogSnapshot {
@@ -185,15 +149,15 @@ function appendLog(level: LogLevel, source: LogSource, text: string, topic?: str
 
 /** 给界面用的三个便捷入口 */
 export function logInfo(source: LogSource, text: string, topic?: string): void {
-  appendLog("信息", source, text, topic);
+  appendLog("info", source, text, topic);
 }
 
 export function logWarning(source: LogSource, text: string, topic?: string, details?: string): void {
-  appendLog("注意", source, text, topic, details);
+  appendLog("warning", source, text, topic, details);
 }
 
 export function logError(source: LogSource, text: string, topic?: string, details?: string): void {
-  appendLog("错误", source, text, topic, details);
+  appendLog("error", source, text, topic, details);
 }
 
 /** 带结构化字段的事件（插件/关节/模块）；没有字段时退化为普通日志 */
@@ -229,13 +193,13 @@ export function finishCommand(
   context?: LogContext,
 ): CommandReceipt {
   const elapsedMs = Date.now() - startedAt;
-  if (receipt.通过) {
-    appendLog("信息", "回执", translate("日志.回执通过", { 主题: topic, 耗时: elapsedMs }), topic, receipt.说明 || undefined, context);
+  if (receipt.passed) {
+    appendLog("info", "receipt", translate("日志.回执通过", { topic: topic, elapsed: elapsedMs }), topic, receipt.description || undefined, context);
   } else {
     // 失败必须"两个出口都亮"：控制台留痕 + 右下角顶一条提示。
-    const description = receipt.说明 || translate("日志.无说明");
-    appendLog("错误", "回执", translate("日志.回执失败", { 主题: topic, 说明: description }), topic, translate("日志.耗时", { 值: elapsedMs }), context);
-    showError(translate("提示.命令失败", { 主题: topic }), description);
+    const description = receipt.description || translate("日志.无说明");
+    appendLog("error", "receipt", translate("日志.回执失败", { topic: topic, description: description }), topic, translate("日志.耗时", { value: elapsedMs }), context);
+    showError(translate("提示.命令失败", { topic: topic }), description);
   }
   return receipt;
 }
@@ -261,7 +225,7 @@ export function clearLogs(): void {
 
 /** 供 `问题` 页签用：把一行日志当成一条问题（只有 注意/错误 才算问题） */
 export function isProblem(row: LogRow): boolean {
-  return row.level === "错误" || row.level === "注意";
+  return row.level === "error" || row.level === "warning";
 }
 
 let started = false;
@@ -275,60 +239,60 @@ export function startLogging(): () => void {
   if (started) return cleanup ?? (() => {});
   started = true;
 
-  appendLog("信息", "控制台", translate("日志.启动"));
+  appendLog("info", "console", translate("日志.启动"));
 
   let lastPlanningEvent = "";
   let lastDiagnosticEvent = "";
 
   const unsubscribe = backend.subscribe((e) => {
     if (e.state) {
-      if (e.state === "已连接") {
+      if (e.state === "connected") {
         connectionStart = Date.now();
-        appendLog("信息", "连接", translate("日志.已连接"));
-      } else if (e.state === "已断开") {
-        appendLog("注意", "连接", translate("日志.已断开"));
+        appendLog("info", "connection", translate("日志.已连接"));
+      } else if (e.state === "disconnected") {
+        appendLog("warning", "connection", translate("日志.已断开"));
       } else {
-        appendLog("信息", "连接", translate("日志.连接中"));
+        appendLog("info", "connection", translate("日志.连接中"));
       }
     }
     if (e.handshake) {
-      const topicCount = e.handshake.可用主题?.length ?? 0;
-      const contractVersion = e.handshake.契约?.版本;
+      const topicCount = e.handshake.available_topics?.length ?? 0;
+      const contractVersion = e.handshake.contract?.version;
       appendLog(
-        "信息",
-        "握手",
+        "info",
+        "handshake",
         translate("日志.握手", {
-          主题数: topicCount,
-          间隔: e.handshake.广播间隔,
-          契约: contractVersion === undefined ? "" : translate("日志.握手契约", { 版本: contractVersion }),
+          topicCount: topicCount,
+          interval: e.handshake.broadcast_interval,
+          contract: contractVersion === undefined ? "" : translate("日志.握手契约", { version: contractVersion }),
         }),
         "__问候__",
-        e.handshake.可用主题?.join(" · "),
+        e.handshake.available_topics?.join(" · "),
       );
     }
     if (e.receipt) {
       appendLog(
-        e.receipt.通过 ? "信息" : "错误",
-        "回执",
-        e.receipt.通过
-          ? translate("日志.回执简单通过", { 主题: e.receipt.主题 })
-          : translate("日志.回执失败", { 主题: e.receipt.主题, 说明: e.receipt.说明 || translate("日志.无说明") }),
-        e.receipt.主题,
-        e.receipt.说明 || undefined,
+        e.receipt.passed ? "info" : "error",
+        "receipt",
+        e.receipt.passed
+          ? translate("日志.回执简单通过", { topic: e.receipt.topic })
+          : translate("日志.回执失败", { topic: e.receipt.topic, description: e.receipt.description || translate("日志.无说明") }),
+        e.receipt.topic,
+        e.receipt.description || undefined,
       );
     }
     if (e.error) {
-      appendLog("错误", "错误", e.error, undefined, translate("日志.后端错误细节"));
+      appendLog("error", "error", e.error, undefined, translate("日志.后端错误细节"));
     }
-    if (e.frame?.主题) {
-      latestFrames.set(e.frame.主题, Date.now());
-      const data = (e.frame.数据 ?? {}) as Record<string, unknown>;
+    if (e.frame?.topic) {
+      latestFrames.set(e.frame.topic, Date.now());
+      const data = (e.frame.data ?? {}) as Record<string, unknown>;
       const asString = (v: unknown) => (typeof v === "string" ? v : "");
       const asNumber = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 
       // 规划结果里的真实关节信息：失败 / 估算限位时产生一条结构化事件。
       // 这不是"解析日志猜关节"，而是直接读后端规划结果的 `瓶颈关节`。
-      if (e.frame.主题 === "planning.result") {
+      if (e.frame.topic === "planning.result") {
         const state = asString(data.status);
         const reason = asString(data.reason);
         const limit = asString(data.limit_source);
@@ -341,11 +305,11 @@ export function startLogging(): () => void {
             lastPlanningEvent = signature;
             const jointLabel = joint !== undefined && joint >= 0 ? `J${joint}` : translate("通用.无");
             const text = failed
-              ? translate("日志.规划失败", { 原因: reason || translate("日志.无说明") })
-              : translate("日志.规划估算", { 来源: limit, 关节: jointLabel });
+              ? translate("日志.规划失败", { reason: reason || translate("日志.无说明") })
+              : translate("日志.规划估算", { source: limit, joint: jointLabel });
             logStructured(
-              failed ? "错误" : "注意",
-              "规划",
+              failed ? "error" : "warning",
+              "planning",
               text,
               { module: "规划", joint: joint !== undefined && joint >= 0 ? joint : undefined },
               "planning.result",
@@ -358,24 +322,24 @@ export function startLogging(): () => void {
       }
 
       // 诊断报告里的失败项：同样来自真实报告，不解析自由文本。
-      if (e.frame.主题 === "诊断") {
-        const items = Array.isArray(data.项) ? (data.项 as Record<string, unknown>[]) : [];
-        const failures = items.filter((x) => x && x.通过 === false);
-        const error = asString(data.出错);
+      if (e.frame.topic === "诊断") {
+        const items = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
+        const failures = items.filter((x) => x && x.passed === false);
+        const error = asString(data.errors);
         if (failures.length || error) {
-          const signature = [data.时间, data.通过, data.总数, failures.map((x) => asString(x.名)).join(","), error].join("|");
+          const signature = [data.time, data.passed, data.total, failures.map((x) => asString(x.name)).join(","), error].join("|");
           if (signature !== lastDiagnosticEvent) {
             lastDiagnosticEvent = signature;
             const text = error
-              ? translate("日志.诊断出错", { 说明: error })
-              : translate("日志.诊断未通过", { 通过: asNumber(data.通过) ?? 0, 总数: asNumber(data.总数) ?? 0 });
+              ? translate("日志.诊断出错", { description: error })
+              : translate("日志.诊断未通过", { passed: asNumber(data.passed) ?? 0, total: asNumber(data.total) ?? 0 });
             logStructured(
-              "错误",
-              "诊断",
+              "error",
+              "diagnostics",
               text,
               { module: "诊断" },
               "诊断",
-              failures.length ? failures.map((x) => asString(x.名)).filter(Boolean).join(" · ") || undefined : undefined,
+              failures.length ? failures.map((x) => asString(x.name)).filter(Boolean).join(" · ") || undefined : undefined,
             );
           }
         }
@@ -403,16 +367,16 @@ export function startLogging(): () => void {
   // 前端自己的异常也要进控制台，否则"界面白屏"在日志里查不到
   const handleError = (event: ErrorEvent) => {
     appendLog(
-      "错误",
-      "前端",
-      translate("日志.未捕获", { 信息: event.message || translate("日志.无信息") }),
+      "error",
+      "frontend",
+      translate("日志.未捕获", { message: event.message || translate("日志.无信息") }),
       undefined,
-      [event.filename, event.lineno ? translate("日志.行号", { 值: event.lineno }) : ""].filter(Boolean).join(" ") ||
+      [event.filename, event.lineno ? translate("日志.行号", { value: event.lineno }) : ""].filter(Boolean).join(" ") ||
         undefined,
     );
   };
   const handleRejection = (event: PromiseRejectionEvent) => {
-    appendLog("错误", "前端", translate("日志.未处理拒绝", { 原因: String(event.reason) }));
+    appendLog("error", "frontend", translate("日志.未处理拒绝", { reason: String(event.reason) }));
   };
   window.addEventListener("error", handleError);
   window.addEventListener("unhandledrejection", handleRejection);

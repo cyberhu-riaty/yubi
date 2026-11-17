@@ -55,7 +55,7 @@ export function CollapsibleSection({
           aria-expanded={isOpen}
           aria-controls={contentId}
           onClick={() => setOpen(!isOpen)}
-          title={isOpen ? t("区块.收起名", { 名: title }) : t("区块.展开名", { 名: title })}
+          title={isOpen ? t("区块.收起名", { name: title }) : t("区块.展开名", { name: title })}
         >
           <span aria-hidden="true" className="monospace text-dim">
             {isOpen ? "▾" : "▸"}

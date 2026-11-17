@@ -39,7 +39,7 @@ import websockets
 def find_browser() -> str:
     """测试工具也要跨平台：优先环境变量，其次查 PATH 和常见安装位置。"""
     candidate = [
-        os.environ.get("驭臂_测试浏览器", ""),
+        os.environ.get("YUBI_TEST_BROWSER", os.environ.get("驭臂_测试浏览器", "")),
         shutil.which("google-chrome") or "",
         shutil.which("chrome") or "",
         shutil.which("msedge") or "",
@@ -57,7 +57,7 @@ def find_browser() -> str:
 CHROME = find_browser()
 DEBUG_PORT = 9333
 # 端口可用环境变量改（与假后端共用同一个变量）：真后端正在 8712 上跑时不必抢端口。
-PORT = int(os.environ.get("驭臂_测试端口", "8712"))
+PORT = int(os.environ.get("YUBI_TEST_PORT", os.environ.get("驭臂_测试端口", "8712")))
 URL = f"http://127.0.0.1:{PORT}/"
 
 
@@ -253,9 +253,9 @@ async def main(output_dir: str) -> int:
                 osc_active = await P.evaluate("""
                 (() => {
                   const s = window.yubi && window.yubi.getState();
-                  const elements = (s && s.plugins && s.plugins.data && s.plugins.data.插件) || [];
-                  const x = elements.find(e => e.插件 === 'osc');
-                  return !!(x && x.当前启用);
+                  const elements = (s && s.plugins && s.plugins.data && s.plugins.data.plugins) || [];
+                  const x = elements.find(e => e.plugin === 'osc');
+                  return !!(x && x.enabled);
                 })()
                 """)
                 if not osc_active:

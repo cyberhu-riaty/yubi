@@ -86,8 +86,8 @@ function ParameterValueEditor({
     }
     if ((min !== undefined && digit < min) || (max !== undefined && digit > max)) {
       setError(t("验证.参数.超范围", {
-        最小: min ?? "−∞",
-        最大: max ?? "+∞",
+        min: min ?? "−∞",
+        max: max ?? "+∞",
       }));
       return;
     }
@@ -125,7 +125,7 @@ function ParameterValueEditor({
         title={[
           fullName,
           min !== undefined || max !== undefined
-            ? t("验证.参数.范围提示", { 最小: min ?? "−∞", 最大: max ?? "+∞" })
+            ? t("验证.参数.范围提示", { min: min ?? "−∞", max: max ?? "+∞" })
             : "",
           stepSize ? `步长 ${stepSize}` : "",
           t("验证.参数.编辑提示"),
@@ -291,8 +291,8 @@ export function ValidateView() {
     setEditing(fullName);
     try {
       const receipt = await commands.updateParameters({ [fullName]: newValue });
-      if (!receipt.通过) {
-        showError(receipt.说明);
+      if (!receipt.passed) {
+        showError(receipt.description);
         return false;
       }
       return true;
@@ -398,7 +398,7 @@ export function ValidateView() {
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1 text-[0.85em] text-dim">
           <span className="flex-none">{t("验证.窗口.标签")}</span>
-          <span className="monospace">{t("验证.窗口.值", { 值: windowSeconds })}</span>
+          <span className="monospace">{t("验证.窗口.值", { value: windowSeconds })}</span>
           <span aria-hidden="true">·</span>
           <span>{t("曲线.轴时间")}</span>
           <span aria-hidden="true">·</span>
@@ -407,10 +407,10 @@ export function ValidateView() {
               ? t("验证.从未收到")
               : !simulationRunning
                 ? t("验证.采集已暂停")
-                : t("验证.最近更新", { 秒: latestAge.toFixed(0) })}
+                : t("验证.最近更新", { seconds: latestAge.toFixed(0) })}
           </span>
           {paused ? <Tag tone="emphasis">{t("验证.暂停中")}</Tag> : null}
-          {outsideWindow > 0 ? <Tag tone="notice">{t("验证.超出窗口", { 条: outsideWindow })}</Tag> : null}
+          {outsideWindow > 0 ? <Tag tone="notice">{t("验证.超出窗口", { count: outsideWindow })}</Tag> : null}
         </div>
 
         {names.length ? (

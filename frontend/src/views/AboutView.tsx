@@ -79,9 +79,9 @@ export function AboutView() {
           {handshake ? (
             <span>
               {t("关于.握手.有", {
-                可用: handshake.可用主题?.length ?? 0,
-                间隔: handshake.广播间隔,
-                版本: handshake.契约?.版本 ?? "--",
+                available: handshake.available_topics?.length ?? 0,
+                interval: handshake.broadcast_interval,
+                version: handshake.contract?.version ?? "--",
               })}
             </span>
           ) : (

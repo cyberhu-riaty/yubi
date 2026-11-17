@@ -160,7 +160,7 @@ export function SimulationToolbar() {
   const ran = state?.state === "running";
   const paused = state?.state === "paused";
   const gravityEnabled = state?.gravity_enabled ?? true;
-  const canSend = connection === "已连接" && !!model && !!state;
+  const canSend = connection === "connected" && !!model && !!state;
   const experimentCompleted = !!experiment?.current && experiment?.status === "completed";
   const experimentStatusText = ({
     not_selected: t("simulation.experiment.status.not_selected"),

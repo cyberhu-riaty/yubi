@@ -26,12 +26,12 @@ export function StatusBar() {
   const metricRate = useStore((s) => s.topicRates["指标"] ?? 0);
 
   const running = simulation?.state === "running";
-  const simulationSeconds = simulation?.simulation_time ?? system?.仿真时间;
+  const simulationSeconds = simulation?.simulation_time ?? system?.simulation_time;
   const RTF = system?.RTF;
   // 冻结时 RTF 天然是 0，不算"跑不动"；只有推进中且明显掉速才提示。
   const rtfWarning = running && RTF !== undefined && RTF < 0.95;
   const connectionColor =
-    connection === "已连接" ? "var(--ok)" : connection === "连接中" ? "var(--warn)" : "var(--danger)";
+    connection === "connected" ? "var(--ok)" : connection === "connecting" ? "var(--warn)" : "var(--danger)";
 
   return (
     <footer

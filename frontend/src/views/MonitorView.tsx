@@ -22,8 +22,8 @@ export function MonitorView() {
   const simulation = useStore((s) => s.simulation.data);
   const connection = useStore((s) => s.connection);
   const alerts = useStore((s) => s.alerts.data);
-  const activeAlerts = alerts?.活动 ?? [];
-  const errorCount = activeAlerts.filter((a) => a.严重度 === "严重").length;
+  const activeAlerts = alerts?.active ?? [];
+  const errorCount = activeAlerts.filter((a) => a.severity === "严重").length;
   const frozen = simulation?.state === "paused";
   const canRun = system?.RTF !== undefined && system.RTF >= 0.95;
 
@@ -43,16 +43,16 @@ export function MonitorView() {
         },
         {
           key: t("监控.步频"),
-          value: <span className="monospace">{system.步频 === undefined ? "--" : `${system.步频.toFixed(0)} Hz`}</span>,
+          value: <span className="monospace">{system.step_rate === undefined ? "--" : `${system.step_rate.toFixed(0)} Hz`}</span>,
         },
-        { key: t("监控.步长"), value: <span className="monospace">{system.仿真步长?.toFixed(4) ?? "--"} s</span> },
+        { key: t("监控.步长"), value: <span className="monospace">{system.timestep?.toFixed(4) ?? "--"} s</span> },
         {
           key: t("监控.内存"),
-          value: <span className="monospace">{system.内存MB === undefined ? "--" : `${system.内存MB.toFixed(0)} MB`}</span>,
+          value: <span className="monospace">{system.memory_mb === undefined ? "--" : `${system.memory_mb.toFixed(0)} MB`}</span>,
         },
-        { key: t("监控.仿真时间"), value: <span className="monospace">{system.仿真时间?.toFixed(2) ?? "--"} s</span> },
-        { key: t("监控.墙钟"), value: <span className="monospace">{system.墙钟?.toFixed(1) ?? "--"} s</span> },
-        { key: t("监控.插件数"), value: <span className="monospace">{system.插件数 ?? "--"}</span> },
+        { key: t("监控.仿真时间"), value: <span className="monospace">{system.simulation_time?.toFixed(2) ?? "--"} s</span> },
+        { key: t("监控.墙钟"), value: <span className="monospace">{system.wall_clock?.toFixed(1) ?? "--"} s</span> },
+        { key: t("监控.插件数"), value: <span className="monospace">{system.plugin_count ?? "--"}</span> },
       ]
     : [];
 
@@ -64,7 +64,7 @@ export function MonitorView() {
           title={t("监控.告警")}
           badge={
             <Tag tone={errorCount ? "notice" : "emphasis"}>
-              {t("监控.告警.计数", { 活动: activeAlerts.length, 严重: errorCount })}
+              {t("监控.告警.计数", { active: activeAlerts.length, severe: errorCount })}
             </Tag>
           }
         >
@@ -72,31 +72,31 @@ export function MonitorView() {
           <ul className="mt-2 space-y-1.5">
             {activeAlerts.map((a, i) => (
               <li
-                key={`${a.类型}-${a.信号}-${i}`}
+                key={`${a.kind}-${a.signal}-${i}`}
                 className="panel p-2"
                 style={{
-                  borderLeft: `3px solid ${a.严重度 === "严重" ? "var(--danger)" : "var(--warn)"}`,
+                  borderLeft: `3px solid ${a.severity === "严重" ? "var(--danger)" : "var(--warn)"}`,
                 }}
               >
                 <div className="flex flex-wrap items-baseline gap-1.5">
-                  <Tag tone={a.严重度 === "严重" ? "notice" : "emphasis"}>{a.类型}</Tag>
-                  <span className="min-w-0 flex-1 break-words text-[0.85em] monospace" title={a.信号}>
-                    {String(a.信号 ?? "")}
+                  <Tag tone={a.severity === "严重" ? "notice" : "emphasis"}>{a.kind}</Tag>
+                  <span className="min-w-0 flex-1 break-words text-[0.85em] monospace" title={a.signal}>
+                    {String(a.signal ?? "")}
                   </span>
                   <span className="flex-none text-[0.78em] text-dim monospace">
-                    {`${(a.开始秒 ?? 0).toFixed(1)}–${(a.结束秒 ?? 0).toFixed(1)}s`}
+                    {`${(a.start_seconds ?? 0).toFixed(1)}–${(a.end_seconds ?? 0).toFixed(1)}s`}
                   </span>
                 </div>
-                <div className="mt-1 text-[0.82em]">{a.证据}</div>
-                {a.曲线?.length ? (
+                <div className="mt-1 text-[0.82em]">{a.evidence}</div>
+                {a.curve?.length ? (
                   <>
-                    <AlertTrend charts={a.曲线} />
+                    <AlertTrend charts={a.curve} />
                     <div className="text-[0.74em] text-dim">
-                      {`${t("监控.告警.走势")} ${(a.曲线t?.[a.曲线t.length - 1] ?? 0).toFixed(1)} s`}
+                      {`${t("监控.告警.走势")} ${(a.curve_times?.[a.curve_times.length - 1] ?? 0).toFixed(1)} s`}
                     </div>
                   </>
                 ) : null}
-                <div className="mt-1 text-[0.8em] text-dim">{a.建议}</div>
+                <div className="mt-1 text-[0.8em] text-dim">{a.recommendation}</div>
               </li>
             ))}
           </ul>
@@ -125,12 +125,12 @@ export function MonitorView() {
           </div>
         ) : (
           <div className="mt-2 text-dim">
-            {connection === "已连接" ? t("监控.没数据") : t("连接.已断开")}
+            {connection === "connected" ? t("监控.没数据") : t("连接.已断开")}
           </div>
         )}
-        {system?.出错 ? (
+        {system?.errors ? (
           <div className="mt-2" style={{ color: "var(--warn)" }}>
-            {system.出错}
+            {system.errors}
           </div>
         ) : null}
       </CollapsibleSection>
