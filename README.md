@@ -149,8 +149,8 @@ yubi/
 ├── run_yubi_web.py        浏览器入口
 ├── experiments/           无界面实验定义与运行入口（run_experiment_cli.py）
 ├── scripts/               命名审计等仓库维护脚本
-├── 软件/                  runtime/plugin/project/model 核心、宿主及各消息桥
-├── frontend/                  React 19 + Vite 7 + Tailwind 4 源码（构建产物在 软件/web/）
+├── runtime/                  runtime/plugin/project/model 核心、宿主及各消息桥
+├── frontend/                  React 19 + Vite 7 + Tailwind 4 源码（构建产物在 runtime/web/）
 ├── controllers/common/    控制、录制、辨识插件与算法模板
 ├── 模型/                  MuJoCo 模型与网格资产（6 台机械臂 + Robotiq 2F85 + Panda MPC 任务）
 ├── projects/              项目配置：一个项目 = 模型 + 算法列表 + 参数（版本 2）
@@ -280,7 +280,7 @@ class MyController(ControlPlugin):
 - **插件**：只有本机算法库，没有远端安装、签名校验或版本服务器。
 - **3D**：没有幽灵姿态、录制回放等叠加显示。
 
-如果你要拿它做真机控制，请把 `软件/设备/` 当作接口参考，而不是安全认证组件；真机必须自己实现协议后端、硬件看门狗和独立的物理急停。
+如果你要拿它做真机控制，请把 `runtime/设备/` 当作接口参考，而不是安全认证组件；真机必须自己实现协议后端、硬件看门狗和独立的物理急停。
 
 ## 文档
 
@@ -304,3 +304,6 @@ GUI 已作为稳定载体使用。控制算法通过 `ControllerRegistry` 按名
 
 GUI 顶部可直接选择实验；加载后复用原来的“开始/暂停/复位”。开始时自动记录，
 达到实验停止时间后自动暂停并导出 CSV、指标 JSON 和离线曲线。
+
+
+代码英文化状态：自有源码标识符、文件/目录名与 JSON 机器键均已通过严格检查。运行代码在 `runtime/`；旧插件名通过 `runtime/legacy_imports.py` 的显式导入适配保留。旧命令行路径与退役规则见 [兼容入口登记](docs/legacy-compatibility-registry.md)。

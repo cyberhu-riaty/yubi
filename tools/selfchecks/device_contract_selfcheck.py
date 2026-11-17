@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 
 package_root = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(package_root / "软件"))
+sys.path.insert(0, str(package_root / "runtime"))
 
 details: list[str] = []
 passed = 0

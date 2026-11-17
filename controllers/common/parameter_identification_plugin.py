@@ -29,13 +29,13 @@ import numpy as np
 from official_api import messages
 
 # ★ 本文件在 `算法库/通用/` 下，但它要 import 外壳侧的 `参数辨识`、`辨识桥`、`项目`
-#   —— 那三个在 `软件/` 里。所以先保证 `软件/` 在 sys.path 上。
+#   —— 那三个在 `runtime/` 里。所以先保证 `runtime/` 在 sys.path 上。
 #   （外壳通过 `装配器` 装配时也会加，但本文件被单独 import 时同样要能跑，
 #     所以这一道自己带 —— 不能依赖调用方帮忙铺路。）
 import os as _os
 import sys as _sys
 _runtime_directory = _os.path.normpath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                           "..", "..", "软件"))
+                                           "..", "..", "runtime"))
 if _os.path.isdir(_runtime_directory) and _runtime_directory not in _sys.path:
     _sys.path.insert(0, _runtime_directory)
 

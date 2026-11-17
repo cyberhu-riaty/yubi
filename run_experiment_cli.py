@@ -6,9 +6,13 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parent
-LEGACY_RUNTIME = ROOT / "软件"
-if str(LEGACY_RUNTIME) not in sys.path:
-    sys.path.insert(0, str(LEGACY_RUNTIME))
+RUNTIME_DIRECTORY = ROOT / "runtime"
+if str(RUNTIME_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_DIRECTORY))
+
+from legacy_imports import install
+
+install()
 
 from run_experiment import main  # noqa: E402
 

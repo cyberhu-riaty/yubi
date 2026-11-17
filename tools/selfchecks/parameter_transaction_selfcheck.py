@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "软件"))
+sys.path.insert(0, str(ROOT / "runtime"))
 
 details: list[str] = []
 passed = 0

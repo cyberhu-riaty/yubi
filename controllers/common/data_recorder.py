@@ -33,14 +33,14 @@ import numpy as np
 
 from official_api import messages
 
-# ★ 录制命令的定义**不在本文件里**，在 `软件/录制桥.py` —— 界面和仿真侧都从那里
+# ★ 录制命令的定义**不在本文件里**，在 `runtime/录制桥.py` —— 界面和仿真侧都从那里
 #   import，才能保证是同一个类对象。原因见 录制桥.py 的文件头（这个坑踩过两次：
 #   一次是同一个 .py 被加载两遍，一次是算法搬到 算法库/ 后模块名变了）。
 #   所以下面 `@messages.handler` 收到的消息类型，和面板发出的那个一定是同一个。
 import sys as _sys
 import os as _os
 _runtime_directory = _os.path.normpath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                           "..", "..", "软件"))
+                                           "..", "..", "runtime"))
 if _os.path.isdir(_runtime_directory) and _runtime_directory not in _sys.path:
     _sys.path.insert(0, _runtime_directory)
 from recording_bridge import RecordingCommand as RecordingCommand                   # noqa: E402

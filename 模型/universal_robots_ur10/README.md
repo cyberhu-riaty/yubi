@@ -34,7 +34,7 @@
 | `assets/` | 视觉 OBJ 与碰撞 STL |
 | `模型信息.json` | 模型库索引用的显示名 / 许可 / 说明（`tools/import_model.py --索引` 会读它） |
 
-在驭臂里加载纯机械臂 XML 时，`软件/模型加载.py` 会自动把 `模型/公共场景.xml`
+在驭臂里加载纯机械臂 XML 时，`runtime/模型加载.py` 会自动把 `模型/公共场景.xml`
 （地面、灯光、棋盘格材质）挂上，所以一般不需要 `scene.xml`。
 
 ## 与 menagerie `ur10e` 模型的差别

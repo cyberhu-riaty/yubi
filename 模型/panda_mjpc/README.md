@@ -53,6 +53,6 @@ curl -sL https://raw.githubusercontent.com/google-deepmind/mujoco_mpc/main/mjpc/
 ## 模型库索引
 
 `模型/模型库.json` 里的 `panda_mjpc` 是**手工条目**（类别 `arm_task`，`可控制: false`），
-`软件/模型桥.py` 的过滤已放行 `arm_task`，所以它能在资产库显示、点选加载。
+`runtime/模型桥.py` 的过滤已放行 `arm_task`，所以它能在资产库显示、点选加载。
 
 ⚠️ 重跑 `tools/import_model.py --全部` 会重写 `模型/模型库.json`，这条需要补回。

@@ -9,14 +9,14 @@ fake_backend.py —— **给界面做冒烟测试用的最小 WebSocket 对端**
     验证不了"有数据时画得对"。
 
 它是什么：
-    · 一个 60 行的 websockets 服务，按 `软件/contract.py` 的主题名发帧，形状与 `生成/contract.ts` 一致
+    · 一个 60 行的 websockets 服务，按 `runtime/contract.py` 的主题名发帧，形状与 `生成/contract.ts` 一致
     · 用**正弦波**造指标值 —— 所以图上的波形是"这一层真的收到了这些数"，
       不是这一层自己算的（界面上任何数字仍然只来自网络）
-    · 同时提供 HTTP：把 `软件/web/` 的产物按同源方式发给浏览器，
+    · 同时提供 HTTP：把 `runtime/web/` 的产物按同源方式发给浏览器，
       这样 `猜地址()` 推出的 `ws://<同一个 host>/` 正好连到它
 
 它不是什么：
-    · 不是后端，不替代 `软件/Web桥.py`，不进 `软件/web/` 产物，不参与启动流程
+    · 不是后端，不替代 `runtime/Web桥.py`，不进 `runtime/web/` 产物，不参与启动流程
     · 只在"改前端、想看一眼"的时候手动跑：
         /Users/huspark/Desktop/驭臂/.venv/bin/python frontend/tests/fake_backend.py
       然后浏览器开 http://127.0.0.1:8712/
@@ -35,8 +35,8 @@ import time
 import websockets
 
 PACKAGE_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-FRONTEND_DIR = os.path.join(PACKAGE_ROOT, "软件", "web")
-SOFTWARE_DIR = os.path.join(PACKAGE_ROOT, "软件")
+FRONTEND_DIR = os.path.join(PACKAGE_ROOT, "runtime", "web")
+SOFTWARE_DIR = os.path.join(PACKAGE_ROOT, "runtime")
 if SOFTWARE_DIR not in sys.path:
     sys.path.insert(0, SOFTWARE_DIR)
 
@@ -99,7 +99,7 @@ def encode_frame(topic: str, data: dict, sequence: int) -> str:
 
 
 async def serve_static(connection, request):
-    """HTTP 分支：只服务 软件/web/ 里的产物；WebSocket 升级请求放行。"""
+    """HTTP 分支：只服务 runtime/web/ 里的产物；WebSocket 升级请求放行。"""
     from websockets.datastructures import Headers
     from websockets.http11 import Response
 

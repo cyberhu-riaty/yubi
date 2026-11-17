@@ -7,7 +7,7 @@ platform_selfcheck.py —— 守住"入口不碰平台细节"这条边界
     NSOpenGLView / WKWebView）。能跑，但"能跑"不等于"可移植"：
     入口一旦沾上平台，将来做 Windows 版就得从入口一路改进去，也没人知道边界在哪。
 
-    现在已经收进 `软件/平台适配层/`。这层只回答一个问题：
+    现在已经收进 `runtime/平台适配层/`。这层只回答一个问题：
     **换一个平台，最少要实现什么？** —— 五个方法，见 `契约.py`。
 
 检查（全部机器可判）：
@@ -27,10 +27,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "软件"))
+sys.path.insert(0, str(ROOT / "runtime"))
 
 # ENTRY_FILES：允许写"业务"，不允许写"平台"
-ENTRY_FILES = [ROOT / "软件" / "desktop_app.py"]
+ENTRY_FILES = [ROOT / "runtime" / "desktop_app.py"]
 
 
 def check_entry(path: Path) -> list[str]:

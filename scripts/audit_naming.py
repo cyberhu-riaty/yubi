@@ -269,6 +269,11 @@ def main(argv: list[str] | None = None) -> int:
         if len(added) > 30:
             print("  ... use --json-report for the full inventory")
         return 1
+    if args.strict:
+        print(f"Strict naming gate passed across {len(report['files'])} files; "
+              "no non-ASCII code identifiers, source paths or JSON keys remain. "
+              f"{len(report['findings'])} advisory string-key positions are classified separately.")
+        return 0
     print(f"Naming gate passed across {len(report['files'])} files; "
           f"{len(report['findings'])} existing positions remain (including advisory keys). "
           "This is an incremental gate, not full migration completion.")

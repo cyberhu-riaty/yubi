@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 
-RUNTIME = Path(__file__).resolve().parents[2] / "软件"
+RUNTIME = Path(__file__).resolve().parents[2] / "runtime"
 # Captured before renaming from the v21 implementation, not regenerated from it.
 WIRE_V21_SHA256 = "61b15d41655ad3317790fb682112b8a7e0036f4947d93238785eda831b465024"
 VALIDATION_V21_SHA256 = "707fe6c82c4f99f6c8e0f00fe6ec50baa081d2f13a8cfd5352e445d66fb3501b"
@@ -59,7 +59,7 @@ class ContractTests(unittest.TestCase):
         canonical = patch.dict(sys.modules, {"contract": self.contract})
         canonical.start()
         self.addCleanup(canonical.stop)
-        return self.load_source("契约.py", "legacy_contract_under_test")
+        return self.load_source("legacy/contract.py", "legacy_contract_under_test")
 
     def test_wire_payload_and_version_are_unchanged(self):
         wire = self.contract.to_dict()

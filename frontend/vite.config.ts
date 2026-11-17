@@ -14,7 +14,7 @@ import tailwindcss from "@tailwindcss/vite";
  */
 const FRONTEND_ROOT = (import.meta as unknown as { dirname: string }).dirname;
 
-// 构建产物直接落到 软件/web/ —— 由 Python 的 Web桥 在同一个端口提供，
+// 构建产物直接落到 runtime/web/ —— 由 Python 的 Web桥 在同一个端口提供，
 // 所以"前端产物"和"后端服务"是同源的：不需要 CORS，不需要第二个进程。
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -25,13 +25,13 @@ export default defineConfig({
     },
   },
   build: {
-    // ★ 产物目录 = `软件/web/`，`emptyOutDir` 会**递归清空**它。
+    // ★ 产物目录 = `runtime/web/`，`emptyOutDir` 会**递归清空**它。
     //   所以这里只放构建产物，**不放任何需要长期存在的文件** —— 生成物
     //   （contract.ts / themes.ts / theme.css）一律落在 `src/generated/`，靠 import 打进包。
     //   踩过的坑：生成物曾同时放这里，于是每次构建都删掉它，且顺序一变就时好时坏。
     //   （`emptyOutDir` 只有 boolean，没有"排除目录"，查过类型定义；所以正解是
     //    别把东西放进来，而不是想办法排除。）
-    outDir: "../软件/web",
+    outDir: "../runtime/web",
     emptyOutDir: true,
     chunkSizeWarningLimit: 1500,
   },

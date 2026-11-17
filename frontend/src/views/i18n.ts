@@ -3,7 +3,7 @@
  *
  * 纪律（`CONVENTIONS.md` §三）：**组件里不硬编码中文**，任何画到屏幕上的字都走 `取(键)`。
  *
- * 与后端 `软件/文案.py` 的关系：**术语照抄，键名各自独立**。
+ * 与后端 `runtime/文案.py` 的关系：**术语照抄，键名各自独立**。
  *   后端那份管 ImGui 面板（受"字体画不出汉字"限制，键名与字符串都是它自己的）；
  *   这份管浏览器（字体齐全，中文随便画）。两边共享的只有"叫法"：
  *   模型库、算法库、参数辨识、物理总闸… 这些词两边必须一样，否则同一个人看到两套名词。
@@ -685,7 +685,7 @@ const messages = {
   "定义.资产库.带星": ["当前加载", "loaded"],
   "定义.资产库.点选": ["加载这台：{name}", "Load {name}"],
   "定义.资产库.待接入": [
-    "模型库列表**还没进契约**：`软件/契约.py` 里只有「当前模型」，没有可浏览的模型清单。",
+    "模型库列表**还没进契约**：`runtime/契约.py` 里只有「当前模型」，没有可浏览的模型清单。",
     "The model library is **not in the contract yet**: the contract carries only the current model, not a browsable list.",
   ],
   "定义.资产库.后补": [
@@ -901,8 +901,8 @@ const messages = {
   ],
   "外观.高级": ["高级信息（开发者）", "Advanced (developer)"],
   "外观.高级说明": [
-    "皮肤定义来自 软件/theme_table.json，生成前端主题；选择写在浏览器本地存储里。普通使用不需要看这些。",
-    "Skin definitions live in 软件/theme_table.json and are generated into the frontend theme; the choice is stored in browser local storage. Normal use does not need this.",
+    "皮肤定义来自 runtime/theme_table.json，生成前端主题；选择写在浏览器本地存储里。普通使用不需要看这些。",
+    "Skin definitions live in runtime/theme_table.json and are generated into the frontend theme; the choice is stored in browser local storage. Normal use does not need this.",
   ],
   "外观.语言当前": ["当前界面语言：{language}", "Current UI language: {language}"],
   "外观.当前": ["当前", "current"],
@@ -921,7 +921,7 @@ const messages = {
   "关于.名称": ["名称", "Name"],
   "关于.版本": ["软件版本", "Software version"],
   "关于.契约版本": ["契约版本 / 协议版本", "Contract / protocol version"],
-  "关于.软件": ["软件", "Software"],
+  "关于.软件": ["runtime", "Software"],
   "关于.构建": ["构建", "Build"],
   "关于.构建值": ["本地源码运行（无打包版本号）", "local source (no packaged build number)"],
   "关于.许可证与第三方": ["许可证与第三方", "License & third-party"],

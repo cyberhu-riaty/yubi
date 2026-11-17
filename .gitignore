@@ -141,7 +141,7 @@ research_*.md
 # 依赖不入库（几万文件 / 几百 MB），靠 pnpm-lock.yaml 重建。
 frontend/node_modules/
 frontend/dist/
-# ★ 但 `软件/web/`（构建产物 + Python 生成的契约/主题）**要入库**：
+# ★ 但 `runtime/web/`（构建产物 + Python 生成的契约/主题）**要入库**：
 #   它是"双击即用、离线可用"的一部分 —— 用户不该为了看界面去装 Node。
 #   重新构建见 frontend/约定.md §四。
 # pnpm 的虚拟存储：某些 pnpm 版本会无视 store-dir 设置，直接落在仓库根上。

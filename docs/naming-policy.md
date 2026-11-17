@@ -1,5 +1,8 @@
 # Naming policy and migration boundary
 
+> Final naming status (2026-11-17): application source lives in `runtime/`; all source filenames, directories, code identifiers and JSON keys pass the strict ASCII gate. Historical Chinese import names are lazy aliases to ASCII adapters in `runtime/legacy/`, not physical source files. `scripts/check_naming.py` now uses strict mode and the debt baseline is empty. The detailed migration notes below record earlier stages; current compatibility rules are in [the registry](legacy-compatibility-registry.md).
+
+
 ## Current policy and audit (2026-11-16)
 
 Application-owned identifiers use English ASCII. Python modules, functions,
@@ -49,7 +52,7 @@ experiments and plugins keep working during the transition.
 
 - `run_yubi.py`, `run_experiment_cli.py` and `compare_experiments_cli.py` are the supported ASCII entry points.
 - `projects/`, `experiments/` and `controllers/common/` are the new data/algorithm directories. Readers still accept the legacy `项目/`, `实验/` and `算法库/` trees so projects copied by older installs keep working.
-- The legacy `软件/` and `tools/` runtime/tooling roots remain valid; every Chinese module name inside them is an explicit compatibility shim. See [legacy name registry](legacy-compatibility-registry.md) for the retirement condition of each entry.
+- The legacy `runtime/` and `tools/` runtime/tooling roots remain valid; every Chinese module name inside them is an explicit compatibility shim. See [legacy name registry](legacy-compatibility-registry.md) for the retirement condition of each entry.
 - Do not rename a legacy module without first adding an English replacement and a thin compatibility shim.
 - A migration is complete only after imports, JSON paths, frontend build paths, tests and documentation all use the new name.
 

@@ -11,9 +11,9 @@ import sys
 from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PACKAGE_ROOT / "软件"))
+sys.path.insert(0, str(PACKAGE_ROOT / "runtime"))
 
-ADAPTER_PATH = PACKAGE_ROOT / "软件" / "official_api.py"
+ADAPTER_PATH = PACKAGE_ROOT / "runtime" / "official_api.py"
 EXPERIMENTAL_PREFIX = "mujoco.experimental"
 
 # 允许直接碰官方实验层的文件（**只有这一个**）
@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     files: list[Path] = []
-    for name in ("软件", "controllers", "tools"):
+    for name in ("runtime", "controllers", "tools"):
         directory = PACKAGE_ROOT / name
         files += [p for p in find_python_files(directory) if p.resolve() not in ALLOWED_IMPORT_FILES]
 
@@ -85,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.short:
         print(f'  结果：✓ 0 处越界，官方层 {passed}/{total}')
     else:
-        print(f'  ✓ 没有文件越界直接 import `{EXPERIMENTAL_PREFIX}`（唯一入口：软件/official_api.py）')
+        print(f'  ✓ 没有文件越界直接 import `{EXPERIMENTAL_PREFIX}`（唯一入口：runtime/official_api.py）')
         print(f'  ✓ 官方层依赖符号：{passed}/{total} 都在')
         print(f'\n  结果：✓ 通过（{len(files)} 个文件）')
     return 0

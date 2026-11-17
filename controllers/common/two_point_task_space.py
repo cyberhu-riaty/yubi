@@ -12,7 +12,7 @@ two_point_task_space.py —— 任务空间控制插件（把教程 10 号脚本
 
 ★ 两个插件同时挂上时谁说了算？—— 看**装配顺序**，不是看 Priority。
 
-    本外壳的派发是"逐个插件依次调用"（为了做出错隔离，见 软件/plugin_system.py），
+    本外壳的派发是"逐个插件依次调用"（为了做出错隔离，见 runtime/plugin_system.py），
     顺序 = 项目文件里 `算法` 列表的顺序，**排在最后的那个最后写 ctrl[:]，它赢**。
     `messages.Priority` 在本外壳的**跨插件**派发里不参与排序 —— 官方
     `PluginRegistry.dispatch` 会按它降序排，但我们没用官方那条路。
@@ -68,7 +68,7 @@ class TwoPointTaskSpaceController(ControlPlugin):
 
     # ------------------------------------------------------------------
     # 兼容性预检：外壳换模型时会先问一句"这个模型你能跑吗"
-    #   （契约见 软件/plugin_system.py 的 `ControlPlugin`）
+    #   （契约见 runtime/plugin_system.py 的 `ControlPlugin`）
     # ------------------------------------------------------------------
     def check_model_compatibility(self, model) -> str:
         """要求 6 自由度 + 有 `attachment_site` 这个末端站点。

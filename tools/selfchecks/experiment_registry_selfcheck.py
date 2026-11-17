@@ -9,7 +9,7 @@ import numpy as np
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SOFTWARE = ROOT / "软件"
+SOFTWARE = ROOT / "runtime"
 if str(SOFTWARE) not in sys.path:
     sys.path.insert(0, str(SOFTWARE))
 os.environ["YUBI_DISABLE_WEB"] = "1"

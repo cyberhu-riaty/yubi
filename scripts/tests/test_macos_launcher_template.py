@@ -31,7 +31,7 @@ class MacOSLauncherTemplateTests(unittest.TestCase):
             python.parent.mkdir(parents=True)
             (package_root / "run_yubi.py").write_text("# test entry\n", encoding="utf-8")
             (package_root / "run_yubi_web.py").write_text("# fallback entry\n", encoding="utf-8")
-            (resources / "包路径.txt").write_text(str(package_root) + "\n", encoding="utf-8")
+            (resources / "package_path.txt").write_text(str(package_root) + "\n", encoding="utf-8")
 
             arguments_file = package_root / "arguments.txt"
             python.write_text(
@@ -48,7 +48,7 @@ class MacOSLauncherTemplateTests(unittest.TestCase):
                       .replace("{package_dir_name}", package_root.name)
                       .replace("{extra_args}", "")
                       .replace("{{", "{").replace("}}", "}"))
-            launcher = resources / "启动.sh"
+            launcher = resources / "launch.sh"
             launcher.write_text(script, encoding="utf-8")
             launcher.chmod(0o755)
 

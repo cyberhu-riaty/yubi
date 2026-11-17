@@ -30,7 +30,7 @@ import sys
 # ---- 定位包根：本文件在 优化（…）/验证/ 下，上两级是包根 ----
 directory = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(directory))
-SOFTWARE = os.path.join(ROOT, "软件")
+SOFTWARE = os.path.join(ROOT, "runtime")
 if SOFTWARE not in sys.path:
     sys.path.insert(0, SOFTWARE)
 
@@ -385,7 +385,7 @@ def main() -> int:
                    if os.path.exists(os.path.join(SOFTWARE, n))), "")
     entry_name = os.path.basename(entry_script) if entry_script else "（无入口）"
     if not entry_script:
-        summary.check("找到至少一个启动入口", False, "软件/ 下没有 主程序*.py")
+        summary.check("找到至少一个启动入口", False, "runtime/ 下没有 主程序*.py")
     else:
         entry_issues = find_undefined_entry_names(entry_script)
         summary.check(f"{entry_name} 里没有未定义的名字（会闪退）", not entry_issues, "；".join(entry_issues))
@@ -413,7 +413,7 @@ def main() -> int:
             importlib.import_module(name)
         except Exception as exc:                                          # noqa: BLE001
             import_failures.append(f"{name}.py → {type(exc).__name__}: {exc}")
-    summary.check(f"软件/ 下 {len(module_names)} 个模块都能 import", not import_failures,
+    summary.check(f"runtime/ 下 {len(module_names)} 个模块都能 import", not import_failures,
             "；".join(import_failures))
 
     # ---- ①-d 入口能走到"开窗前"那一步（真跑一遍 main()，不靠"看着对"）----
@@ -527,7 +527,7 @@ def main() -> int:
     if os.path.isdir(legacy_directory):
         remaining = sorted(f for f in os.listdir(legacy_directory) if f.endswith(".py"))
         if remaining:
-            summary.warn(f"老算法目录 软件/plugins/ 里还有 .py：{'、'.join(remaining)}"
+            summary.warn(f"老算法目录 runtime/plugins/ 里还有 .py：{'、'.join(remaining)}"
                     f" —— 装配器仍会扫它，建议全部迁到 算法库/ 后删掉这个目录")
 
     # ---- 结论 ----

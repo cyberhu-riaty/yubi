@@ -16,7 +16,7 @@
     "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
-      // 生成物（contract.ts / themes.ts）落在 软件/web/ —— 由 Python 侧生成，
+      // 生成物（contract.ts / themes.ts）落在 runtime/web/ —— 由 Python 侧生成，
       // 这里用别名指过去，前端就不必"抄一份契约"。
       "@generated/*": ["./src/generated/*"]
     }

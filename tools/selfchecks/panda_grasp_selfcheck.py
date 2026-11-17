@@ -20,8 +20,8 @@ from pathlib import Path
 import mujoco
 
 ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT / "软件") not in sys.path:
-    sys.path.insert(0, str(ROOT / "软件"))
+if str(ROOT / "runtime") not in sys.path:
+    sys.path.insert(0, str(ROOT / "runtime"))
 
 from official_api import messages                                            # noqa: E402
 

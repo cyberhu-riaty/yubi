@@ -16,7 +16,7 @@ frontend/                     构建期源码（不参与运行时，可随时�
   测试/                   ⚠️ 开发期工具，**不进构建产物**
     fake_backend.py             60 行 WebSocket 对端（按契约发帧），手动跑，用来真验界面
     browser_smoke.py           用 CDP 开一次无头 Chrome，查"真的画出来了"（截图 + 文本）
-软件/web/                  ⚠️ 生成物 + 构建产物，由 Python 侧服务直接发给浏览器
+runtime/web/                  ⚠️ 生成物 + 构建产物，由 Python 侧服务直接发给浏览器
 ```
 
 `测试/` 那两支只在"改前端、想看一眼"时手动跑（`tsc` 证明不了"真的画出来"，
@@ -32,13 +32,13 @@ frontend/                     构建期源码（不参与运行时，可随时�
 ```
 
 
-**生成物不要手改**（`frontend/src/generated/` 与 `软件/web/assets/` 里的 `.ts`/`.css`）：
+**生成物不要手改**（`frontend/src/generated/` 与 `runtime/web/assets/` 里的 `.ts`/`.css`）：
 
 | 生成物 | 来源（单一事实来源） | 生成命令 |
 |---|---|---|
-| `contract.ts` | `软件/契约.py` | `./.venv/bin/python tools/generate_frontend_assets.py` |
-| `themes.ts` | `软件/theme_table.json` | 同上 |
-| `theme.css` | `软件/theme_table.json` | 同上 |
+| `contract.ts` | `runtime/contract.py` | `./.venv/bin/python tools/generate_frontend_assets.py` |
+| `themes.ts` | `runtime/theme_table.json` | 同上 |
+| `theme.css` | `runtime/theme_table.json` | 同上 |
 
 改了来源就跑一次生成。`tools/selfchecks/contract_selfcheck.py` 会检查它们有没有过期。
 
@@ -71,7 +71,7 @@ if (!回执.通过) 提示(回执.说明);
 
 ## 三、界面约定
 
-- **换肤**：`<html data-theme="mission_control">`。全部风格与 `软件/theme_table.json` 同源，
+- **换肤**：`<html data-theme="mission_control">`。全部风格与 `runtime/theme_table.json` 同源，
   颜色一律用 `var(--…)`，**不要写死颜色**（写死就没法换肤）。状态色另有一组
   `--ok / --warn / --danger / --info`（生成自风格表的 `网页语义色`），
   并且**颜色不单独承担信息**：状态标签必须带文字/符号。
@@ -123,15 +123,15 @@ if (!回执.通过) 提示(回执.说明);
 cd frontend
 pnpm install
 pnpm run build
-# 产物 → 软件/web/（由 Web桥 在同端口提供）
+# 产物 → runtime/web/（由 Web桥 在同端口提供）
 
 cd ..
 .venv/bin/python tools/generate_frontend_assets.py    # 保证 src/生成 与来源逐字节一致
 ```
 
-**★ 构建会清空 `软件/web/`**（`vite.config.ts` 里 `emptyOutDir`）。
-生成物只落 `frontend/src/generated/`，会被 Vite 打进 `软件/web/assets/`；
-`软件/web/` 里不再保存第二份生成物。所以先构建、再跑生成脚本。
+**★ 构建会清空 `runtime/web/`**（`vite.config.ts` 里 `emptyOutDir`）。
+生成物只落 `frontend/src/generated/`，会被 Vite 打进 `runtime/web/assets/`；
+`runtime/web/` 里不再保存第二份生成物。所以先构建、再跑生成脚本。
 
 第二步是幂等的；跑它的意义是让 `tools/selfchecks/contract_selfcheck.py` 的「生成物是否过期」
 检查通过，并保证构建用的 `src/generated/` 没有落后于 `theme_table.json` / `contract.py`。

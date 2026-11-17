@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 
-RUNTIME = Path(__file__).resolve().parents[2] / "软件"
+RUNTIME = Path(__file__).resolve().parents[2] / "runtime"
 
 
 class WireCompatibilityTests(unittest.TestCase):
