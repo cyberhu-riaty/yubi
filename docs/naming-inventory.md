@@ -2,7 +2,7 @@
 
 由 `scripts/audit_naming.py` 从当前工作区生成。
 
-扫描 211 个源码与配置文件；非 ASCII 名称出现位置共 11086 处。次数表示位置数量，不是迁移完成百分比。
+扫描 212 个源码与配置文件；非 ASCII 名称出现位置共 6086 处。次数表示位置数量，不是迁移完成百分比。
 
 中文界面、普通字符串值、注释和文档不计为标识符。字符串键是人工确认项，可能是机器字段，也可能是显示标签；JSON 键列入迁移范围。
 
@@ -12,13 +12,11 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 
 | 类别 | 出现位置 |
 | --- | ---: |
-| `css_identifier` | 146 |
-| `directory_name` | 17 |
-| `file_name` | 70 |
-| `import_path` | 139 |
-| `json_key` | 579 |
-| `string_key` | 4849 |
-| `typescript_identifier` | 5286 |
+| `directory_name` | 10 |
+| `file_name` | 37 |
+| `json_key` | 578 |
+| `string_key` | 4937 |
+| `typescript_identifier` | 524 |
 
 ## 按文件迁移
 
@@ -26,63 +24,35 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 
 | 文件或目录 | 代码标识符 | 路径/导入 | JSON 键 | 字符串键待确认 |
 | --- | ---: | ---: | ---: | ---: |
+| `frontend/src/components/CollapsibleSection.tsx` | 2 | 0 | 0 | 0 |
+| `frontend/src/data/connection.ts` | 56 | 0 | 0 | 0 |
+| `frontend/src/data/logs.ts` | 68 | 0 | 0 | 0 |
+| `frontend/src/data/store.ts` | 139 | 0 | 0 | 0 |
+| `frontend/src/generated/contract.ts` | 0 | 0 | 0 | 91 |
+| `frontend/src/shell/App.tsx` | 0 | 0 | 0 | 3 |
+| `frontend/src/shell/Console.tsx` | 61 | 0 | 0 | 0 |
+| `frontend/src/shell/StatusBar.tsx` | 1 | 0 | 0 | 1 |
+| `frontend/src/views/AboutView.tsx` | 7 | 0 | 0 | 0 |
+| `frontend/src/views/DefineView.tsx` | 36 | 0 | 0 | 0 |
+| `frontend/src/views/DeploymentView.tsx` | 48 | 0 | 0 | 5 |
+| `frontend/src/views/DiagnosticsView.tsx` | 27 | 0 | 0 | 0 |
+| `frontend/src/views/IdentificationView.tsx` | 22 | 0 | 0 | 0 |
+| `frontend/src/views/MonitorView.tsx` | 29 | 0 | 0 | 0 |
+| `frontend/src/views/PlanningView.tsx` | 2 | 0 | 0 | 0 |
+| `frontend/src/views/PluginView.tsx` | 14 | 0 | 0 | 0 |
+| `frontend/src/views/ValidateView.tsx` | 9 | 0 | 0 | 0 |
+| `frontend/src/views/i18n.ts` | 3 | 0 | 0 | 618 |
+| `frontend/tests/fake_backend.py` | 0 | 0 | 0 | 138 |
 | `scripts/check_naming.py` | 0 | 0 | 0 | 2 |
-| `scripts/tests/test_connection.cjs` | 0 | 0 | 0 | 15 |
+| `scripts/tests/test_connection.cjs` | 0 | 0 | 0 | 14 |
 | `scripts/tests/test_contract.py` | 0 | 0 | 0 | 21 |
+| `scripts/tests/test_frontend_state.cjs` | 0 | 0 | 0 | 9 |
 | `scripts/tests/test_model_import.py` | 0 | 0 | 0 | 7 |
 | `scripts/tests/test_official_api.py` | 0 | 0 | 0 | 3 |
 | `scripts/tests/test_wire_compatibility.py` | 0 | 0 | 0 | 5 |
-| `前端` | 0 | 1 | 0 | 0 |
-| `前端/src/index.css` | 122 | 0 | 0 | 0 |
-| `前端/src/main.tsx` | 7 | 4 | 0 | 0 |
-| `前端/src/外壳` | 0 | 1 | 0 | 0 |
-| `前端/src/外壳/App.tsx` | 422 | 9 | 0 | 0 |
-| `前端/src/外壳/step_navigation.ts` | 0 | 1 | 0 | 0 |
-| `前端/src/外壳/上下文条.tsx` | 21 | 3 | 0 | 0 |
-| `前端/src/外壳/中区.tsx` | 198 | 10 | 0 | 0 |
-| `前端/src/外壳/任务流.ts` | 54 | 2 | 0 | 0 |
-| `前端/src/外壳/侧栏.tsx` | 52 | 18 | 0 | 0 |
-| `前端/src/外壳/控制台.tsx` | 785 | 6 | 0 | 0 |
-| `前端/src/外壳/提示区.tsx` | 13 | 3 | 0 | 0 |
-| `前端/src/外壳/活动栏.tsx` | 91 | 3 | 0 | 0 |
-| `前端/src/外壳/状态栏.tsx` | 68 | 3 | 0 | 1 |
-| `前端/src/数据` | 0 | 1 | 0 | 0 |
-| `前端/src/数据/connection.ts` | 61 | 1 | 0 | 0 |
-| `前端/src/数据/仓库.ts` | 558 | 1 | 0 | 0 |
-| `前端/src/数据/日志.ts` | 466 | 3 | 0 | 0 |
-| `前端/src/生成` | 0 | 1 | 0 | 0 |
-| `前端/src/生成/主题.css` | 24 | 1 | 0 | 0 |
-| `前端/src/生成/外观.ts` | 45 | 2 | 0 | 0 |
-| `前端/src/生成/契约.ts` | 288 | 1 | 0 | 16 |
-| `前端/src/生成/风格.ts` | 32 | 1 | 0 | 0 |
-| `前端/src/组件` | 0 | 1 | 0 | 0 |
-| `前端/src/组件/可折叠区块.tsx` | 2 | 2 | 0 | 0 |
-| `前端/src/组件/开关.tsx` | 0 | 2 | 0 | 0 |
-| `前端/src/组件/按钮.tsx` | 0 | 1 | 0 | 0 |
-| `前端/src/组件/数值表.tsx` | 0 | 2 | 0 | 0 |
-| `前端/src/组件/曲线.tsx` | 0 | 3 | 0 | 0 |
-| `前端/src/组件/标签.tsx` | 0 | 1 | 0 | 0 |
-| `前端/src/组件/路径值.tsx` | 0 | 2 | 0 | 0 |
-| `前端/src/视图` | 0 | 1 | 0 | 0 |
-| `前端/src/视图/关于视图.tsx` | 64 | 7 | 0 | 0 |
-| `前端/src/视图/外观视图.tsx` | 28 | 7 | 0 | 0 |
-| `前端/src/视图/定义视图.tsx` | 496 | 10 | 0 | 0 |
-| `前端/src/视图/帮助视图.tsx` | 16 | 4 | 0 | 0 |
-| `前端/src/视图/插件视图.tsx` | 53 | 7 | 0 | 0 |
-| `前端/src/视图/文案.ts` | 10 | 1 | 0 | 618 |
-| `前端/src/视图/监控视图.tsx` | 110 | 6 | 0 | 0 |
-| `前端/src/视图/规划视图.tsx` | 329 | 9 | 0 | 0 |
-| `前端/src/视图/诊断视图.tsx` | 102 | 8 | 0 | 0 |
-| `前端/src/视图/辨识视图.tsx` | 186 | 8 | 0 | 0 |
-| `前端/src/视图/部署视图.tsx` | 294 | 8 | 0 | 5 |
-| `前端/src/视图/验证视图.tsx` | 433 | 12 | 0 | 0 |
-| `前端/tsconfig.json` | 0 | 0 | 1 | 0 |
-| `前端/vite.config.ts` | 2 | 0 | 0 | 1 |
-| `前端/测试` | 0 | 1 | 0 | 0 |
-| `前端/测试/fake_backend.py` | 0 | 0 | 0 | 138 |
 | `实验` | 0 | 1 | 0 | 0 |
 | `工具` | 0 | 1 | 0 | 0 |
-| `工具/generate_frontend_assets.py` | 0 | 0 | 0 | 30 |
+| `工具/generate_frontend_assets.py` | 0 | 0 | 0 | 33 |
 | `工具/import_model.py` | 0 | 0 | 0 | 79 |
 | `工具/urdf_to_mjcf.py` | 0 | 0 | 0 | 25 |
 | `工具/模型清单.json` | 0 | 1 | 245 | 0 |

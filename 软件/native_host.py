@@ -1808,7 +1808,7 @@ class HostApp(NSObject):
             # ★ WKWebView 的 API 是 evaluateJavaScript:completionHandler:，
             #   没有单参数版本；写 `evaluateJavaScript_` 会被静默拒掉。
             self.web_view.evaluateJavaScript_completionHandler_(
-                "document.documentElement.setAttribute('data-工程面板','" + label + "');"
+                "document.documentElement.setAttribute('data-native-panel','" + label + "');"
                 "window.dispatchEvent(new CustomEvent('驭臂.工程面板',"
                 "{detail:{开:" + value + "}}));",
                 None)
@@ -2037,7 +2037,7 @@ class HostApp(NSObject):
             # CSS 负责立刻隐藏（即使 React 还没处理完事件），避免出现"上下两份日志"。
             script = WKUserScript.alloc().initWithSource_injectionTime_forMainFrameOnly_(
                 "window.addEventListener('驭臂.工程面板', function(e){"
-                "document.documentElement.setAttribute('data-工程面板',"
+                "document.documentElement.setAttribute('data-native-panel',"
                 "(e && e.detail && e.detail.开) ? '1' : '0');});",
                 WKUserScriptInjectionTimeAtDocumentStart, True)
             configuration.userContentController().addUserScript_(script)

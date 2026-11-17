@@ -4,8 +4,8 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "../..");
-const ts = require(process.env.YUBI_TYPESCRIPT_PATH || path.join(root, "前端/node_modules/typescript"));
-const source = fs.readFileSync(path.join(root, "前端/src/数据/connection.ts"), "utf8");
+const ts = require(process.env.YUBI_TYPESCRIPT_PATH || path.join(root, "frontend/node_modules/typescript"));
+const source = fs.readFileSync(path.join(root, "frontend/src/data/connection.ts"), "utf8");
 const sockets = [];
 const timers = new Map();
 let nextTimer = 1;
@@ -33,7 +33,7 @@ const javascript = ts.transpileModule(source, {
 }).outputText;
 vm.runInNewContext(javascript, {
   exports: exportsObject,
-  require: () => ({ "协议版本": 21 }),
+  require: () => ({ PROTOCOL_VERSION: 21 }),
   WebSocket: FakeSocket,
   window: {
     setTimeout: schedule, setInterval: schedule,

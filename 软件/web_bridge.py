@@ -370,7 +370,7 @@ class Server:
                           "Content-Length": str(len(body)),
                           "Cache-Control": "no-store"})
             return Response(200, "OK", header, body)
-        if path in ("/api/contract", "/api/契约"):
+        if path in ("/api/contract", "/api/contract"):
             # 契约只读下发：前端可据此生成/校验自己的类型定义
             body = json.dumps(_contract_dict(), ensure_ascii=False).encode("utf-8")
             header = Headers({"Content-Type": "application/json; charset=utf-8",

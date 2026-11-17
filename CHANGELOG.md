@@ -198,7 +198,7 @@
   深琥珀/深红；分段控件与清空按钮固定 Aqua 外观，不再黑底小字看不清。
 - 原生 NSTextView 日志镜像：真实连接/握手/命令回执/规划/诊断日志；
   支持全部/注意/错误筛选、清空、800 行环形缓冲/最近 500 行显示。
-- Web 端 `日志.ts` 通过 `window.webkit.messageHandlers.驭臂日志` 发送真实日志行；
+- Web 端 `logs.ts` 通过 `window.webkit.messageHandlers.驭臂日志` 发送真实日志行；
   浏览器无此通道时是 no-op。
 - 明确：这是**日志镜像**，不是交互式 PTY；不假装提供 shell。
 
@@ -314,7 +314,7 @@
 
 ### 测试与验证
 
-- 更新 `前端/测试/browser_smoke.py` 的规划断言：从“必须是未实现”改为“必须是尚无航点 + 说明至少 2 个航点”，
+- 更新 `frontend/tests/browser_smoke.py` 的规划断言：从“必须是未实现”改为“必须是尚无航点 + 说明至少 2 个航点”，
   因为规划功能已实现，旧断言会把正确状态判错。
 - `tsc --noEmit` 0；Vite build 成功；生成物一致；`py_compile 软件/宿主窗口.py` 0；界面冒烟通过。
 - 真机流程实测：诊断 12/12（5.82 s，可导出）；部署导出 3 文件 / 3.3 KB（含 `模型清单.md`）。
@@ -362,9 +362,9 @@
 
 ### 测试夹具与验证
 
-- `前端/测试/fake_backend.py`：契约版本从 `软件/契约.py` 读取（不再写死 1）；补 `系统` 主题；
+- `frontend/tests/fake_backend.py`：契约版本从 `软件/契约.py` 读取（不再写死 1）；补 `系统` 主题；
   参数表改成产品真实形状并处理 `命令.改参数`；端口支持 `驭臂_测试端口`。
-- `前端/测试/browser_smoke.py`：固定 1440×900 CSS 视口；断言真仿真时间/RTF/3D 在右侧/兼容性；
+- `frontend/tests/browser_smoke.py`：固定 1440×900 CSS 视口；断言真仿真时间/RTF/3D 在右侧/兼容性；
   切肤时断言背景**真的变了**（防止 `:root` 覆盖复发）。
 - 复跑：`tsc --noEmit`、Vite build、生成物 `--检查`、契约自检 32/32、风格表 474+168、
   平台层 4/4、作用域 0/50、语言 21/21、界面冒烟通过。
@@ -665,7 +665,7 @@ pyobjc-framework-Metal`（PyObjC 12.2.2）。
   > 这个 dataclass）；以及数字 `1` 冒充布尔 `True`（Python 里 `1 == True`，会静默通过）。
 
 - **`工具/generate_frontend_assets.py`**（新增）—— 从 `契约.py` 与 `风格表.json` 生成
-  `契约.ts` / `风格.ts` / `主题.css`（5 套风格 → CSS 变量）。**单一来源，不许手抄**。
+  `contract.ts` / `themes.ts` / `theme.css`（5 套风格 → CSS 变量）。**单一来源，不许手抄**。
 
 ### 新增：上行命令通道
 
@@ -691,7 +691,7 @@ pyobjc-framework-Metal`（PyObjC 12.2.2）。
 
 ### 新增：Web 界面（React 19 + Vite 7 + Tailwind 4）
 
-- **`前端/`** —— 构建期源码（不参与运行时）；产物落到 **`软件/web/`**，由 `Web桥` 在同端口提供。
+- **`frontend/`** —— 构建期源码（不参与运行时）；产物落到 **`软件/web/`**，由 `Web桥` 在同端口提供。
   没有产物时**自动回落到 P0 的单文件仪表盘**，任何情况下都不会"打不开页面"。
 - 外壳：活动栏（5 步任务流 + 外观/关于）/ 上下文侧栏 / **常驻中区**（不随任务流切换）/
   底部控制台（输出·事件·问题，真日志 + 每秒实测主题速率）/ 状态栏（六项真值）。
@@ -715,7 +715,7 @@ pyobjc-framework-Metal`（PyObjC 12.2.2）。
 
 ### 注意
 
-- **构建前端**需要 Node：`cd 前端 && node <pnpm.mjs> run build`。
+- **构建前端**需要 Node：`cd frontend && node <pnpm.mjs> run build`。
   ⚠️ 本机 DSH 那份 node 开了 hardened runtime，会拒绝加载 rollup 的预编译原生模块
   （`mapping process and mapped file (non-platform) have different Team IDs`）；
   **用 `/usr/local/bin/node` 则正常**（`tsc` 用哪份都行）。这是本机工具链问题，不是代码问题。

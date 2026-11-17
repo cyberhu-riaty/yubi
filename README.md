@@ -150,7 +150,7 @@ yubi/
 ├── 实验/                  无界面实验定义与运行入口（run_experiment_cli.py）
 ├── scripts/               命名审计等仓库维护脚本
 ├── 软件/                  runtime/plugin/project/model 核心、宿主及各消息桥
-├── 前端/                  React 19 + Vite 7 + Tailwind 4 源码（构建产物在 软件/web/）
+├── frontend/                  React 19 + Vite 7 + Tailwind 4 源码（构建产物在 软件/web/）
 ├── 算法库/通用/           控制、录制、辨识插件与算法模板
 ├── 模型/                  MuJoCo 模型与网格资产（6 台机械臂 + Robotiq 2F85 + Panda MPC 任务）
 ├── 项目/                  项目配置：一个项目 = 模型 + 算法列表 + 参数
@@ -284,7 +284,7 @@ class MyController(ControlPlugin):
 ## 文档
 
 - [使用手册](docs/使用手册.md) —— 11 个页面逐页说明、典型工作流、故障排查
-- [前端约定](前端/约定.md) —— 前端目录边界、数据流、构建方式
+- [前端约定](frontend/CONVENTIONS.md) —— 前端目录边界、数据流、构建方式
 - [变更记录](CHANGELOG.md) —— 每个版本改了什么、影响了谁
 - [参与贡献](CONTRIBUTING.md) —— 分支、验证与 PR 要求
 

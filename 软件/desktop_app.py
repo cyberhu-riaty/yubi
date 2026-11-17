@@ -119,7 +119,7 @@ def check_environment() -> int:
     else:
         failures += 1
         print("  ✗ 前端产物不在（窗口里会是一片空白）")
-        print("      构建：cd 前端 && node <pnpm.mjs> run build")
+        print("      构建：cd frontend && node <pnpm.mjs> run build")
     # ③ 模型
     model_path, description = find_model()
     print(f"  {'✓' if model_path else '✗'} 模型："

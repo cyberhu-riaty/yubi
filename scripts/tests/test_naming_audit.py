@@ -24,7 +24,7 @@ class NamingAuditTests(unittest.TestCase):
         self.scope = audit.read_json(audit.SCOPE_FILE)
         self.previous_typescript = os.environ.get("YUBI_TYPESCRIPT_PATH")
         if not self.previous_typescript:
-            os.environ["YUBI_TYPESCRIPT_PATH"] = str(SCRIPTS.parent / "前端/node_modules/typescript")
+            os.environ["YUBI_TYPESCRIPT_PATH"] = str(SCRIPTS.parent / "frontend/node_modules/typescript")
             self.addCleanup(lambda: os.environ.pop("YUBI_TYPESCRIPT_PATH", None))
 
     def write(self, name, content):
@@ -54,10 +54,23 @@ class 控制器:
         self.write("src/controller.py", "ｘ = 1\n")
         self.assertIn("ｘ", {x["name"] for x in self.findings()["findings"]})
 
+    def test_python_fstring_expressions_are_scanned(self):
+        self.write("src/fstring.py", 'text = f"{模型.状态} {format_value(目标=1)}"\n')
+        names = {x["name"] for x in self.findings()["findings"]}
+        self.assertTrue({"模型", "状态", "目标"} <= names)
+
+    def test_new_typescript_binding_cannot_reuse_legacy_property_debt(self):
+        self.write("frontend/widget.ts", "export interface Legacy { 状态: number; }\n")
+        baseline = audit.baseline_for(self.findings(), self.scope)
+        self.write("frontend/widget.ts", "export const 状态 = 1;\n")
+        regressions = audit.regressions(self.findings(), baseline, self.scope)
+        self.assertEqual(len(regressions), 1)
+        self.assertEqual(regressions[0]["category"], "typescript_binding")
+
     def test_typescript_uses_syntax_tree_and_keeps_jsx_text(self):
         self.write("frontend/Panel.tsx", '''
 // 中文注释
-import { value } from "./数据/store";
+import { value } from "./数据/仓库";
 const 标题 = "中文界面";
 const escaped = {"显示标签": value};
 const lookup = escaped["显示标签"];
@@ -66,7 +79,7 @@ export function Panel() { return <button data-状态={标题}>开始运行</butt
 ''')
         findings = self.findings()["findings"]
         names = {x["name"] for x in findings}
-        self.assertTrue({"标题", "变量", "data-状态", "./数据/store", "显示标签"} <= names)
+        self.assertTrue({"标题", "变量", "data-状态", "./数据/仓库", "显示标签"} <= names)
         self.assertNotIn("中文界面", names)
         self.assertNotIn("开始运行", names)
 

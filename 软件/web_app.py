@@ -111,7 +111,7 @@ def check_environment() -> int:
     else:
         failures += 1
         print("  ✗ 前端产物不在（会回落到 P0 的单页仪表盘）")
-        print("      构建：cd 前端 && node <pnpm.mjs> run build")
+        print("      构建：cd frontend && node <pnpm.mjs> run build")
         print("      （或用系统 node；DSH 那份 node 有 hardened runtime 限制）")
 
     # ② 契约与生成物
@@ -238,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  界面地址： {url}")
     if not has_frontend:
         print("  ⚠ 前端还没构建，浏览器里看到的是简版数据页（不是完整界面）")
-        print("      构建：cd 前端 && node <pnpm.mjs> run build")
+        print("      构建：cd frontend && node <pnpm.mjs> run build")
     print("  关掉：在这个终端按 Ctrl+C")
     print("=" * 74, flush=True)
 

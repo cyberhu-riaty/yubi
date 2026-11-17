@@ -5,7 +5,7 @@ contract_selfcheck.py —— P1 的 L0 层"可机检的不变量"
     ① **契约 vs 真实 dataclass**：`contract.py` 是手写的，手写就会漂移。
        字段名/顺序/数量不一致时，前端的类型定义会与后端实际发出的东西对不上，
        而**运行期不会报错** —— 只是某个字段永远显示不出来。
-    ② **生成物是否过期**：`前端/src/生成/契约.ts`、`主题.css`、`风格.ts`
+    ② **生成物是否过期**：`frontend/src/generated/contract.ts`、`theme.css`、`themes.ts`
        是从 `contract.py` 与 `风格表.json` 生成的。来源改了没重新生成 = 前端拿旧契约解析新数据。
     ③ **上行命令是否真的能落地**：每条登记的上行命令都要能构造出对应的消息类，
        否则"契约里有、实际发不出去"。
@@ -60,7 +60,7 @@ def check_generated_assets() -> None:
     result = subprocess.run([sys.executable, "-X", "utf8", script, "--check"],
                           capture_output=True, encoding="utf-8")
     check(result.returncode == 0,
-      "前端生成物（契约.ts / 主题.css / 风格.ts）与来源一致")
+      "前端生成物（contract.ts / theme.css / themes.ts）与来源一致")
     if result.returncode != 0:
         for line in result.stdout.strip().splitlines():
             if "✗" in line:

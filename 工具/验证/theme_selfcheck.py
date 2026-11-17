@@ -68,7 +68,7 @@ def check_number(path: str, value, variable_name: str) -> None:
 
 
 def check_undefined_css_variables() -> None:
-    """源码里 `var(--x)` 用到的变量，必须在 `主题.css` 里真的定义过。
+    """源码里 `var(--x)` 用到的变量，必须在 `theme.css` 里真的定义过。
 
     ★ 为什么加这条：`var(--warning)` 不存在时，浏览器**不会报错**，
       只会把那条颜色当成"没有值"——表现就是"文字/线没颜色"，
@@ -78,16 +78,16 @@ def check_undefined_css_variables() -> None:
     import glob
 
     definition = set()
-    for file in ("前端/src/生成/主题.css", "前端/src/index.css"):
+    for file in ("frontend/src/generated/theme.css", "frontend/src/index.css"):
         source = (ROOT / file).read_text(encoding="utf-8")
         definition |= set(re.findall(r"(--[a-zA-Z0-9_-]+)\s*:", source))
     # Tailwind 与内联样式里允许的局部变量（不是颜色 token）
     allowed = {"--tw-ring-offset-shadow", "--tw-ring-shadow", "--tw-shadow"}
     missing = []
     used = 0
-    for file in glob.glob(str(ROOT / "前端/src/**/*.tsx"), recursive=True) +\
-            glob.glob(str(ROOT / "前端/src/**/*.ts"), recursive=True) +\
-            glob.glob(str(ROOT / "前端/src/**/*.css"), recursive=True):
+    for file in glob.glob(str(ROOT / "frontend/src/**/*.tsx"), recursive=True) +\
+            glob.glob(str(ROOT / "frontend/src/**/*.ts"), recursive=True) +\
+            glob.glob(str(ROOT / "frontend/src/**/*.css"), recursive=True):
         source = open(file, encoding="utf-8").read()
         for name in re.findall(r"var\((--[a-zA-Z0-9_-]+)", source):
             used += 1
@@ -170,14 +170,14 @@ def main() -> int:
     import glob as _glob
     import re as _re
     _defined = set()
-    for _f in ("前端/src/生成/主题.css", "前端/src/index.css"):
+    for _f in ("frontend/src/generated/theme.css", "frontend/src/index.css"):
         _source = pathlib.Path(ROOT, _f).read_text(encoding="utf-8")
         _defined |= set(_re.findall(r"(--[a-zA-Z0-9_-]+)\s*:", _source))
     _allowed = {"--tw-ring-offset-shadow", "--tw-ring-shadow", "--tw-shadow"}
     _missing, _used = [], 0
-    for _f in (_glob.glob(os.path.join(ROOT, "前端/src/**/*.tsx"), recursive=True)
-               + _glob.glob(os.path.join(ROOT, "前端/src/**/*.ts"), recursive=True)
-               + _glob.glob(os.path.join(ROOT, "前端/src/**/*.css"), recursive=True)):
+    for _f in (_glob.glob(os.path.join(ROOT, "frontend/src/**/*.tsx"), recursive=True)
+               + _glob.glob(os.path.join(ROOT, "frontend/src/**/*.ts"), recursive=True)
+               + _glob.glob(os.path.join(ROOT, "frontend/src/**/*.css"), recursive=True)):
         _text = open(_f, encoding="utf-8").read()
         for _match in _re.finditer(r"var\((--[a-zA-Z0-9_-]+)(\$\{)?", _text):
             # ★ 动态拼接的（`var(--palette-${i})`）跳过：名字要运行期才定，
