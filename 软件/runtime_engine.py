@@ -280,7 +280,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
     """
     import mujoco
     # 全部走适配层（`软件/official_api.py`），消息类仍使用官方原始对象。
-    # 直接 import mujoco.experimental.* 已被断言禁止（见 工具/验证/official_api_selfcheck.py）。
+    # 直接 import mujoco.experimental.* 已被断言禁止（见 tools/selfchecks/official_api_selfcheck.py）。
     from official_api import launch_native, launch_thread, messages, viewer_handle
 
     # 同一进程内再次启动（主要用于自检）时，不能把上一次残留消息带进新模型。
@@ -1135,7 +1135,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                 metric_publisher = None
 
             # 诊断器：收到「命令.诊断」就在后台线程跑 10 套断言，跑完发「诊断报告」。
-            #   ★ 用子进程跑 `工具/验证/*.py`（就是终端里那批脚本），不另写一份检查 ——
+            #   ★ 用子进程跑 `tools/selfchecks/*.py`（就是终端里那批脚本），不另写一份检查 ——
             #     两套检查迟早不一致，不一致的那套一定会在关键时刻骗人。
             try:
                 import diagnostics_bridge as _diagnostics_bridge

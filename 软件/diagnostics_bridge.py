@@ -8,7 +8,7 @@
     于是"我刚改了个东西，还能不能用"只能靠开发者去敲命令。
 
     这一步把那些断言搬进界面：点一下「开始检查」，把 11 套真跑一遍，逐条报结果。
-    **跑的是同一批脚本**（子进程调用 `工具/验证/*.py`），不是另写一份"看起来像检查"的东西 ——
+    **跑的是同一批脚本**（子进程调用 `tools/selfchecks/*.py`），不是另写一份"看起来像检查"的东西 ——
     两套检查迟早会不一致，而不一致的那个一定会在关键时刻骗人。
 
 ★ 为什么用子进程而不是 import 进来跑：
@@ -62,17 +62,17 @@ class DiagnosticsReport(messages.Snapshot):
 # 要跑的套件。顺序有意：先跑"与运行环境最相关"的，用户最关心。
 #   (显示名, 脚本相对路径)
 SUITES: tuple[tuple[str, str], ...] = (
-    ("官方层", "工具/验证/official_api_selfcheck.py"),
-    ("平台层", "工具/验证/platform_selfcheck.py"),
-    ("契约", "工具/验证/contract_selfcheck.py"),
-    ("项目", "工具/验证/project_selfcheck.py"),
-    ("作用域", "工具/验证/scope_selfcheck.py"),
-    ("语言", "工具/验证/language_selfcheck.py"),
-    ("风格表", "工具/验证/theme_selfcheck.py"),
-    ("轨迹规划", "工具/验证/trajectory_planning_selfcheck.py"),
-    ("参数事务", "工具/验证/parameter_transaction_selfcheck.py"),
-    ("病态检出", "工具/验证/observation_selfcheck.py"),
-    ("设备契约", "工具/验证/device_contract_selfcheck.py"),
+    ("官方层", "tools/selfchecks/official_api_selfcheck.py"),
+    ("平台层", "tools/selfchecks/platform_selfcheck.py"),
+    ("契约", "tools/selfchecks/contract_selfcheck.py"),
+    ("项目", "tools/selfchecks/project_selfcheck.py"),
+    ("作用域", "tools/selfchecks/scope_selfcheck.py"),
+    ("语言", "tools/selfchecks/language_selfcheck.py"),
+    ("风格表", "tools/selfchecks/theme_selfcheck.py"),
+    ("轨迹规划", "tools/selfchecks/trajectory_planning_selfcheck.py"),
+    ("参数事务", "tools/selfchecks/parameter_transaction_selfcheck.py"),
+    ("病态检出", "tools/selfchecks/observation_selfcheck.py"),
+    ("设备契约", "tools/selfchecks/device_contract_selfcheck.py"),
 )
 
 SUITE_TIMEOUT_SECONDS = 120.0        # 任何一项超时就判失败，别让界面永远"检查中"

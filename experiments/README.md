@@ -73,7 +73,7 @@ GUI 模式使用实时固定步进器，按模型 timestep 节拍显示；无界
 1. 在 `算法库/` 新增一个继承 `plugin_system.ControlPlugin` 的文件。
 2. 在实验专用项目 JSON 的 `算法` 中写入插件文件名。
 3. 复制一个实验 JSON，修改 `key/controllers/project`。
-4. 运行 `工具/验证/experiment_registry_selfcheck.py`。
+4. 运行 `tools/selfchecks/experiment_registry_selfcheck.py`。
 
 不需要修改 GUI、渲染模块、`runtime_engine.py` 或命令桥。复杂 Python 实验也可以通过
 `ExperimentRegistry.register()` 注册工厂，不必局限于 JSON。

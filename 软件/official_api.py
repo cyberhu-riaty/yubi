@@ -33,7 +33,7 @@ official_api.py —— **全工程唯一**一处 `import mujoco.experimental.*` 
     from official_api import ux                                 # 需要时再取（较重的子模块）
 
     其余文件**不允许**再出现 `mujoco.experimental`（有专门的断言盯着，见
-    `工具/验证/official_api_selfcheck.py`）。
+    `tools/selfchecks/official_api_selfcheck.py`）。
 """
 from __future__ import annotations
 

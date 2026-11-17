@@ -3,7 +3,7 @@
   "menagerie_commit": "32224735cf004df068cd29ba099459f71bcd7d21",
   "asset_base_url": "https://github.com/google-deepmind/mujoco_menagerie/releases/download/assets",
   "proxy_prefix": "https://gh-proxy.com/",
-  "description": "本清单由 工具/import_model.py 使用；数据来自 mujoco-menagerie 官方 registry（PyPI 包）。「扭矩上限」是为了生成 <motor> 扭矩接口变体；模型自带 forcerange 时留空即可自动读取。",
+  "description": "本清单由 tools/import_model.py 使用；数据来自 mujoco-menagerie 官方 registry（PyPI 包）。「扭矩上限」是为了生成 <motor> 扭矩接口变体；模型自带 forcerange 时留空即可自动读取。",
   "models": {
     "agilex_piper": {
       "display_name": "AgileX PiPER",

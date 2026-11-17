@@ -5,7 +5,7 @@
 ## 开始开发
 
 1. 从 `main` 创建分支，例如 `feature/new-controller` 或 `fix/model-loading`。
-2. 使用 `bash 工具/rebuild_environment.sh` 创建本地环境。
+2. 使用 `bash tools/rebuild_environment.sh` 创建本地环境。
 3. 修改前后运行与你改动相关的检查或手动验证，并在 Pull Request 中写明结果。
 
 ## 代码与资源
@@ -14,7 +14,7 @@
 - 提交前运行 `python scripts/check_naming.py`。检查覆盖源码、前端、工具、测试和配置；现有问题已登记基线，PR 不应增加新的中文内部命名。
 - 历史迁移记录不代表全仓完成；剩余项见 [自动清单](docs/naming-inventory.md) 和 [迁移计划](docs/naming-migration-plan.md)。生成源码需要修改生成器后重建。不要通过自动刷新基线掩盖新增问题。
 - 控制算法放在 `controllers/common/`，可以从 `controllers/common/controller_template.py` 开始。
-- 新模型请保留来源和许可证，并通过 `工具/import_model.py --索引` 重新生成 `模型/模型库.json`。
+- 新模型请保留来源和许可证，并通过 `tools/import_model.py --索引` 重新生成 `模型/模型库.json`。
 - 不要提交 `.venv/`、`输出/`、`*.app/`、日志、录制数据或其他可重建的本地产物。
 - 不要更新 `requirements.lock`，除非已完成与 MuJoCo Studio 接口相关的验证。
 

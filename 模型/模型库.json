@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "description": "驭臂的模型库索引，由 工具/import_model.py 自动生成。『扭矩模型』是推荐加载的那个 —— 它的 ctrl 就是关节力矩，能被本项目控制插件直接驱动；『可控制』= true 表示 nu==nv==nq（控制插件写 ctrl 的前提）。界面按『类别=arm』列出可选机械臂。",
+  "description": "驭臂的模型库索引，由 tools/import_model.py 自动生成。『扭矩模型』是推荐加载的那个 —— 它的 ctrl 就是关节力矩，能被本项目控制插件直接驱动；『可控制』= true 表示 nu==nv==nq（控制插件写 ctrl 的前提）。界面按『类别=arm』列出可选机械臂。",
   "root": "模型",
   "models": [
     {

@@ -21,20 +21,20 @@ import_model.py —— 从 MuJoCo Menagerie 导入机器人模型，并自动生
 
 用法：
     # 列出可导入的机械臂（24 个，全部是 MIT / BSD-3 / Apache-2.0 许可）
-    .venv/bin/python 工具/import_model.py --列表
+    .venv/bin/python tools/import_model.py --列表
 
     # 导入指定的几个
-    .venv/bin/python 工具/import_model.py franka_emika_panda universal_robots_ur10e
+    .venv/bin/python tools/import_model.py franka_emika_panda universal_robots_ur10e
 
     # 导入清单里全部 24 个机械臂（约 40 MB 下载 / 250 MB 解包）
-    .venv/bin/python 工具/import_model.py --全部
+    .venv/bin/python tools/import_model.py --全部
 
     # 已经下过、想重新生成扭矩变体
-    .venv/bin/python 工具/import_model.py franka_emika_panda --只生成扭矩
+    .venv/bin/python tools/import_model.py franka_emika_panda --只生成扭矩
 
     # 换下载通道（默认走 gh-proxy 代理，因为国内直连 GitHub 常常不通）
-    .venv/bin/python 工具/import_model.py ... --直连
-    .venv/bin/python 工具/import_model.py ... --代理 https://gh-proxy.com/
+    .venv/bin/python tools/import_model.py ... --直连
+    .venv/bin/python tools/import_model.py ... --代理 https://gh-proxy.com/
 
 网络：GitHub 直连不通时用 `--代理`（默认 https://gh-proxy.com/ ）。不需要 pip 装任何东西。
 """
@@ -223,7 +223,7 @@ def generate_torque_variant(model_id: str, directory: str, info: dict, torque_li
                 raise SystemExit(
                     f"✗ {model_id} 的执行器「{e['name']}」没有 forcerange（扭矩无限），"
                     f"无法自动生成扭矩变体。\n"
-                    f"  请在 工具/import_model.py 的 扭矩上限补充表 里为 {model_id} 补一组关节扭矩上限，"
+                    f"  请在 tools/import_model.py 的 扭矩上限补充表 里为 {model_id} 补一组关节扭矩上限，"
                     f"或用 --扭矩上限 320,320,176,176,110,40,40 指定。")
         torque_limits.append(max(abs(lo), abs(hi)))
 
@@ -277,7 +277,7 @@ def generate_torque_variant(model_id: str, directory: str, info: dict, torque_li
     header = (
         f"<!-- ============================================================================\n"
         f"     {os.path.basename(output_path)} —— {info['display_name']} 的**力矩接口**变体\n"
-        f"     由 工具/import_model.py 自动生成，**请勿手工编辑**（重新导入会覆盖）。\n"
+        f"     由 tools/import_model.py 自动生成，**请勿手工编辑**（重新导入会覆盖）。\n"
         f"     来源模型 : {os.path.relpath(base_xml, PACKAGE_ROOT)}\n"
         f"     改了什么 : ① 执行器（位置伺服）→ <motor> 力矩电机（ctrl 就是关节力矩 N·m）\n"
         f"                ② 丢掉非关节执行器（{'、'.join(discarded_actuators) if discarded_actuators else '无'}）→ 保证 nu == nv\n"
@@ -288,7 +288,7 @@ def generate_torque_variant(model_id: str, directory: str, info: dict, torque_li
         f"     为什么   : 驭臂的控制插件往 data.ctrl[:] 写的是力矩，位置伺服模型会把力矩\n"
         f"                当成目标角度，行为完全不对。④ 是因为位置伺服的 kd 掩盖了\n"
         f"                \"关节电枢惯量为 0\"，换成力矩接口后会数值发散。\n"
-        f"     详见     : 工具/import_model.py 顶部说明\n"
+        f"     详见     : tools/import_model.py 顶部说明\n"
         f"     ============================================================================ -->\n"
     )
     tree_xml = ET.tostring(root, encoding="unicode")
@@ -372,7 +372,7 @@ def update_library_index(log=print) -> str:
     """扫描 模型/ 目录，重建 模型库.json（界面选模型时会读它）。
 
     元数据（显示名 / 许可 / 该加载哪个入口 / 类别）按下面的顺序合并：
-      ① `工具/model_manifest.json`（menagerie 官方元数据，优先）
+      ① `tools/model_manifest.json`（menagerie 官方元数据，优先）
       ② 模型目录里的 `模型信息.json`（本地或非 menagerie 模型用）
          支持的键：显示名、许可、入口模型、类别、自由度、执行器数、说明。
          「入口模型」用于一个目录里有多个 XML、默认的 `*_torque.xml` 不是入口的情况
@@ -465,7 +465,7 @@ def update_library_index(log=print) -> str:
 
     index = {
         "schema_version": 2,
-        "description": ("驭臂的模型库索引，由 工具/import_model.py 自动生成。"
+        "description": ("驭臂的模型库索引，由 tools/import_model.py 自动生成。"
                         "『扭矩模型』是推荐加载的那个 —— 它的 ctrl 就是关节力矩，能被本项目控制插件直接驱动；"
                         "『可控制』= true 表示 nu==nv==nq（控制插件写 ctrl 的前提）。"
                         "界面按『类别=arm』列出可选机械臂。"),

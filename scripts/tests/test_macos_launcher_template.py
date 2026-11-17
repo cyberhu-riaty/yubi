@@ -10,7 +10,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-MODULE_PATH = ROOT / "工具" / "package_macos_app.py"
+MODULE_PATH = ROOT / "tools" / "package_macos_app.py"
 SPEC = importlib.util.spec_from_file_location("package_macos_app_test_target", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 PACKAGE_MODULE = importlib.util.module_from_spec(SPEC)

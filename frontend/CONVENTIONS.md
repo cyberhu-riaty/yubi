@@ -36,11 +36,11 @@ frontend/                     构建期源码（不参与运行时，可随时�
 
 | 生成物 | 来源（单一事实来源） | 生成命令 |
 |---|---|---|
-| `contract.ts` | `软件/契约.py` | `./.venv/bin/python 工具/generate_frontend_assets.py` |
+| `contract.ts` | `软件/契约.py` | `./.venv/bin/python tools/generate_frontend_assets.py` |
 | `themes.ts` | `软件/theme_table.json` | 同上 |
 | `theme.css` | `软件/theme_table.json` | 同上 |
 
-改了来源就跑一次生成。`工具/验证/contract_selfcheck.py` 会检查它们有没有过期。
+改了来源就跑一次生成。`tools/selfchecks/contract_selfcheck.py` 会检查它们有没有过期。
 
 ## 二、数据怎么进来（只有这一条路）
 
@@ -126,14 +126,14 @@ pnpm run build
 # 产物 → 软件/web/（由 Web桥 在同端口提供）
 
 cd ..
-.venv/bin/python 工具/generate_frontend_assets.py    # 保证 src/生成 与来源逐字节一致
+.venv/bin/python tools/generate_frontend_assets.py    # 保证 src/生成 与来源逐字节一致
 ```
 
 **★ 构建会清空 `软件/web/`**（`vite.config.ts` 里 `emptyOutDir`）。
 生成物只落 `frontend/src/generated/`，会被 Vite 打进 `软件/web/assets/`；
 `软件/web/` 里不再保存第二份生成物。所以先构建、再跑生成脚本。
 
-第二步是幂等的；跑它的意义是让 `工具/验证/contract_selfcheck.py` 的「生成物是否过期」
+第二步是幂等的；跑它的意义是让 `tools/selfchecks/contract_selfcheck.py` 的「生成物是否过期」
 检查通过，并保证构建用的 `src/generated/` 没有落后于 `theme_table.json` / `contract.py`。
 
 ### 构建失败时

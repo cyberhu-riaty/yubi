@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     files: list[Path] = []
-    for name in ("软件", "controllers", "工具"):
+    for name in ("软件", "controllers", "tools"):
         directory = PACKAGE_ROOT / name
         files += [p for p in find_python_files(directory) if p.resolve() not in ALLOWED_IMPORT_FILES]
 

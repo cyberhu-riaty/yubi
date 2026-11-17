@@ -62,7 +62,7 @@
 ```bash
 git clone https://github.com/cyberhu-riaty/yubi.git
 cd yubi
-bash 工具/rebuild_environment.sh
+bash tools/rebuild_environment.sh
 ```
 
 脚本会创建 `.venv`、安装 MuJoCo 3.13.0、WebSocket 通信和 macOS 窗口依赖，并同步前端生成物。
@@ -133,13 +133,13 @@ Windows 启动方式：
 ### 3. 想要桌面图标（macOS，可选）
 
 ```bash
-.venv/bin/python 工具/package_macos_app.py \
+.venv/bin/python tools/package_macos_app.py \
   --name 小软件 \
   --output-name 小软件 \
   --entry run_yubi.py
 ```
 
-生成的 `.app` 在包根目录，双击即可启动。它只是启动器 + 图标，不含 Python 环境；换机器后仍要先跑 `工具/rebuild_environment.sh`。
+生成的 `.app` 在包根目录，双击即可启动。它只是启动器 + 图标，不含 Python 环境；换机器后仍要先跑 `tools/rebuild_environment.sh`。
 
 ## 项目结构
 
@@ -154,7 +154,7 @@ yubi/
 ├── controllers/common/    控制、录制、辨识插件与算法模板
 ├── 模型/                  MuJoCo 模型与网格资产（6 台机械臂 + Robotiq 2F85 + Panda MPC 任务）
 ├── projects/              项目配置：一个项目 = 模型 + 算法列表 + 参数（版本 2）
-├── 工具/                  环境重建、模型导入、URDF→MJCF、打包、前端资产生成
+├── tools/                  环境重建、模型导入、URDF→MJCF、打包、前端资产生成
 │   └── 验证/              19 个可独立运行的检查脚本（诊断页跑其中 11 个）
 ├── docs/                  使用手册与界面截图
 ├── .github/workflows/     命名审计 CI
@@ -243,8 +243,8 @@ class MyController(ControlPlugin):
 模型来源与许可见各模型目录内的 `LICENSE`。需要导入更多模型：
 
 ```bash
-.venv/bin/python 工具/import_model.py --列表
-.venv/bin/python 工具/import_model.py universal_robots_ur5e
+.venv/bin/python tools/import_model.py --列表
+.venv/bin/python tools/import_model.py universal_robots_ur5e
 ```
 
 ## 验证
@@ -252,12 +252,12 @@ class MyController(ControlPlugin):
 界面「诊断」页可以一键跑 11 套检查。也可以在终端单独跑：
 
 ```bash
-.venv/bin/python 工具/验证/contract_selfcheck.py
-.venv/bin/python 工具/验证/project_selfcheck.py
-.venv/bin/python 工具/验证/trajectory_planning_selfcheck.py
-.venv/bin/python 工具/验证/parameter_transaction_selfcheck.py
-.venv/bin/python 工具/验证/observation_selfcheck.py
-.venv/bin/python 工具/验证/device_contract_selfcheck.py
+.venv/bin/python tools/selfchecks/contract_selfcheck.py
+.venv/bin/python tools/selfchecks/project_selfcheck.py
+.venv/bin/python tools/selfchecks/trajectory_planning_selfcheck.py
+.venv/bin/python tools/selfchecks/parameter_transaction_selfcheck.py
+.venv/bin/python tools/selfchecks/observation_selfcheck.py
+.venv/bin/python tools/selfchecks/device_contract_selfcheck.py
 ```
 
 另有入口自检：

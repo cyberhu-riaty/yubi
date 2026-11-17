@@ -17,7 +17,7 @@ platform_selfcheck.py —— 守住"入口不碰平台细节"这条边界
   ④ 当前平台的 `可用()` 能被调用且返回二元组（不是抛异常）
 
 用法：
-    .venv/bin/python 工具/验证/platform_selfcheck.py [--brief]
+    .venv/bin/python tools/selfchecks/platform_selfcheck.py [--brief]
 """
 from __future__ import annotations
 

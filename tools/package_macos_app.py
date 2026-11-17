@@ -28,10 +28,10 @@ package_macos_app.py —— 生成 macOS 的 .app（双击即启动）
     · Bundle Identifier 自动保证唯一（避免两个 .app 撞 id、互相干扰）
 
 用法：
-    .venv/bin/python 工具/package_macos_app.py                  # 在资料包根目录生成 .app
-    .venv/bin/python 工具/package_macos_app.py --包根 /路径       # 指定包根
-    .venv/bin/python 工具/package_macos_app.py --名字 "小软件"     # 换软件名
-    .venv/bin/python 工具/package_macos_app.py --标识 local.digitwin.yubi   # 显式指定 bundle id
+    .venv/bin/python tools/package_macos_app.py                  # 在资料包根目录生成 .app
+    .venv/bin/python tools/package_macos_app.py --包根 /路径       # 指定包根
+    .venv/bin/python tools/package_macos_app.py --名字 "小软件"     # 换软件名
+    .venv/bin/python tools/package_macos_app.py --标识 local.digitwin.yubi   # 显式指定 bundle id
 """
 from __future__ import annotations
 
@@ -104,7 +104,7 @@ echo "（若卡住不动：请在弹出的「想访问桌面文件夹」对话�
 
 PY="$PKG_DIR/.venv/bin/python"
 if [ ! -x "$PY" ]; then
-  osascript -e 'display dialog "找到了包文件夹，但里面没有运行环境（.venv）。\n\n请先在终端执行：\nbash 工具/rebuild_environment.sh" buttons {{"好"}} default button 1 with icon stop' 2>/dev/null
+  osascript -e 'display dialog "找到了包文件夹，但里面没有运行环境（.venv）。\n\n请先在终端执行：\nbash tools/rebuild_environment.sh" buttons {{"好"}} default button 1 with icon stop' 2>/dev/null
   echo "✗ 找不到 $PY" >> "$LOG"; exit 1
 fi
 
@@ -159,7 +159,7 @@ done
 #    ★ 为什么用 _NSGetExecutablePath + realpath：
 #      双击启动时工作目录是 /，argv[0] 可能不完整；必须自己问系统要绝对路径。
 # ---------------------------------------------------------------------------
-NATIVE_LAUNCHER_SOURCE = r"""// {app_name} 原生 arm64 启动器（由 工具/package_macos_app.py 生成，勿手改）
+NATIVE_LAUNCHER_SOURCE = r"""// {app_name} 原生 arm64 启动器（由 tools/package_macos_app.py 生成，勿手改）
 //
 // 存在意义：让 macOS 认出 .app 是原生 arm64 应用，不提示安装 Rosetta。
 // 做法：算出自己的绝对路径 → 上一级的 Resources/启动.sh → 转发全部参数。
@@ -266,7 +266,7 @@ def build_app(package_root: str, app_name: str, entry_path: str, bundle_id: str 
         shutil.copyfile(icon, os.path.join(resources_dir, "图标.icns"))
         icon_name = "icon"
     else:
-        print("  ℹ 没找到 .icns 图标（可先跑 工具/generate_app_icon.py），本次不设图标")
+        print("  ℹ 没找到 .icns 图标（可先跑 tools/generate_app_icon.py），本次不设图标")
 
     # ---- ① 先写 bash 启动脚本（启动逻辑）----
     #      放在 Resources/ 而不是 MacOS/：MacOS/ 里只留 Mach-O，整个 .app 才能签名
@@ -417,13 +417,13 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--bundle-id", "--标识", default=None,
                     help="Bundle Identifier（默认：沿用已有的；没有则按名字自动派生一个唯一 id）")
     ap.add_argument("--version", "--版本", default="0.6.0", help="版本号")
-    ap.add_argument("--icon", "--图标", default=None, help=".icns 路径（默认：工具/图标.icns）")
+    ap.add_argument("--icon", "--图标", default=None, help=".icns 路径（默认：tools/图标.icns）")
     ap.add_argument("--no-refresh", "--不刷新注册", action="store_true",
                     help="不调用 lsregister 刷新系统注册")
     args = ap.parse_args(argv)
 
-    # 本脚本在 <包根>/工具/ 下 → 上一级就是包根
-    #   （原来写的是上两级，那是"脚本在 工具/打包/ 里"的老结构，早已不成立）
+    # 本脚本在 <包根>/tools/ 下 → 上一级就是包根
+    #   （原来写的是上两级，那是"脚本在 tools/打包/ 里"的老结构，早已不成立）
     package_root = args.package_root or os.path.normpath(
         os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
@@ -438,7 +438,7 @@ def main(argv: list[str]) -> int:
         print(f"  ⚠ 主程序不在预期位置：{args.entry}")
         print("     （仍会生成，但双击时会弹'找不到主程序'）")
 
-    icon = args.icon or os.path.join(package_root, "工具", "图标.icns")
+    icon = args.icon or os.path.join(package_root, "tools", "图标.icns")
     app = build_app(package_root, args.output_name or args.name, args.entry, args.bundle_id, args.version,
                extra_args=args.extra_args, icon=icon)
 

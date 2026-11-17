@@ -149,18 +149,18 @@ Windows 的类、方法、导入及反射名称已同步改名并通过静态检
 - 迁移时发现 `项目/Panda_MJPC.json` 的旧参数挂在“Panda 抓取演示（脚本化）”名下，而该项目实际装配 `panda_mjpc_port`；旧版同样不会恢复该参数。本批按原意保留数据并映射到 `panda_pick_place`，未把它当作可用参数。
 - 验证：50 项 Python 单元测试（新增 10 项项目文档迁移/往返/大小写/参数隔离检查）、39 项契约检查、74 项项目检查、11 项参数事务检查、4 项运行内核检查、13 项实验注册检查、桌面启动器 `--check` 通过；无界面实验 `ur5e_pid_plain` 实际恢复 4 个参数并完成录制导出。前端类型检查与生产构建通过。
 - 命名扫描：总位置 5,813 → 5,547；JSON 键 578 → 367，文件名 37 → 27；增量基线从 625 个位置缩到 404 个位置，没有新增基线条目。新增测试中的旧格式样例按字符串字面量保存，不属于新增产品机器键。
-- 尚未完成：`工具/模型清单.json`（245 键）、`软件/风格表.json`（118 键）与 URDF 示例参数仍是中文键；录制元信息、插件元数据内部结构、`模型/模型库.json` 及剩余目录名仍需后续批次。Windows 宿主仍未在 Windows 真机验证。
+- 尚未完成：`tools/模型清单.json`（245 键）、`软件/风格表.json`（118 键）与 URDF 示例参数仍是中文键；录制元信息、插件元数据内部结构、`模型/模型库.json` 及剩余目录名仍需后续批次。Windows 宿主仍未在 Windows 真机验证。
 
 
 ## 2026-11-17：机器配置清单与外观表（13:55 起）
 
 本批清掉扫描范围内最后一批中文 JSON 键（模型清单、外观风格表、URDF 示例参数），并给旧文件保留读取兼容。
 
-- `工具/模型清单.json` 改为英文键（`source / asset_base_url / proxy_prefix / models`，每项 `display_name / category / license / asset / download_bytes / unpacked_bytes / default_model / entrypoints / torque_limit`）；`import_model.py` 的 `read_manifest()` 同时接受旧中文键，`normalize_manifest()` 负责统一。清单本身未增删模型，24 个条目与哈希值不变。
+- `tools/模型清单.json` 改为英文键（`source / asset_base_url / proxy_prefix / models`，每项 `display_name / category / license / asset / download_bytes / unpacked_bytes / default_model / entrypoints / torque_limit`）；`import_model.py` 的 `read_manifest()` 同时接受旧中文键，`normalize_manifest()` 负责统一。清单本身未增删模型，24 个条目与哈希值不变。
 - 重新生成 `模型/模型库.json`，键改为 `models / identifier / display_name / torque_model / controllable / dof / ...`；两个 `模型信息.json` 同步改英文键。`model_bridge`、`project_registry` 与项目自检保留旧键回退，用户已有的模型索引仍可读。
 - `软件/风格表.json` 改为 `themes`（ASCII id：`minimal / modern_dark / blueprint / warm_night / mission_control / workbench`）、`theme_order`、`default_theme`、`web_semantic_colors`、`conventions`；每套风格使用 `display_name / legacy_name / tagline / english_name / base_theme / colors / styles / plots`。中文显示名仍是值，不是键。
 - 生成器输出 `ThemeMetadata` 增加 `id` 与 `legacyName`；CSS 的 `data-theme` 改用 ASCII id，仍以 `display_name` 作为界面名称。前端 `appearance.ts` 读取旧 localStorage 时把历史中文短名迁移到 id，`AppearanceView` 仍显示中文名。
-- `工具/urdf_to_mjcf.py` 的覆盖参数段改为 `joints / motors`，读取兼容旧的 `关节 / 电机`；两个示例 JSON 已改英文键。
+- `tools/urdf_to_mjcf.py` 的覆盖参数段改为 `joints / motors`，读取兼容旧的 `关节 / 电机`；两个示例 JSON 已改英文键。
 - 验证：51 项 Python 单元测试、39 项契约检查、74 项项目检查、4 项运行内核检查、13 项实验注册检查通过；风格表自检 474 个颜色 + 168 个样式值通过；生成物 `--check` 一致；前端类型检查与生产构建通过。
 - 命名扫描：5,547 → 5,110；`json_key` 从 367 降到 **0**；剩余 5,073 处字符串键、27 个文件名、10 个目录名。基线待本批收尾时重建。
 - 说明：本次只把机器键改成英文；模型/风格/参数的显示值（中文名、说明）没有翻译。Windows 宿主仍未验证。
@@ -183,13 +183,13 @@ Windows 的类、方法、导入及反射名称已同步改名并通过静态检
 
 - 项目目录 `项目/` → `projects/`，实验目录 `实验/` → `experiments/`；`project_registry` 与 `ExperimentRegistry` 先读新目录，再读旧目录，旧用户副本仍能加载。
 - 算法目录 `算法库/通用/` → `controllers/common/`；`discover_algorithms()`、装配器 `sys.path`、部署导出、项目自检和 Panda 自检同步，旧 `算法库/` 仍作为读取回退。
-- `工具/模型清单.json` → `工具/model_manifest.json`，`软件/风格表.json` → `软件/theme_table.json`；读取端保留旧名回退。
-- `工具/示例_urdf转mjcf/` → `工具/examples_urdf_to_mjcf/`，两个示例参数文件改为 `example_params.json` / `example_params_six_axis.json`；示例不是运行时入口，旧路径不保留转发。
-- 新增 [历史名称与兼容入口登记](legacy-compatibility-registry.md)：剩余中文文件/目录全部列出保留原因和退役条件。`软件/`、`工具/`、`工具/验证/` 仍是兼容根（扁平导入、诊断命令和用户脚本按路径调用），中文模块仍是旧插件导入转发层。
+- `tools/模型清单.json` → `tools/model_manifest.json`，`软件/风格表.json` → `软件/theme_table.json`；读取端保留旧名回退。
+- `tools/示例_urdf转mjcf/` → `tools/examples_urdf_to_mjcf/`，两个示例参数文件改为 `example_params.json` / `example_params_six_axis.json`；示例不是运行时入口，旧路径不保留转发。
+- 新增 [历史名称与兼容入口登记](legacy-compatibility-registry.md)：剩余中文文件/目录全部列出保留原因和退役条件。`软件/`、`tools/`、`tools/selfchecks/` 仍是兼容根（扁平导入、诊断命令和用户脚本按路径调用），中文模块仍是旧插件导入转发层。
 - 更新 README、使用手册、前端约定、命名政策与迁移计划里的目录与项目 JSON 示例；v2 项目键（`project / model / algorithms / parameters`）成为文档主写法，同时说明旧文件可读。
 - 验证：55 项 Python 单元测试、39 项契约检查、74 项项目检查、4 项运行内核检查、13 项实验注册检查、GUI 实验闭环、Panda 抓取闭环、桌面启动器 `--check`、前端类型检查与构建通过。
-- 命名扫描：4,956 → 4,947；JSON 键仍为 0；剩余 28 个路径项是 23 个兼容文件、`工具/`、`工具/验证/`、`软件/`、`软件/设备/`、`软件/骨架/`。基线随之缩到 28 项，不再包含字符串键。
-- 仍未完成：`软件/` 与 `工具/` 根目录的完整英文迁移、原生宿主诊断键、参数辨识结果边界、Windows 宿主真机验证、干净源码安装/打包复核和开源文档最终同步。
+- 命名扫描：4,956 → 4,947；JSON 键仍为 0；剩余 28 个路径项是 23 个兼容文件、`tools/`、`tools/selfchecks/`、`软件/`、`软件/设备/`、`软件/骨架/`。基线随之缩到 28 项，不再包含字符串键。
+- 仍未完成：`软件/` 与 `tools/` 根目录的完整英文迁移、原生宿主诊断键、参数辨识结果边界、Windows 宿主真机验证、干净源码安装/打包复核和开源文档最终同步。
 
 
 ## 2026-11-17：设置键、告警枚举与字符串键分类（14:55 起）
@@ -201,7 +201,7 @@ Windows 的类、方法、导入及反射名称已同步改名并通过静态检
 - 新增 [字符串键分类](string-key-classification.md)：4,895 处逐类记录——兼容别名 3,039、界面本地化 890、v21/生成物/测试 698、插件显示标签 100、原生宿主诊断 61、其他 107。没有把“扫描归零”当成删除兼容字段的理由。
 - 验证：58 项 Python 单元测试、39 项契约检查、19 项观测自检、74 项项目检查、4 项运行内核检查、13 项实验注册检查、55 项命名/兼容测试相关检查；前端类型检查与构建通过。
 - 命名扫描：4,947 → 4,923；`json_key` 为 0；文件/目录项 28 个仍在兼容入口登记中。
-- 仍未完成：原生宿主诊断键（需 Windows 复核）、`软件/` 与 `工具/` 根目录迁移、干净源码打包、Windows 宿主真机验证和文档最终同步。
+- 仍未完成：原生宿主诊断键（需 Windows 复核）、`软件/` 与 `tools/` 根目录迁移、干净源码打包、Windows 宿主真机验证和文档最终同步。
 
 
 ## 已知行为漂移：辨识动作值（只核实，未修改）
@@ -218,8 +218,17 @@ Windows 的类、方法、导入及反射名称已同步改名并通过静态检
 
 - `scripts/check_naming.py`、58 项 Python 单元测试、3 组 Node 回归、39 项契约检查、74 项项目检查、4 项运行内核检查、13 项实验注册检查、19 项观测自检、风格表 474 颜色 + 168 样式检查全部通过。
 - 前端 `npm run typecheck` 与 `npm run build` 通过；生成物 `--check` 与来源一致。
-- `run_yubi.py --check` 通过；用 `工具/package_macos_app.py` 在干净树重新打包 `.app`，运行其 `--check` 通过，启动日志记录“可以启动”。
+- `run_yubi.py --check` 通过；用 `tools/package_macos_app.py` 在干净树重新打包 `.app`，运行其 `--check` 通过，启动日志记录“可以启动”。
 - 在干净树运行无界面实验 `ur5e_pd_plain` 成功，参数恢复、录制和导出正常；新 `.meta.json` 为版本 2 英文键。
 - 浏览器冒烟使用**全新**假后端与独立端口 18713：数据接收、曲线、运行/暂停/复位、算法应用/保存、页签、主题（ASCII id）和语言切换全部通过。截图在 `/private/tmp/yubi-final-smoke9/`。
 - 未验证：Windows 宿主（本机 macOS，不能代替 Windows 窗口/打包验证）；真实辨识插件“开始/停止”与“采样/辨识”的动作值漂移仍未修改（见上一节）。
-- 仍未完成的结构项：`软件/`、`工具/`、`工具/验证/` 根目录与 23 个中文兼容模块/文件。它们已在 [兼容入口登记](legacy-compatibility-registry.md) 中逐项记录，不是未分类的遗漏；完整搬迁需要单独的包化、打包、诊断命令和文档批次。
+- 仍未完成的结构项：`软件/`、`tools/`、`tools/selfchecks/` 根目录与 23 个中文兼容模块/文件。它们已在 [兼容入口登记](legacy-compatibility-registry.md) 中逐项记录，不是未分类的遗漏；完整搬迁需要单独的包化、打包、诊断命令和文档批次。
+
+
+## 2026-11-17：工具目录迁移到 tools/（15:15 起）
+
+- `工具/` → `tools/`，`工具/验证/` → `tools/selfchecks/`；诊断页命令表、自检脚本、打包/图标脚本、环境重建、`scripts/check_naming.py`、命名范围、测试和全部文档路径同步。未跟踪的 `tools/字体补丁/` 等用户文件随目录移动并保持未跟踪、未提交。
+- `模型/模型库.json` 的生成说明与模型目录 README 更新到 `tools/import_model.py`；重新执行 `tools/import_model.py --index`。
+- 修复迁移中误改 `软件/contract.py` 描述导致的 v21 契约摘要变化：契约文本已全部还原，线上摘要仍为固定值。
+- 验证：58 项 Python 单元测试、39 项契约检查、74 项项目检查、4 项运行内核检查、13 项实验注册检查、风格表自检、桌面 `--check`、前端类型检查/构建全部通过。
+- 命名扫描：4,923 → 4,921；目录项从 5 降到 3（只剩 `软件/`、`软件/设备/`、`软件/骨架/`），文件名仍 23 个中文兼容模块；基线 26 项。`工具/` 与 `工具/验证/` 已从兼容登记表移到“已迁移”。

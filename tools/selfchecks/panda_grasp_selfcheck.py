@@ -8,7 +8,7 @@
   ④ 没有异常。
 
 用法：
-    .venv/bin/python 工具/验证/panda_grasp_selfcheck.py
+    .venv/bin/python tools/selfchecks/panda_grasp_selfcheck.py
 退出码：0 通过；1 失败。
 """
 from __future__ import annotations

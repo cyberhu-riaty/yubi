@@ -9,7 +9,7 @@
   ⑤ 运行期间没有线程错误（规划线程的异常会记在 指标.错误次数）。
 
 用法：
-    .venv/bin/python 工具/验证/panda_workflow_selfcheck.py
+    .venv/bin/python tools/selfchecks/panda_workflow_selfcheck.py
 退出码：0 = 通过；1 = 有失败。
 """
 from __future__ import annotations

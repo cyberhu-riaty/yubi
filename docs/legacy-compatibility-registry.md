@@ -11,17 +11,17 @@
 | `项目/` | `projects/` | `project_registry.project_directories()` 先读新目录，再读旧目录；旧用户项目可继续加载 | 发布说明告知一个版本周期后，删除旧目录扫描 |
 | `实验/` | `experiments/` | `ExperimentRegistry._directories()` 扫描新旧两处 | 同上 |
 | `算法库/通用/` | `controllers/common/` | `project_registry.algorithm_directories()` 与装配器 `sys.path` 同时接受旧树 | 同上 |
-| `工具/模型清单.json` | `工具/model_manifest.json` | `import_model.read_manifest()` 在新文件缺失时回退旧名 | 旧清单副本不再需要时删除回退 |
+| `tools/模型清单.json` | `tools/model_manifest.json` | `import_model.read_manifest()` 在新文件缺失时回退旧名 | 旧清单副本不再需要时删除回退 |
 | `软件/风格表.json` | `软件/theme_table.json` | 生成器与风格表自检在新文件缺失时回退旧名 | 旧检出不再使用后删除回退 |
-| `工具/示例_urdf转mjcf/` | `工具/examples_urdf_to_mjcf/` | 无运行时读取；示例仅文档使用 | 已退役（旧路径不再提供） |
+| `tools/示例_urdf转mjcf/` | `tools/examples_urdf_to_mjcf/` | 无运行时读取；示例仅文档使用 | 已退役（旧路径不再提供） |
 
 ## 保留的兼容边界（尚未退役）
 
 | 位置 | 新实现 | 保留原因 | 退役条件 |
 | --- | --- | --- | --- |
 | `软件/` | 计划中的 `src/yubi/` | 运行时采用扁平导入（`import contract`），入口脚本把该目录加入 `sys.path`；打包、Vite 输出、`.app` 模板与大量文档仍按该路径工作 | 单独批次完成包化、打包、启动器、前端产物路径与干净源码验证后再改 |
-| `工具/` | 计划中的 `tools/` | 诊断页、自检命令、打包脚本和用户文档按路径调用；没有 Python 包级转发机制 | 与诊断页命令、文档和 CI 同步迁移，并保留一个版本的路径说明 |
-| `工具/验证/` | 计划中的 `tools/selfchecks/` | 同上；`diagnostics_bridge` 的断言命令表直接写路径 | 同上 |
+| `tools/` | 计划中的 `tools/` | 诊断页、自检命令、打包脚本和用户文档按路径调用；没有 Python 包级转发机制 | 与诊断页命令、文档和 CI 同步迁移，并保留一个版本的路径说明 |
+| `tools/selfchecks/` | 计划中的 `tools/selfchecks/` | 同上；`diagnostics_bridge` 的断言命令表直接写路径 | 同上 |
 | `软件/Web桥.py`、`参数辨识.py`、`命令桥.py`、`契约.py`、`官方层.py`、`录制桥.py`、`控制台.py`、`插件桥.py`、`文案.py`、`界面文字.py`、`界面桥.py`、`观测核心.py`、`诊断桥.py`、`辨识桥.py`、`部署桥.py`、`高亮桥.py` | 对应的英文模块 | 旧插件/扩展按中文模块名导入；文件只做名称转发，不复制实现 | 外发布弃用说明并确认外部插件迁移后删除 |
 | `软件/设备/契约.py`、`安全层.py`、`模拟后端.py`、`跟踪回路.py`、`连接桥.py` | `软件/devices/` | 旧插件按 `设备.*` 名称导入设备层；别名表与关键字转发保留旧构造参数 | 同上 |
 | `软件/骨架/官方接口清单.py` | `软件/official_interface_inventory.py` | 旧诊断命令/脚本路径仍可运行 | 诊断页命令与文档同步切换到英文入口后删除 |

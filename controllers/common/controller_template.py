@@ -14,7 +14,7 @@ controller_template.py —— 复制这个文件开始写你自己的控制算�
 运行 / 检查：
     ./.venv/bin/python run_yubi.py                         # 开工作台
     ./.venv/bin/python run_yubi.py --project UR5e_基础PD
-    ./.venv/bin/python "工具/验证/project_selfcheck.py"            # 项目↔模型↔算法 一致性
+    ./.venv/bin/python "tools/selfchecks/project_selfcheck.py"            # 项目↔模型↔算法 一致性
 
 ★ 元信息怎么显示：
     · `name` / `description` 用于中文界面与终端；

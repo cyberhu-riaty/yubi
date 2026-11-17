@@ -6,12 +6,12 @@ check_dependency_lock.py —— 当前环境是否与"实测跑通过"的版本�
     我们把实测通过的版本钉在 `requirements.lock` 里，用这个脚本随时核对：
       · 版本一致 → 放心
       · 版本不同 → 明确警告（并告出怎么退回实测版本）
-    配合 `软件/official_api.py` 的自检与 `工具/验证/official_api_selfcheck.py`，
+    配合 `软件/official_api.py` 的自检与 `tools/selfchecks/official_api_selfcheck.py`，
     形成"版本 + 接口"两道防线：版本对了接口不一定对，接口对了版本也未必对，两道都要。
 
 用法：
-    .venv/bin/python 工具/check_dependency_lock.py
-    .venv/bin/python 工具/check_dependency_lock.py --锁 某个别的.lock
+    .venv/bin/python tools/check_dependency_lock.py
+    .venv/bin/python tools/check_dependency_lock.py --锁 某个别的.lock
 """
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def installed_version(package_name: str) -> str | None:
 def main(argv: list[str]) -> int:
     directory = os.path.dirname(os.path.abspath(__file__))
     default_lock = os.path.normpath(os.path.join(directory, "..", "..", "requirements.lock"))
-    # 兼容资料包结构（工具/ 在包根下）
+    # 兼容资料包结构（tools/ 在包根下）
     if not os.path.exists(default_lock):
         default_lock = os.path.normpath(os.path.join(directory, "..", "requirements.lock"))
 

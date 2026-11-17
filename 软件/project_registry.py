@@ -475,7 +475,7 @@ def discover_algorithms() -> list[dict]:
 
     这一步**只读文件、不 import**（import 有副作用，不能在扫描阶段做）：
     类名靠"条目里写了就用条目的，没写就等装配时按模块里的子类推断"。
-    界面上的"可选算法清单"、`工具/` 下的检查脚本都用它。
+    界面上的"可选算法清单"、`tools/` 下的检查脚本都用它。
     """
     result: list[dict] = []
     seen: set[str] = set()

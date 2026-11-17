@@ -22,21 +22,21 @@
 | 文件 | 位置数 | 性质 |
 | --- | ---: | --- |
 | `软件/web_bridge.py` | 27 | v21 帧/握手/回执键（`主题、协议、数据、请求、通过…`）；前端适配器负责转换，保持线上格式 |
-| `工具/验证/command_receipt_selfcheck.py` | 13 | 旧回执/命令固定件 |
-| `工具/验证/contract_selfcheck.py` | 11 | v21 契约固定件与显示文案 |
-| `工具/验证/theme_selfcheck.py` | 7 | 旧主题名/显示键检查样例 |
+| `tools/selfchecks/command_receipt_selfcheck.py` | 13 | 旧回执/命令固定件 |
+| `tools/selfchecks/contract_selfcheck.py` | 11 | v21 契约固定件与显示文案 |
+| `tools/selfchecks/theme_selfcheck.py` | 7 | 旧主题名/显示键检查样例 |
 | `scripts/tests/test_settings_migration.py` | 6 | 旧设置键迁移固定件 |
 | `软件/command_bridge.py` | 6 | `SOURCE_MODULES` 里的旧消息类名（线上类名） |
 | `软件/diagnostics_bridge.py` | 5 | 诊断项显示名与命令路径 |
-| `工具/验证/parameter_transaction_selfcheck.py` | 4 | 参数事务测试夹具 |
+| `tools/selfchecks/parameter_transaction_selfcheck.py` | 4 | 参数事务测试夹具 |
 | `软件/devices/connection_bridge.py` | 4 | `legacy_wire` 审计条目键（类型/内容/错误码） |
 | `软件/run_experiment.py` | 4 | v21 录制命令 `动作/频率/备注` |
 | `scripts/tests/test_env_config.py` | 3 | 旧环境变量别名固定件 |
 | `scripts/tests/test_model_import.py` | 3 | 旧清单键固定件 |
 | `scripts/tests/test_official_api.py` | 3 | 旧入口导入固定件 |
 | `软件/simulation_control.py` | 3 | 插件状态显示名（运行/重力/复位） |
-| `工具/验证/observation_selfcheck.py` | 2 | 信号与检测器测试固定件 |
-| `工具/验证/project_selfcheck.py` | 2 | 显示文案/测试标签 |
+| `tools/selfchecks/observation_selfcheck.py` | 2 | 信号与检测器测试固定件 |
+| `tools/selfchecks/project_selfcheck.py` | 2 | 显示文案/测试标签 |
 | `软件/runtime_engine.py` | 2 | 插件目录 v21 负载键（数量/插件） |
 | `controllers/common/controller_template.py` | 1 | 示例状态显示名 |
 | `软件/official_interface_inventory.py` | 1 | 旧 `核心` 模块键别名（显式兼容） |

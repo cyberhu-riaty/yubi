@@ -17,7 +17,7 @@ trajectory_planning_selfcheck.py —— 规划内核的**性质测试**（不是
   ⑩ 不可行必须报错（LE 缺陷 10：只捕获 RuntimeError）
 
 用法：
-    .venv/bin/python 工具/验证/trajectory_planning_selfcheck.py [--short]
+    .venv/bin/python tools/selfchecks/trajectory_planning_selfcheck.py [--short]
 """
 from __future__ import annotations
 

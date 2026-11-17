@@ -10,9 +10,9 @@ generate_app_icon.py —— 给 .app 画一个图标（不依赖设计软件）
     用代码画的好处是**可重现**：改几行参数就能换配色/换造型，不用找设计师。
 
 用法：
-    .venv/bin/python 工具/generate_app_icon.py                      # 默认输出到 工具/图标.icns
-    .venv/bin/python 工具/generate_app_icon.py --输出 某处/我的.icns
-    .venv/bin/python 工具/generate_app_icon.py --底色 "#1b2a41" --主色 "#4cc2ff"
+    .venv/bin/python tools/generate_app_icon.py                      # 默认输出到 tools/图标.icns
+    .venv/bin/python tools/generate_app_icon.py --输出 某处/我的.icns
+    .venv/bin/python tools/generate_app_icon.py --底色 "#1b2a41" --主色 "#4cc2ff"
 
 技术要点（踩过的）：
     · macOS 图标必须留出"安全边距"（内容不能占满整张图），否则在 Dock 里显得比别人大

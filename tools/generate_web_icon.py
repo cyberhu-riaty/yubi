@@ -10,8 +10,8 @@ generate_web_icon.py —— 画「小软件 · 工作台（Web 界面）」的�
     配色沿用同一套品牌色（深蓝底 + 亮蓝强调），所以两个图标看着是一家的。
 
 用法：
-    .venv/bin/python 工具/generate_web_icon.py                    # 输出 工具/图标_Web.icns
-    .venv/bin/python 工具/generate_web_icon.py --输出 某处/x.icns
+    .venv/bin/python tools/generate_web_icon.py                    # 输出 tools/图标_Web.icns
+    .venv/bin/python tools/generate_web_icon.py --输出 某处/x.icns
 """
 from __future__ import annotations
 
