@@ -46,13 +46,8 @@ class PluginCatalog(messages.Snapshot):
     description: str = ""
 
 
-# 插件类上我们认识的元信息（与 算法库/通用/我的控制律_模板.py 里的一致）
-METADATA_FIELDS = {
-    "name": "名称",
-    "version": "版本",
-    "description": "说明",
-    "author": "作者",
-}
+# 插件类上我们认识的元信息（与 算法库/通用/controller_template.py 里的一致）
+METADATA_FIELDS = {"name", "version", "description", "author"}
 
 
 def _read_class_attributes(path: str) -> dict[str, str]:
@@ -77,29 +72,20 @@ def _read_class_attributes(path: str) -> dict[str, str]:
                     continue
                 if isinstance(child.value, ast.Constant) and isinstance(child.value.value, str):
                     # 第一个带字面量值的类优先（一个文件里通常只有一个插件类）
-                    output.setdefault(METADATA_FIELDS[target.id], child.value.value)
+                    output.setdefault(target.id, child.value.value)
     return output
 
 
 def _projects_using_plugins(package_root: str) -> dict[str, list[str]]:
-    """反查：每个插件被哪些项目用到。数据来自 `项目/*.json` 的 `算法` 列。"""
-    import json
+    """反查：每个插件被哪些项目用到。数据来自项目文件的 `algorithms` 列。"""
+    import project_registry as _project
     result: dict[str, list[str]] = {}
-    directory = os.path.join(package_root, "项目")
-    try:
-        filenames = [n for n in os.listdir(directory) if n.endswith(".json") and n != "索引.json"]
-    except OSError:
-        return result
-    for name in sorted(filenames):
-        try:
-            d = json.load(open(os.path.join(directory, name), encoding="utf-8"))
-        except Exception:                                             # noqa: BLE001
-            continue
-        project_name = str(d.get("项目") or os.path.splitext(name)[0])
-        for items in (d.get("算法") or []):
-            plugins = str((items or {}).get("插件") or "") if isinstance(items, dict) else ""
-            if plugins:
-                result.setdefault(plugins, []).append(project_name)
+    for project_name in _project.list_projects():
+        data = _project.load_project(project_name) or {}
+        for items in (data.get("algorithms") or []):
+            plugin = str((items or {}).get("plugin") or "") if isinstance(items, dict) else ""
+            if plugin:
+                result.setdefault(plugin, []).append(project_name)
     return result
 
 
@@ -122,19 +108,19 @@ def get_plugin_catalog(package_root: str, current_algorithms: list[str] | None =
         return {"数量": 0, "插件": [], "说明": f"算法库扫描失败：{exc}"}
 
     for items in discovered:
-        name = str(items.get("插件", ""))
-        file = str(items.get("文件", ""))
+        name = str(items.get("plugin", ""))
+        file = str(items.get("file", ""))
         metadata = _read_class_attributes(file) if file else {}
-        display_name = metadata.get("名称", name)
+        display_name = metadata.get("name", name)
         current_order = enabled_order.get(name, enabled_order.get(display_name, -1))
         output.append({
             "插件": name,
-            "分组": str(items.get("分组", "")),
-            "版本": metadata.get("版本", ""),
-            "说明": metadata.get("说明", ""),
-            "作者": metadata.get("作者", ""),
+            "分组": str(items.get("group", "")),
+            "版本": metadata.get("version", ""),
+            "说明": metadata.get("description", ""),
+            "作者": metadata.get("author", ""),
             "名称": display_name,
-            "文件": str(items.get("相对包根", "")),
+            "文件": str(items.get("relative", "")),
             "被项目使用": usage.get(name, []),
             # ★ 判定"已启用"要同时认两种标识：
             #   · 模块名（`关节pd控制`）—— 项目文件与命令里用的就是它

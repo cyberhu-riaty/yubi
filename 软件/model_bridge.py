@@ -14,7 +14,7 @@ model_bridge.py —— 模型库、模型切换与项目状态的界面↔仿真
     真正的加载与"重绑 model/data + 通知插件"由外壳注入的回调完成（见 runtime_engine.py）。
 
 另外它会记录"上次用的模型"：
-    `输出/设置.json` 里存 `上次模型`，用于保留操作记录和空场景缺失时兜底；
+    `输出/设置.json` 里存 `last_model`，用于保留操作记录和空场景缺失时兜底；
     普通启动仍固定进入空场景，不会自动恢复机械臂。
     启动外壳会在每次切换成功后记录。
 
@@ -66,13 +66,18 @@ def read_model_library(arms_only: bool = True) -> list[dict]:
     except Exception as exc:                                       # noqa: BLE001
         print(f"⚠ 模型库索引读取失败：{type(exc).__name__}: {exc}")
         return []
-    entries = index_data.get("模型", [])
+    entries = index_data.get("models", index_data.get("模型", []))
     if arms_only:
         entries = [m for m in entries if (
-            (m.get("类别") == "arm" and m.get("可控制"))
-            or m.get("类别") == "arm_task"
+            (_model_field(m, "category", "类别") == "arm" and _model_field(m, "controllable", "可控制"))
+            or _model_field(m, "category", "类别") == "arm_task"
         )]
     return entries
+
+
+def _model_field(entry: dict, english: str, legacy: str, default=None):
+    """Model-library field with a legacy Chinese-key fallback."""
+    return entry[english] if english in entry else entry.get(legacy, default)
 
 
 def arm_joint_count(model) -> int:
@@ -118,8 +123,9 @@ def display_name(path: str) -> str:
     if absolute and os.path.normpath(absolute) == os.path.normpath(EMPTY_SCENE_PATH):
         return "空场景（无机械臂）"
     for m in read_model_library(arms_only=False):
-        if os.path.normpath(absolute_path(m.get("扭矩模型", ""))) == os.path.normpath(absolute):
-            return str(m.get("显示名") or m.get("标识") or os.path.basename(path))
+        if os.path.normpath(absolute_path(_model_field(m, "torque_model", "扭矩模型", ""))) == os.path.normpath(absolute):
+            return str(_model_field(m, "display_name", "显示名")
+                       or _model_field(m, "identifier", "标识") or os.path.basename(path))
     return os.path.basename(path)
 
 
@@ -147,9 +153,22 @@ def _write_settings(data: dict) -> None:
         print(f"⚠ 设置保存失败（不影响使用）：{type(exc).__name__}: {exc}")
 
 
+SETTING_ALIASES = {
+    "last_model": "上次模型",
+    "last_project": "上次项目",
+    "language": "语言",
+    "windows_split_v2": "Windows主分栏V2",
+    "windows_right_split": "Windows右列分栏",
+}
+
+
 def read_setting(key: str, default=None):
-    """读一个设置项（`输出/设置.json`）。"""
-    return _read_settings().get(key, default)
+    """读一个设置项（`输出/设置.json`），兼容旧中文键。"""
+    data = _read_settings()
+    if key in data:
+        return data[key]
+    legacy = SETTING_ALIASES.get(key)
+    return data.get(legacy, default) if legacy else default
 
 
 def write_setting(key: str, value) -> None:
@@ -163,7 +182,7 @@ def write_setting(key: str, value) -> None:
 
 def read_last_model() -> str:
     """返回上次成功加载的模型路径；没有 / 文件已不在 → 返回空串。"""
-    path = str(_read_settings().get("上次模型") or "")
+    path = str(read_setting("last_model", "") or "")
     if path and os.path.exists(path):
         return path
     return ""
@@ -172,9 +191,10 @@ def read_last_model() -> str:
 def remember_model(path: str) -> None:
     """记住这次用的模型。空场景也记（等价于"上次我就是要空着"）。"""
     data = _read_settings()
-    if data.get("上次模型") == path:
+    if data.get("last_model") == path and "上次模型" not in data:
         return
-    data["上次模型"] = path
+    data.pop("上次模型", None)
+    data["last_model"] = path
     _write_settings(data)
     print(f"【模型】已记录最近选择：{display_name(path)}（普通启动仍进入空场景）", flush=True)
 
@@ -240,18 +260,18 @@ def asset_manifest(arms_only: bool = True) -> dict:
     for m in library:
         # ★ 用「扭矩模型」而不是「模型文件」：前者是"该加载的那一个"，
         #   后者是这个资产包里的全部 xml（含 mjx_* 变体），拿它去加载会挑错。
-        relative = str(m.get("扭矩模型", "") or "")
+        relative = str(_model_field(m, "torque_model", "扭矩模型", "") or "")
         absolute = absolute_path(relative) if relative else ""
         if not absolute:
             continue                       # 没有可加载文件的条目不上架（点了也白点）
         output.append({
-            "id": str(m.get("标识", "")),
-            "display_name": str(m.get("显示名", "")),
-            "category": str(m.get("类别", "")),
-            "dof": int(m.get("自由度", 0) or 0),
-            "actuator_count": int(m.get("执行器数", 0) or 0),
-            "license": str(m.get("许可", "")),
-            "controllable": bool(m.get("可控制", False)),
+            "id": str(_model_field(m, "identifier", "标识", "")),
+            "display_name": str(_model_field(m, "display_name", "显示名", "")),
+            "category": str(_model_field(m, "category", "类别", "")),
+            "dof": int(_model_field(m, "dof", "自由度", 0) or 0),
+            "actuator_count": int(_model_field(m, "actuator_count", "执行器数", 0) or 0),
+            "license": str(_model_field(m, "license", "许可", "")),
+            "controllable": bool(_model_field(m, "controllable", "可控制", False)),
             "path": absolute,
         })
     return {"count": len(output), "models": output}
@@ -395,8 +415,10 @@ class ProjectState(messages.Snapshot):
       （【Model library】关心前者，【Controller params】关心后者）。
       合成一条会让"只想知道算法列表"的面板每 2 Hz 收一堆无关字段。
 
-    `算法` 是 `插件系统.收集算法信息()` 的产物：
-        [{"名称": …, "版本": …, "英文名": …, "参数": {...}}, …]
+    `algorithms` 保持 v21 线上形状（中文键，前端适配层负责转英文）：
+        [{"名称": …, "版本": …, "英文名": …, "接管控制": …, "参数": {...}}, …]
+    内部元信息由 `plugin_system.collect_algorithm_info()` 以英文字段产生，
+    发布前经 `plugin_system.algorithm_info_wire()` 编码。
     """
 
     project: str = ""

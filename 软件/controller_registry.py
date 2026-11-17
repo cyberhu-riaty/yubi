@@ -48,7 +48,7 @@ class ControllerRegistry:
         self._metadata.pop(str(name), None)
 
     def keys(self) -> tuple[str, ...]:
-        discovered = {str(item.get("插件") or "") for item in _projects.discover_algorithms()}
+        discovered = {str(item.get("plugin") or "") for item in _projects.discover_algorithms()}
         return tuple(sorted(({x for x in discovered if x} | set(self._factories))))
 
     def create(self, name: str, **kwargs: Any) -> object:
@@ -86,11 +86,11 @@ class ControllerRegistry:
             raise TypeError(f"「{key}」不是控制器")
         return ControllerInfo(
             key=key,
-            name=str(meta.get("名称") or key),
-            version=str(meta.get("版本") or "-"),
-            description=str(meta.get("说明") or ""),
-            author=str(meta.get("作者") or ""),
-            source=str(meta.get("文件") or ""),
+            name=str(meta.get("name") or key),
+            version=str(meta.get("version") or "-"),
+            description=str(meta.get("description") or ""),
+            author=str(meta.get("author") or ""),
+            source=str(meta.get("file") or ""),
         )
 
 

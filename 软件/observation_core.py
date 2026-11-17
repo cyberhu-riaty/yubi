@@ -97,8 +97,8 @@ class SignalBuffer:
 @legacy_wire('告警', {'kind': '类型', 'severity': '严重度', 'signal': '信号', 'start_seconds': '开始秒', 'end_seconds': '结束秒', 'evidence': '证据', 'recommendation': '建议', 'curve': '曲线', 'curve_times': '曲线t', 'last_seen': '最后见'})
 @dataclasses.dataclass
 class Alert:
-    kind: str                    # 振荡 / 发散 / 跟踪超差 / 饱和
-    severity: str                  # 严重 / 警告
+    kind: str                    # oscillation / divergence / tracking_error / saturation
+    severity: str                  # critical / warning
     signal: str                    # 哪个指标（"关节 PD 位置控制·最大误差(deg)"）
     start_seconds: float                # 仿真时间
     end_seconds: float
@@ -142,7 +142,7 @@ class Threshold:
     #   第一版对所有信号跑全部四个判定器，于是「饱和」判定落到了「误差」上 ——
     #   误差 10° 天然 ≥1，被判成"100% 的采样里至少 1 个关节饱和（最多 16 个）"。
     #   这是典型的**看起来很有依据的胡说**，也正是告警系统最不能犯的错。
-    detectors: tuple = ("振荡", "发散", "跟踪超差")
+    detectors: tuple = ("oscillation", "divergence", "tracking_error")
 
 
 THRESHOLDS: tuple[tuple[str, Threshold], ...] = (
@@ -151,12 +151,13 @@ THRESHOLDS: tuple[tuple[str, Threshold], ...] = (
     ("有符号误差", Threshold(oscillation_amplitude=0.8, tracking_error_mean=5.0)),
     # 当前控制器发布的是六关节最大绝对误差：只适合回答“是否持续跟不上”。
     ("最大误差", Threshold(
-        oscillation_amplitude=0.8, tracking_error_mean=5.0, detectors=("跟踪超差",))),
+        oscillation_amplitude=0.8, tracking_error_mean=5.0, detectors=("tracking_error",))),
     # 不为“力矩峰值”登记阈值：最大绝对力矩会因轨迹和负载正常变化，不能据此
     # 单独确认振荡或发散。执行器是否顶住由下面的“饱和关节数”直接判断。
     # 饱和关节数：只要有一个关节长时间顶在上限就报。
     #   它是个**计数**，只能跑「饱和」这一个判定器（见 阈值.判定们 的说明）
-    ("饱和", Threshold(oscillation_amplitude=0.5, tracking_error_mean=0.5, detectors=("饱和",))),
+    ("saturation", Threshold(oscillation_amplitude=0.5, tracking_error_mean=0.5,
+                            detectors=("saturation",))),
 )
 
 
@@ -280,13 +281,13 @@ def detect_saturation(ts: list[float], vs: list[float], threshold: Threshold) ->
 
 
 DETECTORS = (
-    ("振荡", detect_oscillation, "警告",
+    ("oscillation", detect_oscillation, "warning",
      "先降增益（KP 降一半），再考虑提高阻尼（KD）。振荡是增益过高最典型的表现。"),
-    ("发散", detect_divergence, "严重",
+    ("divergence", detect_divergence, "critical",
      "立刻停止：误差在放大，继续跑会撞限位。检查符号（正反馈）与目标是否越界。"),
-    ("跟踪超差", detect_tracking_error, "警告",
+    ("tracking_error", detect_tracking_error, "warning",
      "增益不够或目标变化太快。先看目标轨迹的加速度是否超出机器人能力。"),
-    ("饱和", detect_saturation, "严重",
+    ("saturation", detect_saturation, "critical",
      "执行器已经到极限，继续加增益不会有任何改善。降目标速度/加速度，或换更大的执行器。"),
 )
 
@@ -386,7 +387,7 @@ class ObservationCore:
         return True
 
     def _publish(self) -> None:
-        table = sorted(self._active.values(), key=lambda a: (a.severity != "严重", a.kind))
+        table = sorted(self._active.values(), key=lambda a: (a.severity != "critical", a.kind))
         try:
             self._send(AlertSnapshot(
                 active=tuple({
@@ -403,7 +404,7 @@ class ObservationCore:
 
     # ---- 给界面/自检用 ----
     def active_alerts(self) -> list[Alert]:
-        return sorted(self._active.values(), key=lambda a: (a.severity != "严重", a.kind))
+        return sorted(self._active.values(), key=lambda a: (a.severity != "critical", a.kind))
 
     def clear(self, reset_count: bool = True) -> None:
         """开始新实验/复位/换模型时清除旧时序与旧告警，并立即通知界面。"""

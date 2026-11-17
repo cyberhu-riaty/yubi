@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SOFTWARE = ROOT / "软件"
 if str(SOFTWARE) not in sys.path:
     sys.path.insert(0, str(SOFTWARE))
-os.environ["驭臂_关Web"] = "1"
+os.environ["YUBI_DISABLE_WEB"] = "1"
 
 from controller_registry import controller_registry  # noqa: E402
 from experiment_registry import experiment_registry  # noqa: E402

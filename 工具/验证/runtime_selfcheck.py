@@ -15,7 +15,7 @@ if str(SOFTWARE) not in sys.path:
     sys.path.insert(0, str(SOFTWARE))
 
 # 自检不占 Web 端口，也不创建窗口。
-os.environ["驭臂_关Web"] = "1"
+os.environ["YUBI_DISABLE_WEB"] = "1"
 
 import console_support as console  # noqa: E402
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import env_config
 from typing import Any
 
 from .interface import PlatformCapabilities
@@ -84,7 +85,7 @@ class Windows(PlatformCapabilities):
             from .windows_viewport import MuJoCoViewport
             from .windows_runtime_info import RuntimeInfoPanel
 
-            model_path = os.environ.get("驭臂_当前模型", "")
+            model_path = env_config.read("YUBI_CURRENT_MODEL")
             viewport = MuJoCoViewport(model_path, window)
 
             # 3D 不再裸贴窗口边缘：外壳负责留白、边框和一条短工具栏，
@@ -298,7 +299,7 @@ class Windows(PlatformCapabilities):
         try:
             import model_bridge
             # 新布局的右列包含上下两块，使用新键，避免旧的 55:45 比例覆盖新版默认值。
-            value = model_bridge.read_setting("Windows主分栏V2", None)
+            value = model_bridge.read_setting("windows_split_v2", None)
             if (isinstance(value, list) and len(value) == 2
                     and all(isinstance(x, (int, float)) and x > 0 for x in value)):
                 total = float(value[0]) + float(value[1])
@@ -317,7 +318,7 @@ class Windows(PlatformCapabilities):
         default = [default_upper, default_available - default_upper]
         try:
             import model_bridge
-            value = model_bridge.read_setting("Windows右列分栏", None)
+            value = model_bridge.read_setting("windows_right_split", None)
             if (isinstance(value, list) and len(value) == 2
                     and all(isinstance(x, (int, float)) and x > 0 for x in value)):
                 total = float(value[0]) + float(value[1])
@@ -334,10 +335,10 @@ class Windows(PlatformCapabilities):
             return
         try:
             import model_bridge
-            model_bridge.write_setting("Windows主分栏V2", [int(x) for x in self._splitter.sizes()])
+            model_bridge.write_setting("windows_split_v2", [int(x) for x in self._splitter.sizes()])
             if self._right_splitter is not None:
                 model_bridge.write_setting(
-                    "Windows右列分栏", [int(x) for x in self._right_splitter.sizes()])
+                    "windows_right_split", [int(x) for x in self._right_splitter.sizes()])
         except Exception as exc:
             print(f'⚠ 保存 Windows 分栏失败：{type(exc).__name__}: {exc}', flush=True)
 

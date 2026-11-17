@@ -4,7 +4,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 
 const request = JSON.parse(fs.readFileSync(0, "utf8"));
-const require = createRequire(path.join(request.root, "前端", "package.json"));
+const require = createRequire(path.join(request.root, "frontend", "package.json"));
 let ts;
 try {
   ts = require(process.env.YUBI_TYPESCRIPT_PATH || "typescript");
@@ -52,7 +52,17 @@ for (const relative of request.files) {
   }
   function visit(node) {
     if (ts.isIdentifier(node) || ts.isPrivateIdentifier(node)) {
-      add(node, "typescript_identifier", node.text);
+      const parent = node.parent;
+      const isBinding = parent.name === node && (
+        ts.isVariableDeclaration(parent) || ts.isParameter(parent)
+        || ts.isFunctionDeclaration(parent) || ts.isClassDeclaration(parent)
+        || ts.isInterfaceDeclaration(parent) || ts.isTypeAliasDeclaration(parent)
+        || ts.isEnumDeclaration(parent) || ts.isTypeParameterDeclaration(parent)
+        || ts.isImportSpecifier(parent) || ts.isImportClause(parent)
+        || ts.isNamespaceImport(parent) || ts.isBindingElement(parent)
+        || ts.isMethodDeclaration(parent)
+      );
+      add(node, isBinding ? "typescript_binding" : "typescript_identifier", node.text);
     } else if (ts.isStringLiteral(node)) {
       if (node.parent.name === node || ts.isElementAccessExpression(node.parent)
           && node.parent.argumentExpression === node) add(node, "string_key", node.text);

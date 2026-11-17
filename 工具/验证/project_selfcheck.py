@@ -339,7 +339,7 @@ def main() -> int:
     algorithms = projects.discover_algorithms()
     summary.check("算法库非空", bool(algorithms),
             f"{projects.relative_to_package(projects.ALGORITHM_DIRECTORY)} 里一个算法都没有")
-    algorithm_names = [d["插件"] for d in algorithms]
+    algorithm_names = [d["plugin"] for d in algorithms]
     duplicates = sorted({n for n in algorithm_names if algorithm_names.count(n) > 1})
     summary.check("算法文件名互不重复", not duplicates, f"重复的是：{'、'.join(duplicates)}")
 
@@ -347,7 +347,7 @@ def main() -> int:
     class_names: dict[str, list[str]] = {}
     import_failures: list[str] = []
     for d in algorithms:
-        module, reason = assembler.import_algorithm_file(d["文件"])
+        module, reason = assembler.import_algorithm_file(d["file"])
         if module is None:
             import_failures.append(f"{d['插件']}（{reason}）")
             continue
@@ -355,7 +355,7 @@ def main() -> int:
         if plugin_class is None:
             import_failures.append(f"{d['插件']}（{reason}）")
             continue
-        class_names.setdefault(plugin_class.__name__, []).append(d["插件"])
+        class_names.setdefault(plugin_class.__name__, []).append(d["plugin"])
     summary.check("每个算法文件都能导入并定位到唯一插件类", not import_failures,
             "；".join(import_failures))
 
@@ -371,7 +371,7 @@ def main() -> int:
     #   喂假事件的冒烟检查给了**假绿**，一开窗才每帧 NameError（然后被永久停用）。
     name_issues: list[str] = []
     for d in algorithms:
-        name_issues.extend(f"{d['插件']}：{p}" for p in check_algorithm_names(d["文件"]))
+        name_issues.extend(f"{d['plugin']}：{p}" for p in check_algorithm_names(d["file"]))
     summary.check("算法文件里没有未定义的全局名（抓搬运漏导入）", not name_issues,
             "；".join(name_issues))
 
@@ -449,20 +449,20 @@ def main() -> int:
             continue
 
         # 模型字段必须能解析到一个存在的文件
-        model_reference = str(data.get("模型") or "")
+        model_reference = str(data.get("model") or "")
         absolute_model_path = projects.absolute_path(model_reference)
         summary.check(f"项目「{name}」的模型文件存在", bool(model_reference) and os.path.exists(absolute_model_path),
                 f"写法 {model_reference!r} → 解析为 {absolute_model_path}（不存在）")
         model_inventory.append((name, os.path.normpath(absolute_model_path)))
 
         # 算法字段：解析出来的条目必须和"项目里写的"一样多（少一个就说明有引用不到的）
-        original = data.get("算法", "*")
+        original = data.get("algorithms", "*")
         entries = projects.parse_algorithms(data)
         expected_count = len(algorithms) if isinstance(original, str) and original.strip() in ("*", "全部", "all")\
             else (len(original) if isinstance(original, list) else 0)
         summary.check(f"项目「{name}」声明的算法都能解析", len(entries) == expected_count,
                 f"声明 {expected_count} 个、解析出 {len(entries)} 个（详见上面的警告）")
-        referenced_algorithms.update(str(a.get("插件")) for a in entries)
+        referenced_algorithms.update(str(a.get("plugin")) for a in entries)
 
         # 装配一遍（不带模型 → 不做兼容性预检，只看"装得出来吗"）
         instance, report = assembler.assemble_project(data, name)
@@ -479,12 +479,14 @@ def main() -> int:
     # 规则：每个可控制的机械臂都应该能在项目里找到归宿（否则点它就没算法）
     uncovered: list[str] = []
     for m in projects.model_library_entries():
-        if not m.get("可控制"):
+        if not m.get("controllable", m.get("可控制")):
             continue
-        path = os.path.normpath(projects.absolute_path(str(m.get("扭矩模型") or "")))
+        path = os.path.normpath(projects.absolute_path(
+            str(m.get("torque_model") or m.get("扭矩模型") or "")))
         matches = [n for n, p in model_inventory if p == path]
         if not matches:
-            uncovered.append(str(m.get("显示名") or m.get("标识")))
+            uncovered.append(str(m.get("display_name") or m.get("identifier")
+                                  or m.get("显示名") or m.get("标识")))
     if uncovered:
         summary.warn(f"这些机械臂还没有对应的项目（点开它们不会挂任何算法）：{'、'.join(uncovered)}")
 

@@ -61,7 +61,7 @@ def main() -> int:
     max_error_threshold = O.get_threshold(max_error_signal)
     threshold = O.get_threshold(signed_error_signal)
     check(threshold is not None and max_error_threshold is not None, "① 两类误差信号都有明确阈值")
-    check(max_error_threshold.detectors == ("跟踪超差",),
+    check(max_error_threshold.detectors == ("tracking_error",),
        "① 最大绝对误差只做跟踪超差，不猜振荡/发散")
     check(O.get_threshold("关节 PD 位置控制·力矩峰值(Nm)") is None,
        "① 聚合力矩峰值不再被误判成振荡/发散")
@@ -104,7 +104,7 @@ def main() -> int:
     for i in range(120):
         initial_observer.record(i / 20.0, {max_error_signal: 10.0})
     initial_observer.evaluate(6.0, wall_clock=0.0)
-    check(all(a.kind != "饱和" for a in initial_observer.active_alerts()),
+    check(all(a.kind != "saturation" for a in initial_observer.active_alerts()),
        f'④b 端到端：误差信号**不会**被判成饱和（当前 {[a.kind for a in initial_observer.active_alerts()]}）')
 
     # ⑤ 数据不够

@@ -100,11 +100,11 @@ fi
 #   所以这一步总是跑（纯 Python，秒级，无网络、无 Node 依赖）。
 echo
 echo "== 前端生成物（契约 → TS、风格表 → CSS）=="
-"$PKG/.venv/bin/python" "$PKG/工具/生成前端资产.py" \
+"$PKG/.venv/bin/python" "$PKG/工具/generate_frontend_assets.py" \
     || echo "  （生成失败，不影响软件本体；前端可能显示旧契约）"
 
 #   注意：**构建**前端（vite build）需要 Node，且只在"改了前端"时才需要。
-#   构建产物入库，所以普通用户双击启动不需要 Node。要重新构建见 前端/约定.md §四。
+#   构建产物入库，所以普通用户双击启动不需要 Node。要重新构建见 frontend/CONVENTIONS.md §四。
 
 # ---------- 7. 自检 ----------
 echo

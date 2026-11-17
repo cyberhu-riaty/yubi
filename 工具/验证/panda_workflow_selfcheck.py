@@ -34,7 +34,7 @@ from official_api import messages                                            # n
 
 model_path = ROOT / "模型" / "panda_mjpc" / "task.xml"
 project_name = "Panda_MJPC"
-plugin_path = ROOT / "算法库" / "通用" / "panda_mjpc_port.py"
+plugin_path = ROOT / "controllers" / "common" / "panda_mjpc_port.py"
 required_sensors = ("hand", "box", "box1", "box2", "target1", "target2")
 
 
@@ -95,7 +95,7 @@ def main() -> int:
     data = _project.load_project(project_name)
     check(data is not None, f"项目 {project_name}.json 存在")
     if data:
-        declared_model = str(data.get("模型", "")).replace("\\", "/")
+        declared_model = str(data.get("model", data.get("模型", ""))).replace("\\", "/")
         check(declared_model.endswith("panda_mjpc/task.xml"),
              "项目模型指向 panda_mjpc/task.xml", declared_model)
         algorithm = _project.parse_algorithms(data)

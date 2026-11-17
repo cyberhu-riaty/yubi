@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "_comment": "由实验注册表按名称加载；普通模型选择不会自动选中实验专用项目。",
+  "project": "UR5e_PD跟踪实验",
+  "model": "模型/universal_robots_ur5e/ur5e_torque.xml",
+  "algorithms": [
+    {
+      "plugin": "joint_pd_control"
+    },
+    {
+      "plugin": "data_recorder"
+    }
+  ],
+  "parameters": {
+    "joint_pd_control": {
+      "KP": 86.0,
+      "KD": 70.0
+    }
+  },
+  "appearance": {
+    "style": "现代深色",
+    "theme": "dark"
+  },
+  "notes": "ur5e_pd_tracking 的装配清单；控制器与记录器均通过现有插件系统加载。",
+  "_order_note": "关节 PD 写入 ctrl；数据录制不接管控制，因此放在后面不会覆盖控制器。",
+  "experiment_only": true
+}

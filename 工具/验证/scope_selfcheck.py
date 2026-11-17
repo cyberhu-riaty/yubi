@@ -132,7 +132,7 @@ def main() -> int:
 
     targets = list(default_targets)
     if args.all_files:
-        targets += [ROOT / "算法库", ROOT / "工具", ROOT / "前端" / "测试"]
+        targets += [ROOT / "controllers", ROOT / "工具", ROOT / "frontend" / "tests"]
 
     files: list[Path] = []
     for directory in targets:

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import env_config
 import sys
 
 SOFTWARE_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
@@ -58,7 +59,7 @@ def find_model() -> tuple[str, str]:
       ② 空场景（地面、灯光、背景；机器人由用户在模型库中主动选择）
       ③ 空场景文件缺失时，才回退到上次模型或项目模型
     """
-    if model := os.environ.get("驭臂_模型", "").strip():
+    if model := env_config.read("YUBI_MODEL").strip():
         return model, "命令行/环境变量指定"
     empty_scene = os.path.join(os.path.dirname(SOFTWARE_DIRECTORY), "模型", "空场景.xml")
     if os.path.exists(empty_scene):
@@ -73,7 +74,7 @@ def find_model() -> tuple[str, str]:
     try:
         for name in sorted(project_registry.list_projects() or []):
             project = project_registry.load_project(name)
-            path = (project or {}).get("模型") or ""
+            path = (project or {}).get("model") or ""
             absolute_path = project_registry.absolute_path(path) if path else ""
             if absolute_path and os.path.exists(absolute_path):
                 return absolute_path, f"项目「{name}」声明的模型"
@@ -89,7 +90,7 @@ def select_project(model_path: str, requested_project: str | None) -> str:
             return str(requested_project)
         if os.path.basename(model_path) == "空场景.xml":
             return ""
-        last_model = model_bridge.read_setting("上次项目", "")
+        last_model = model_bridge.read_setting("last_project", "")
         if last_model:
             return str(last_model)
         return project_registry.find_project_for_model(model_path) if model_path else ""
@@ -111,7 +112,7 @@ def check_environment() -> int:
     else:
         failures += 1
         print("  ✗ 前端产物不在（会回落到 P0 的单页仪表盘）")
-        print("      构建：cd 前端 && node <pnpm.mjs> run build")
+        print("      构建：cd frontend && node <pnpm.mjs> run build")
         print("      （或用系统 node；DSH 那份 node 有 hardened runtime 限制）")
 
     # ② 契约与生成物
@@ -137,7 +138,7 @@ def check_environment() -> int:
 
     # ⑤ 端口占用
     import socket
-    port = int(os.environ.get("驭臂_Web端口", "") or web_bridge.DEFAULT_PORT)
+    port = int(env_config.read("YUBI_WEB_PORT") or web_bridge.DEFAULT_PORT)
     with socket.socket() as s:
         if s.connect_ex(("127.0.0.1", port)) == 0:
             print(f"  ⚠ 端口 {port} 已被占用（可能已经有一个在跑；换端口用 --web口）")
@@ -165,7 +166,7 @@ def is_running(host: str, port: int) -> bool:
     try:
         with urllib.request.urlopen(f"http://{host}:{port}/api/status", timeout=1.5) as r:
             data = json.loads(r.read())
-            return isinstance(data, dict) and "启用" in data
+            return isinstance(data, dict) and "enabled" in data
     except Exception:                                                 # noqa: BLE001
         return False
 
@@ -197,14 +198,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.model:
-        os.environ["驭臂_模型"] = args.model
+        env_config.write("YUBI_MODEL", args.model)
     if args.web_port:
-        os.environ["驭臂_Web端口"] = str(args.web_port)
+        env_config.write("YUBI_WEB_PORT", str(args.web_port))
 
     if args.check_environment:
         return check_environment()
 
-    port = int(os.environ.get("驭臂_Web端口", "") or web_bridge.DEFAULT_PORT)
+    port = int(env_config.read("YUBI_WEB_PORT") or web_bridge.DEFAULT_PORT)
     url = f"http://127.0.0.1:{port}/"
 
     # ---- 0. 已经有一个在跑？那就别再起一个，直接把浏览器指过去 ----
@@ -229,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"✗ Web 服务起不来：{web_bridge.server_error(server)}", flush=True)
         print("  端口可能被别的程序占着。换个端口试试：--web口 8899", flush=True)
         return 1
-    url = web_bridge.health()["地址"]
+    url = web_bridge.health()["address"]
     has_frontend = os.path.exists(os.path.join(SOFTWARE_DIRECTORY, "web", "index.html"))
 
     print("=" * 74)
@@ -238,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  界面地址： {url}")
     if not has_frontend:
         print("  ⚠ 前端还没构建，浏览器里看到的是简版数据页（不是完整界面）")
-        print("      构建：cd 前端 && node <pnpm.mjs> run build")
+        print("      构建：cd frontend && node <pnpm.mjs> run build")
     print("  关掉：在这个终端按 Ctrl+C")
     print("=" * 74, flush=True)
 
@@ -253,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
     # ---- 3. 决定模型与项目 ----
     model_path, description = find_model()
     if not model_path:
-        print("✗ 一个模型都没找到：用 --模型 指定一个，或先跑 工具/导入模型.py", flush=True)
+        print("✗ 一个模型都没找到：用 --模型 指定一个，或先跑 工具/import_model.py", flush=True)
         return 1
     project_name = select_project(model_path, args.project)
     if args.enable_gravity:
@@ -277,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:                                     # noqa: BLE001
             print(f"⚠ 项目装配失败（将不挂任何算法）：{type(exc).__name__}: {exc}",
                   flush=True)
-            print("  （算法由 项目/*.json 声明：加算法 = 把 .py 放进 算法库/ 并写进项目文件）",
+            print("  （算法由 projects/*.json 声明：加算法 = 把 .py 放进 controllers/common/ 并写进项目文件）",
                   flush=True)
             print("   （注意：兼容性预检需要模型对象，装配时会给到；"
                   "换模型时会按项目重新装配）", flush=True)
@@ -290,7 +291,7 @@ def main(argv: list[str] | None = None) -> int:
     registry = plugin_system.SafeRegistry(
         plugins, step_plugin=plugin_system.RealtimeFixedStep())
     config = plugin_system.viewer_protocol.ViewerConfig(
-        title=args.title, width=1200, height=800, gfx=os.environ.get("驭臂_gfx", ""))
+        title=args.title, width=1200, height=800, gfx=env_config.read("YUBI_GFX"))
 
     # 同步浏览器入口会在启动函数开头清理旧队列，因此把已校验的实验消息显式
     # 交给启动函数，让它在清理之后再预置；桌面入口则在“已就绪”后直接入队。

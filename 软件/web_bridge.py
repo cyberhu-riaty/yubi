@@ -248,18 +248,18 @@ class Server:
 
     def status(self) -> dict:
         return {
-            "启用": self.enabled,
-            "地址": f'http://{self.host}:{self.port}/' if self.enabled else "",
-            "客户端数": self.client_count,
-            "已广播": self.broadcast_count,
-            "已发送KB": round(self.sent_bytes / 1024, 1),
-            "丢弃": self.dropped_count,
-            "出错": self.error,
-            "主题": self.pending.topics(),
-            "已收命令": self.received_commands,
-            "已派发命令": self.dispatched_commands,
-            "拒收": self.rejected_commands,
-            "最近拒收原因": self.last_rejection,
+            "enabled": self.enabled,
+            "address": f'http://{self.host}:{self.port}/' if self.enabled else "",
+            "clients": self.client_count,
+            "broadcast": self.broadcast_count,
+            "sent_kb": round(self.sent_bytes / 1024, 1),
+            "dropped": self.dropped_count,
+            "error": self.error,
+            "topics": self.pending.topics(),
+            "received_commands": self.received_commands,
+            "dispatched_commands": self.dispatched_commands,
+            "rejected_commands": self.rejected_commands,
+            "last_rejection": self.last_rejection,
         }
 
     # ---- 上行：网络线程入队（只有校验通过的命令才进得来）----
@@ -370,7 +370,7 @@ class Server:
                           "Content-Length": str(len(body)),
                           "Cache-Control": "no-store"})
             return Response(200, "OK", header, body)
-        if path in ("/api/contract", "/api/契约"):
+        if path in ("/api/contract", "/api/contract"):
             # 契约只读下发：前端可据此生成/校验自己的类型定义
             body = json.dumps(_contract_dict(), ensure_ascii=False).encode("utf-8")
             header = Headers({"Content-Type": "application/json; charset=utf-8",
@@ -581,7 +581,7 @@ def publish(topic: str, message: Any) -> None:
 
 def health() -> dict:
     if _instance is None:
-        return {"启用": False, "地址": "", "说明": "未启动"}
+        return {"enabled": False, "address": "", "description": "未启动"}
     return _instance.status()
 
 
@@ -1027,7 +1027,7 @@ if __name__ == "__main__":       # 单独起一个桥来自测（不连仿真）
         print(f'不可用（{exc}）')
     print(f'  状态       : {json.dumps(health(), ensure_ascii=False)}')
     if bridge.enabled:
-        print(f"\n  打开浏览器看： {health()['地址']}")
+        print(f"\n  打开浏览器看： {health()['address']}")
         print("  （这个自检模式没有仿真数据，页面会显示「等待数据」）")
         print("\n  Ctrl+C 退出")
         try:

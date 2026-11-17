@@ -44,8 +44,10 @@ MODULES = {
     "ux": OFFICIAL_PACKAGE_PREFIX + ".ux",
     "dear_imgui": "mujoco.experimental.dear_imgui.dear_imgui",
     "implot": "mujoco.experimental.implot.implot",
-    "核心": "mujoco",
+    "core": "mujoco",
 }
+# Legacy module key used by older inspection scripts; new code uses "core".
+MODULES["核心"] = MODULES["core"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -140,7 +142,7 @@ INTERFACES: list[InterfaceItem] = [
     InterfaceItem(
         identifier="mujoco.MjModel/MjData/MjSpec",
         description="物理引擎本体：加载模型、造状态、改模型后重编译",
-        module_key="核心", expression="mujoco",
+        module_key="core", expression="mujoco",
         check=_has_attributes("MjModel", "MjData", "MjSpec", "mj_step", "mj_forward"),
         remediation="几乎不用改：这是最底层的接口，真断了说明 mujoco 大版本变了，需要重新验收",
         consumers="启动.py / plugins/*",

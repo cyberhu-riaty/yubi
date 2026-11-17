@@ -152,7 +152,12 @@ class ControlPlugin:
     #   · 像"数据录制"这种**平时不写、回放时才写**的，仍算 False
     #     —— 回放是用户主动点的，不是它的默认行为。
     takes_control = True
-    # Persisted parameter labels may outlive an internal attribute rename.
+    # Set by the assembler to the stable module identifier (ASCII).  Parameter
+    # tables and persisted project parameters are addressed by this identifier,
+    # never by the Chinese display `name`.
+    plugin_id = ""
+    # Legacy persisted parameter names map to the current English identifier.
+    # Old project files keep loading after the parameter IDs were migrated.
     parameter_aliases: dict[str, str] = {}
 
     # ---- 插件自己的状态（比如"跑了多少步"），由外壳负责收集 ----
@@ -191,14 +196,15 @@ class ControlPlugin:
           校验点放在基类而不是各插件里：`adjustable_parameters()` 声明的范围就是契约，
           基类照着执行一次，所有插件自动受益，也让"范围"这个字段真的有意义。
         """
-        attribute_name = self.parameter_aliases.get(name, name)
+        canonical_name = self.parameter_aliases.get(name, name)
+        attribute_name = canonical_name
         if not hasattr(self, attribute_name):
             return f"插件 {type(self).__name__} 没有参数「{name}」"
         numeric_value = float(value)
         value_range = None
         try:
             declarations = self.adjustable_parameters() or {}
-            item = declarations.get(name) or {}
+            item = declarations.get(canonical_name) or {}
             value_range = item.get("range")
         except Exception:                                                # noqa: BLE001
             # 参数声明出错不该让"改参数"整个失败：退回旧行为（不校验）
@@ -561,19 +567,19 @@ def check_version() -> dict:
     fingerprint = {
         "mujoco": getattr(mujoco, "__version__", "未知"),
         "python": platform.python_version(),
-        "可执行文件": sys.executable,
-        "ViewerConfig 字段": tuple(f.name for f in __import__("dataclasses").fields(viewer_protocol.ViewerConfig)),
-        "gfx 模式数": len(getattr(viewer_protocol, "GFX_MODES", ())),
-        "消息类型数": len([n for n in dir(messages) if isinstance(getattr(messages, n), type)
-                          and issubclass(getattr(messages, n), messages.Message)]),
+        "executable": sys.executable,
+        "viewer_config_fields": tuple(f.name for f in __import__("dataclasses").fields(viewer_protocol.ViewerConfig)),
+        "gfx_mode_count": len(getattr(viewer_protocol, "GFX_MODES", ())),
+        "message_type_count": len([n for n in dir(messages) if isinstance(getattr(messages, n), type)
+                                   and issubclass(getattr(messages, n), messages.Message)]),
     }
 
     print("─" * 78)
     print("【环境自检】")
     print(f"  mujoco 版本 : {fingerprint['mujoco']}   （实测跑通过的版本：{', '.join(KNOWN_GOOD_VERSIONS)}）")
-    print(f"  Python      : {fingerprint['python']}  @ {fingerprint['可执行文件']}")
-    print(f"  官方 API    : ViewerConfig{fingerprint['ViewerConfig 字段']}、gfx {fingerprint['gfx 模式数']} 种、"
-          f"消息 {fingerprint['消息类型数']} 类")
+    print(f"  Python      : {fingerprint['python']}  @ {fingerprint['executable']}")
+    print(f"  官方 API    : ViewerConfig{fingerprint['viewer_config_fields']}、"
+          f"gfx {fingerprint['gfx_mode_count']} 种、消息 {fingerprint['message_type_count']} 类")
 
     if fingerprint["mujoco"] not in KNOWN_GOOD_VERSIONS:
         print(f"  ⚠ 当前 mujoco {fingerprint['mujoco']} 不在「实测跑通」名单里 —— "
@@ -596,7 +602,7 @@ def print_plugin_list(plugins: list, project_name: str = "") -> None:
     """
     header = f"（项目：{project_name}）" if project_name else ""
     print(f"【已加载 {len(plugins)} 个算法】{header}"
-          f"（加算法：把 .py 放进 算法库/，在项目文件的 算法 字段里写上它；"
+          f"（加算法：把 .py 放进 controllers/common/，在项目文件的 algorithms 字段里写上它；"
           f"参见 --列项目）")
     for i, plugin in enumerate(plugins, 1):
         name = str(getattr(plugin, "name", type(plugin).__name__))
@@ -664,8 +670,9 @@ def collect_algorithm_info(plugins: list) -> list[dict]:
     所以录制出来的 `.meta.json` 里 `插件清单` 永远是空数组。
 
     返回形如：
-        [{"名称": "关节 PD 位置控制", "版本": "1.1", "英文名": "Joint PD position control",
-          "参数": {"KP": 200.0, "KD": 30.0}}, …]
+        [{"name": "关节 PD 位置控制", "version": "1.1",
+          "english_name": "Joint PD position control",
+          "takes_control": True, "parameters": {"KP": 200.0, "KD": 30.0}}, …]
 
     只收"插件自己声明过的可调参数"（`adjustable_parameters()` 的键），不 dump 整个 `__dict__` ——
     那里有 model/data 引用、numpy 数组、文件句柄，序列化不了也没意义。
@@ -674,27 +681,39 @@ def collect_algorithm_info(plugins: list) -> list[dict]:
     for plugin in plugins:
         name = str(getattr(plugin, "name", None) or type(plugin).__name__)
         entry = {
-            "名称": name,
-            "版本": str(getattr(plugin, "version", "-")),
-            "英文名": str(getattr(plugin, "english_name", "") or ""),
-            # ★ `接管控制` 必须一起带上：外壳要靠它判断"几个算法在抢同一个方向盘"
+            "name": name,
+            "version": str(getattr(plugin, "version", "-")),
+            "english_name": str(getattr(plugin, "english_name", "") or ""),
+            # ★ `takes_control` 必须一起带上：外壳要靠它判断"几个算法在抢同一个方向盘"
             #   （多个都写 ctrl[:] 时只有最后一个生效，被覆盖的等于没挂）。
             #   漏带这个键的后果实测过：会被当成"全都接管"，于是默认项目也误报冲突。
-            "接管控制": bool(getattr(plugin, "takes_control", True)),
-            "参数": {},
+            "takes_control": bool(getattr(plugin, "takes_control", True)),
+            "parameters": {},
         }
         get_parameters = getattr(plugin, "adjustable_parameters", None)
         if get_parameters is not None:
             try:
                 for parameter_name, info in (get_parameters() or {}).items():
                     try:
-                        entry["参数"][str(parameter_name)] = float(info.get("value"))
+                        entry["parameters"][str(parameter_name)] = float(info.get("value"))
                     except (TypeError, ValueError, AttributeError):
                         continue          # 不是数字的参数不进元信息（元信息要能 JSON 化）
             except Exception as exc:                                  # noqa: BLE001
                 print(f"⚠ 收集【{name}】的参数时出错（元信息里该算法的参数为空）：{exc}")
         result.append(entry)
     return result
+
+
+WIRE_ALGORITHM_KEYS = {
+    "name": "名称", "version": "版本", "english_name": "英文名",
+    "takes_control": "接管控制", "parameters": "参数",
+}
+
+
+def algorithm_info_wire(info: list[dict]) -> list[dict]:
+    """Encode English algorithm metadata for the frozen v21 wire payload."""
+    return [{WIRE_ALGORITHM_KEYS[key]: item[key] for key in WIRE_ALGORITHM_KEYS if key in item}
+            for item in (info or [])]
 
 
 # ---------------------------------------------------------------------------
@@ -738,5 +757,5 @@ __all__ = [
     "mujoco", "messages", "viewer_protocol", "ControlPlugin", "step_handler",
     "Priority", "FixedStep", "RealtimeFixedStep", "SafeRegistry", "get_registry",
     "check_version", "print_plugin_list", "notify_model_loaded",
-    "collect_algorithm_info", "slider_target", "print_plugin_status",
+    "collect_algorithm_info", "algorithm_info_wire", "slider_target", "print_plugin_status",
 ]

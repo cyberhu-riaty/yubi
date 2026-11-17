@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import env_config
 import sys
 
 SOFTWARE_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
@@ -58,7 +59,7 @@ DEFAULT_WIDTH, DEFAULT_HEIGHT = 1440.0, 920.0
 
 def find_model() -> tuple[str, str]:
     """明确指定时加载指定模型，否则先进入有地面和灯光的空场景。"""
-    if model := os.environ.get("驭臂_模型", "").strip():
+    if model := env_config.read("YUBI_MODEL").strip():
         return model, "命令行/环境变量指定"
     empty_scene = os.path.join(os.path.dirname(SOFTWARE_DIRECTORY), "模型", "空场景.xml")
     if os.path.exists(empty_scene):
@@ -73,7 +74,7 @@ def find_model() -> tuple[str, str]:
     try:
         for name in sorted(project_registry.list_projects() or []):
             project = project_registry.load_project(name) or {}
-            path = project.get("模型") or ""
+            path = project.get("model") or ""
             absolute_path = project_registry.absolute_path(path) if path else ""
             if absolute_path and os.path.exists(absolute_path):
                 return absolute_path, f"项目「{name}」声明的模型"
@@ -88,7 +89,7 @@ def select_project(model_path: str, requested_project: str | None) -> str:
             return str(requested_project)
         if os.path.basename(model_path) == "空场景.xml":
             return ""
-        last_model = model_bridge.read_setting("上次项目", "")
+        last_model = model_bridge.read_setting("last_project", "")
         return str(last_model) if last_model else (
             project_registry.find_project_for_model(model_path) if model_path else "")
     except Exception:                                                 # noqa: BLE001
@@ -119,7 +120,7 @@ def check_environment() -> int:
     else:
         failures += 1
         print("  ✗ 前端产物不在（窗口里会是一片空白）")
-        print("      构建：cd 前端 && node <pnpm.mjs> run build")
+        print("      构建：cd frontend && node <pnpm.mjs> run build")
     # ③ 模型
     model_path, description = find_model()
     print(f"  {'✓' if model_path else '✗'} 模型："
@@ -146,7 +147,7 @@ def check_environment() -> int:
         print(f"  ✗ 上行命令检查失败：{exc}")
     # ⑥ 端口
     import socket
-    port = int(os.environ.get("驭臂_Web端口", "") or web_bridge.DEFAULT_PORT)
+    port = int(env_config.read("YUBI_WEB_PORT") or web_bridge.DEFAULT_PORT)
     with socket.socket() as s:
         if s.connect_ex(("127.0.0.1", port)) == 0:
             print(f"  ⚠ 端口 {port} 已被占用（可能已有一个在跑；换端口用 --web口）")
@@ -185,9 +186,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.model:
-        os.environ["驭臂_模型"] = args.model
+        env_config.write("YUBI_MODEL", args.model)
     if args.web_port:
-        os.environ["驭臂_Web端口"] = str(args.web_port)
+        env_config.write("YUBI_WEB_PORT", str(args.web_port))
 
     if args.check_environment:
         return check_environment()
@@ -206,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"✗ 起不了窗口（{platform_impl.name}）：{reason}", flush=True)
         return 1
 
-    port = int(os.environ.get("驭臂_Web端口", "") or web_bridge.DEFAULT_PORT)
+    port = int(env_config.read("YUBI_WEB_PORT") or web_bridge.DEFAULT_PORT)
     url = f"http://127.0.0.1:{port}/"
 
     # ---- 1. 模型/项目先定下来（视口要用模型路径）----
@@ -215,8 +216,8 @@ def main(argv: list[str] | None = None) -> int:
         print("✗ 一个模型都没找到：用 --模型 指定一个", flush=True)
         return 1
     project_name = select_project(model_path, args.project)
-    os.environ["驭臂_当前模型"] = model_path
-    os.environ["驭臂_当前项目"] = project_name
+    env_config.write("YUBI_CURRENT_MODEL", model_path)
+    env_config.write("YUBI_CURRENT_PROJECT", project_name)
     # ★ `--开重力` 记在这里、**装配之后**才施用：装配过程会重置姿态/冻结物理
     #   （那是"刚加载模型别乱动"的默认行为），先设会被它盖掉 ——
     #   表现就是状态栏明明写着"开重力"，物理却还是"冻结"。

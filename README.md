@@ -18,7 +18,7 @@
 
 - **一个完整的桌面工作台**：11 个页面按「流程 / 运行 / 信息」组织；Windows 右上原生 3D 常驻，右下集中显示状态、输入和 3D 诊断。
 - **真正的原生 3D**：3D 不是网页里画的运动学动画，而是 MuJoCo 在自研窗口右侧的原生 OpenGL 视口里渲染的；界面与物理各跑各的线程，不共享 `MjData`。
-- **可插拔控制算法**：往 `算法库/` 放一个 `.py`，在项目文件里写上名字就能用；新增算法不需要改主程序。
+- **可插拔控制算法**：往 `controllers/common/` 放一个 `.py`，在项目文件里写上名字就能用；新增算法不需要改主程序。
 - **项目配置驱动**：一个项目 = 模型 + 算法列表 + 参数。换模型时自动按项目重新装配算法。
 - **把「结论」而不只是「数字」给出来**：监控页会判定振荡 / 发散 / 跟踪超差 / 饱和，每条告警都带量化证据。
 
@@ -147,13 +147,13 @@ Windows 启动方式：
 yubi/
 ├── run_yubi.py            桌面入口（ASCII 路径，供启动器/终端/打包用）
 ├── run_yubi_web.py        浏览器入口
-├── 实验/                  无界面实验定义与运行入口（run_experiment_cli.py）
+├── experiments/           无界面实验定义与运行入口（run_experiment_cli.py）
 ├── scripts/               命名审计等仓库维护脚本
 ├── 软件/                  runtime/plugin/project/model 核心、宿主及各消息桥
-├── 前端/                  React 19 + Vite 7 + Tailwind 4 源码（构建产物在 软件/web/）
-├── 算法库/通用/           控制、录制、辨识插件与算法模板
+├── frontend/                  React 19 + Vite 7 + Tailwind 4 源码（构建产物在 软件/web/）
+├── controllers/common/    控制、录制、辨识插件与算法模板
 ├── 模型/                  MuJoCo 模型与网格资产（6 台机械臂 + Robotiq 2F85 + Panda MPC 任务）
-├── 项目/                  项目配置：一个项目 = 模型 + 算法列表 + 参数
+├── projects/              项目配置：一个项目 = 模型 + 算法列表 + 参数（版本 2）
 ├── 工具/                  环境重建、模型导入、URDF→MJCF、打包、前端资产生成
 │   └── 验证/              19 个可独立运行的检查脚本（诊断页跑其中 11 个）
 ├── docs/                  使用手册与界面截图
@@ -178,7 +178,7 @@ yubi/
 
 ```bash
 # ① 复制模板
-cp 算法库/通用/controller_template.py 算法库/通用/my_controller.py
+cp controllers/common/controller_template.py controllers/common/my_controller.py
 
 # ② 改类名和元信息，在 step() 里写控制律
 # ③ 在项目文件里登记，或在「插件」页启用
@@ -215,14 +215,15 @@ class MyController(ControlPlugin):
 
 ```json
 {
-  "项目": "UR5e_基础PD",
-  "模型": "模型/universal_robots_ur5e/ur5e_torque.xml",
-  "算法": [{ "插件": "joint_pd_control" }, { "插件": "my_controller" }],
-  "参数": { "关节 PD 位置控制": { "KP": 320.0 } }
+  "schema_version": 2,
+  "project": "UR5e_基础PD",
+  "model": "模型/universal_robots_ur5e/ur5e_torque.xml",
+  "algorithms": [{ "plugin": "joint_pd_control" }, { "plugin": "my_controller" }],
+  "parameters": { "joint_pd_control": { "KP": 320.0 } }
 }
 ```
 
-`算法` 写 `"*"` 表示使用算法库中的全部插件。列表顺序就是每步执行顺序，最后一个写 `ctrl` 的插件说了算。
+`algorithms` 写 `"*"` 表示使用算法库中的全部插件。列表顺序就是每步执行顺序，最后一个写 `ctrl` 的插件说了算。旧版本的中文键项目文件仍会通过 `project_schema.py` 自动读取。
 
 ## 模型库
 
@@ -242,8 +243,8 @@ class MyController(ControlPlugin):
 模型来源与许可见各模型目录内的 `LICENSE`。需要导入更多模型：
 
 ```bash
-.venv/bin/python 工具/导入模型.py --列表
-.venv/bin/python 工具/导入模型.py universal_robots_ur5e
+.venv/bin/python 工具/import_model.py --列表
+.venv/bin/python 工具/import_model.py universal_robots_ur5e
 ```
 
 ## 验证
@@ -251,7 +252,7 @@ class MyController(ControlPlugin):
 界面「诊断」页可以一键跑 11 套检查。也可以在终端单独跑：
 
 ```bash
-.venv/bin/python 工具/验证/契约自检.py
+.venv/bin/python 工具/验证/contract_selfcheck.py
 .venv/bin/python 工具/验证/project_selfcheck.py
 .venv/bin/python 工具/验证/trajectory_planning_selfcheck.py
 .venv/bin/python 工具/验证/parameter_transaction_selfcheck.py
@@ -284,7 +285,7 @@ class MyController(ControlPlugin):
 ## 文档
 
 - [使用手册](docs/使用手册.md) —— 11 个页面逐页说明、典型工作流、故障排查
-- [前端约定](前端/约定.md) —— 前端目录边界、数据流、构建方式
+- [前端约定](frontend/CONVENTIONS.md) —— 前端目录边界、数据流、构建方式
 - [变更记录](CHANGELOG.md) —— 每个版本改了什么、影响了谁
 - [参与贡献](CONTRIBUTING.md) —— 分支、验证与 PR 要求
 
@@ -299,7 +300,7 @@ class MyController(ControlPlugin):
 GUI 已作为稳定载体使用。控制算法通过 `ControllerRegistry` 按名称创建，完整实验通过
 `ExperimentRegistry` 组合模型、控制器、轨迹说明、初始状态、停止条件与记录策略。
 内置示例：`ur5e_pd_tracking`、`ur5e_pid_tracking`。详细用法见
-[`实验/README.md`](实验/README.md)。
+[`experiments/README.md`](experiments/README.md)。
 
 GUI 顶部可直接选择实验；加载后复用原来的“开始/暂停/复位”。开始时自动记录，
 达到实验停止时间后自动暂停并导出 CSV、指标 JSON 和离线曲线。

@@ -109,9 +109,9 @@ def _start(interval_seconds: float, function, repeat: bool, initial_delay: float
 if __name__ == "__main__":
     from Quartz import CFRunLoopRunInMode
 
-    counts = {"重复": 0, "一次": 0}
-    repeat_timer = start(0.05, lambda: counts.__setitem__("重复", counts["重复"] + 1))
-    once_timer = once(0.4, lambda: counts.__setitem__("一次", counts["一次"] + 1))
+    counts = {"repeat": 0, "once": 0}
+    repeat_timer = start(0.05, lambda: counts.__setitem__("repeat", counts["repeat"] + 1))
+    once_timer = once(0.4, lambda: counts.__setitem__("once", counts["once"] + 1))
 
     print("=" * 62)
     print("  定时器自测（泵 run loop 1 秒）")
@@ -120,8 +120,8 @@ if __name__ == "__main__":
     while CFAbsoluteTimeGetCurrent() < end:
         CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.02, False)
     repeat_timer.stop()
-    print(f"  重复定时器（50ms）：触发 {counts['重复']} 次（期望约 20）")
-    print(f"  一次性定时器（400ms）：触发 {counts['一次']} 次（期望 1）")
-    passed = counts["重复"] >= 10 and counts["一次"] == 1
+    print(f"  重复定时器（50ms）：触发 {counts['repeat']} 次（期望约 20）")
+    print(f"  一次性定时器（400ms）：触发 {counts['once']} 次（期望 1）")
+    passed = counts["repeat"] >= 10 and counts["once"] == 1
     print(f"\n  结论：{('✓ 可用' if passed else '✗ 不可用')}")
     raise SystemExit(0 if passed else 1)

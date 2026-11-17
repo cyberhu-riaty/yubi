@@ -5,6 +5,22 @@
 
 ---
 
+## [未发布] — 2026-11-17 · 内部命名英文化收尾（兼容迁移）
+
+> 目标：自有代码的机器标识符用英文；界面文案继续支持中文；旧项目、录制、插件和宿主保持兼容。
+
+- **项目文档 v2**：`projects/*.json` 使用 `schema_version / project / model / algorithms / parameters / appearance` 英文键；旧版 `项目/*.json` 由 `软件/project_schema.py` 读取转换。项目文件从 `项目/` 移到 `projects/`，旧目录仍被读取。
+- **控制器参数**：参数标识改为英文（如 `position_gain`、`integral_limit`、`monitored_joint`），参数表机器键为「插件模块名·参数名」；界面显示中文 `label`，旧中文参数名仍可设置和加载。
+- **目录**：`算法库/通用/` → `controllers/common/`，`实验/` → `experiments/`；旧树保留读取回退。`工具/模型清单.json` → `工具/model_manifest.json`，`软件/风格表.json` → `软件/theme_table.json`。
+- **持久化数据**：录制 `.meta.json` 改为英文键（`recording_file`、`algorithms` 等）；设置改为 `last_model / last_project / language` 并兼容旧键；模型清单与模型库索引改英文键；主题表使用 ASCII id。
+- **环境变量**：写入改用 `YUBI_MODEL / YUBI_WEB_PORT / YUBI_CURRENT_MODEL / YUBI_CURRENT_PROJECT / YUBI_DISABLE_WEB / YUBI_GFX / YUBI_DIAGNOSTIC / YUBI_LANG / YUBI_PACKAGE_PATH`；旧中文名只读兼容。
+- **协议边界**：v21 线上字段、`legacy_wire` 声明、插件目录/项目状态的嵌套负载和前端编解码适配层保持不变；没有借英文化修改通信协议。
+- **保留的兼容入口**：`软件/` 与 `工具/` 根目录及中文模块转发层仍在，逐项退役条件见 `docs/legacy-compatibility-registry.md`。
+- **验收**：58 项 Python 单元测试、3 组 Node 回归、39 项契约检查、74 项项目检查、4 项运行内核检查、13 项实验注册检查、19 项观测自检、风格表 474 颜色 + 168 样式、Panda 抓取闭环、GUI 实验闭环、桌面启动器 `--check`、前端类型检查与构建通过；干净工作树内重新跑通测试、类型检查/构建、打包 `.app` 的 `--check` 和无界面实验。
+- **未验证**：Windows 宿主（需 Windows 真机）；真实辨识插件的“开始/停止”动作值漂移已记录，未修改。
+
+---
+
 ## [未发布] — 2026-11-09 · UR10（CB3）模型导入
 
 - **新增 `模型/universal_robots_ur10/`**：用 `ros-industrial/universal_robot` 的
@@ -17,7 +33,7 @@
   保留自碰撞会让位置伺服在折弯姿态被假接触推飞（实测漂移 3.8 rad）。
   与地面/外部物体的碰撞仍有效（`contype=2, conaffinity=1`）。
 - **新增 `项目/UR10_基础PD.json`**，并更新 `项目/索引.json`；外壳按模型反查得到它。
-- **`工具/导入模型.py` 支持模型目录内的 `模型信息.json`**：非 menagerie 模型可声明
+- **`工具/import_model.py` 支持模型目录内的 `模型信息.json`**：非 menagerie 模型可声明
   `显示名 / 许可 / 入口模型 / 类别 / 自由度 / 执行器数 / 说明`，重建索引时不用再手工改。
   `panda_mjpc` 补了这份文件：它没有 `*_torque.xml`，以前重建索引会挑到 `common.xml`
   并把它从 `arm_task` 降级为 `不可直接控制`、从资产库消失；现在会按 `task.xml` 取。
@@ -57,7 +73,7 @@
 - **收尾：新增 `工具/验证/Panda流程自检.py` 与 `报告/工作报告/Panda仿真流程验证.md`**：
   5 秒 headless 自检通过（hand-box 528→约 45–80 mm，规划 93 次，错误 0）；
   报告记录“能接近、不能抓取”，以及官方 MJPC 编译因网络未完成。
-- **影响谁 / 要重跑什么**：`运行内核自检.py`、`契约自检.py`、`校验项目.py` 已跑过；
+- **影响谁 / 要重跑什么**：`运行内核自检.py`、`contract_selfcheck.py`、`校验项目.py` 已跑过；
   凡是用「运行」按钮做的验收都要重跑 —— 之前可能被 1% 速度掩盖。
 
 ---
@@ -198,7 +214,7 @@
   深琥珀/深红；分段控件与清空按钮固定 Aqua 外观，不再黑底小字看不清。
 - 原生 NSTextView 日志镜像：真实连接/握手/命令回执/规划/诊断日志；
   支持全部/注意/错误筛选、清空、800 行环形缓冲/最近 500 行显示。
-- Web 端 `日志.ts` 通过 `window.webkit.messageHandlers.驭臂日志` 发送真实日志行；
+- Web 端 `logs.ts` 通过 `window.webkit.messageHandlers.驭臂日志` 发送真实日志行；
   浏览器无此通道时是 no-op。
 - 明确：这是**日志镜像**，不是交互式 PTY；不假装提供 shell。
 
@@ -314,7 +330,7 @@
 
 ### 测试与验证
 
-- 更新 `前端/测试/界面冒烟.py` 的规划断言：从“必须是未实现”改为“必须是尚无航点 + 说明至少 2 个航点”，
+- 更新 `frontend/tests/browser_smoke.py` 的规划断言：从“必须是未实现”改为“必须是尚无航点 + 说明至少 2 个航点”，
   因为规划功能已实现，旧断言会把正确状态判错。
 - `tsc --noEmit` 0；Vite build 成功；生成物一致；`py_compile 软件/宿主窗口.py` 0；界面冒烟通过。
 - 真机流程实测：诊断 12/12（5.82 s，可导出）；部署导出 3 文件 / 3.3 KB（含 `模型清单.md`）。
@@ -362,9 +378,9 @@
 
 ### 测试夹具与验证
 
-- `前端/测试/假后端.py`：契约版本从 `软件/契约.py` 读取（不再写死 1）；补 `系统` 主题；
+- `frontend/tests/fake_backend.py`：契约版本从 `软件/契约.py` 读取（不再写死 1）；补 `系统` 主题；
   参数表改成产品真实形状并处理 `命令.改参数`；端口支持 `驭臂_测试端口`。
-- `前端/测试/界面冒烟.py`：固定 1440×900 CSS 视口；断言真仿真时间/RTF/3D 在右侧/兼容性；
+- `frontend/tests/browser_smoke.py`：固定 1440×900 CSS 视口；断言真仿真时间/RTF/3D 在右侧/兼容性；
   切肤时断言背景**真的变了**（防止 `:root` 覆盖复发）。
 - 复跑：`tsc --noEmit`、Vite build、生成物 `--检查`、契约自检 32/32、风格表 474+168、
   平台层 4/4、作用域 0/50、语言 21/21、界面冒烟通过。
@@ -656,16 +672,16 @@ pyobjc-framework-Metal`（PyObjC 12.2.2）。
 ### 新增：契约层（L0）
 
 - **`软件/契约.py`** —— 界面与仿真之间**唯一**的通信契约，11 个主题（下行 6 / 上行 6）。
-  它是**可机检的不变量**，不是文档：`工具/验证/契约自检.py` 拿真实 dataclass 逐项比对。
-- **`工具/验证/契约自检.py`**（新增，**25 项**）—— 五类检查：
+  它是**可机检的不变量**，不是文档：`工具/验证/contract_selfcheck.py` 拿真实 dataclass 逐项比对。
+- **`工具/验证/contract_selfcheck.py`**（新增，**25 项**）—— 五类检查：
   契约 vs dataclass、生成的 TS/CSS 是否过期、每条上行命令能否真的构造出消息类、
   校验器对 15 组好坏用例的判定、通道白名单是否**从契约派生**（不许有幽灵条目）。
 
   > 它立刻抓到两处真漂移：`Web桥` 白名单里的 **`录制状态` 是幽灵条目**（`录制桥` 从没定义过
   > 这个 dataclass）；以及数字 `1` 冒充布尔 `True`（Python 里 `1 == True`，会静默通过）。
 
-- **`工具/生成前端资产.py`**（新增）—— 从 `契约.py` 与 `风格表.json` 生成
-  `契约.ts` / `风格.ts` / `主题.css`（5 套风格 → CSS 变量）。**单一来源，不许手抄**。
+- **`工具/generate_frontend_assets.py`**（新增）—— 从 `契约.py` 与 `风格表.json` 生成
+  `contract.ts` / `themes.ts` / `theme.css`（5 套风格 → CSS 变量）。**单一来源，不许手抄**。
 
 ### 新增：上行命令通道
 
@@ -691,7 +707,7 @@ pyobjc-framework-Metal`（PyObjC 12.2.2）。
 
 ### 新增：Web 界面（React 19 + Vite 7 + Tailwind 4）
 
-- **`前端/`** —— 构建期源码（不参与运行时）；产物落到 **`软件/web/`**，由 `Web桥` 在同端口提供。
+- **`frontend/`** —— 构建期源码（不参与运行时）；产物落到 **`软件/web/`**，由 `Web桥` 在同端口提供。
   没有产物时**自动回落到 P0 的单文件仪表盘**，任何情况下都不会"打不开页面"。
 - 外壳：活动栏（5 步任务流 + 外观/关于）/ 上下文侧栏 / **常驻中区**（不随任务流切换）/
   底部控制台（输出·事件·问题，真日志 + 每秒实测主题速率）/ 状态栏（六项真值）。
@@ -715,7 +731,7 @@ pyobjc-framework-Metal`（PyObjC 12.2.2）。
 
 ### 注意
 
-- **构建前端**需要 Node：`cd 前端 && node <pnpm.mjs> run build`。
+- **构建前端**需要 Node：`cd frontend && node <pnpm.mjs> run build`。
   ⚠️ 本机 DSH 那份 node 开了 hardened runtime，会拒绝加载 rollup 的预编译原生模块
   （`mapping process and mapped file (non-platform) have different Team IDs`）；
   **用 `/usr/local/bin/node` 则正常**（`tsc` 用哪份都行）。这是本机工具链问题，不是代码问题。
@@ -1394,7 +1410,7 @@ git checkout -- <文件>          # 改坏了就回退
 | 目录 | 体积 | 是否进库 | 理由 |
 |---|---|---|---|
 | `软件/ 算法库/ 项目/ 工具/ 文档/` + 根目录文档 | **9.1 MB** | ✅ 进 | 这就是仓库的真正内容 |
-| `模型/` | **108 MB** | ⚠️ **要你定** | 二进制网格（112 个 .obj + 32 个 .stl），可用 `工具/导入模型.py` 按钉住的 menagerie commit 重建，但**需要联网** |
+| `模型/` | **108 MB** | ⚠️ **要你定** | 二进制网格（112 个 .obj + 32 个 .stl），可用 `工具/import_model.py` 按钉住的 menagerie commit 重建，但**需要联网** |
 | `.venv/` | 189 MB | ❌ 排除 | `工具/重建环境.sh` 可重建 |
 | `离线依赖/` | 80 MB | ❌ 排除 | 离线 wheel 包，可重新下载 |
 | `.research/` | 24 MB | ❌ 排除 | 调研中间产物 |

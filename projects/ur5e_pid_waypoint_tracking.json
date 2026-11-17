@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "_comment": "多航点轨迹对比之二：轨迹目标执行器在 PID 之前发布 q_ref(t)。",
+  "project": "ur5e_pid_waypoint_tracking",
+  "model": "模型/universal_robots_ur5e/ur5e_torque.xml",
+  "algorithms": [
+    {
+      "plugin": "trajectory_target_player"
+    },
+    {
+      "plugin": "joint_pid_plain"
+    },
+    {
+      "plugin": "data_recorder"
+    }
+  ],
+  "parameters": {
+    "joint_pid_plain": {
+      "KP": 400.0,
+      "KI": 250.0,
+      "KD": 15.0,
+      "integral_limit": 0.6
+    }
+  },
+  "notes": "与两组 PD 共用 KP/KD和目标速度；Ki=250、积分限幅0.6。连续轨迹更新保留积分，大幅目标跳变才清零，并使用条件积分抗饱和。",
+  "experiment_only": true
+}

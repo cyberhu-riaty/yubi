@@ -91,10 +91,27 @@ def scan(root: Path, scope: dict) -> dict:
             text = path.read_text(encoding="utf-8-sig")
             if path.suffix == ".py":
                 tree = ast.parse(text, filename=relative)
+                source_lines = text.splitlines()
+                token_positions = set()
                 for token in tokenize.generate_tokens(io.StringIO(text).readline):
                     if token.type == tokenize.NAME:
                         add(relative, token.start[0], "python_identifier", token.string)
+                        byte_column = len(source_lines[token.start[0] - 1][:token.start[1]].encode("utf-8"))
+                        token_positions.add((token.start[0], byte_column))
                 for node in ast.walk(tree):
+                    # Python 3.10 tokenizes a whole f-string as STRING. Recover
+                    # names inside interpolation expressions from the AST.
+                    name = None
+                    column = getattr(node, "col_offset", 0)
+                    if isinstance(node, ast.Name):
+                        name = node.id
+                    elif isinstance(node, ast.Attribute):
+                        name = node.attr
+                        column = node.end_col_offset - len(name.encode("utf-8"))
+                    elif isinstance(node, ast.keyword) and node.arg:
+                        name = node.arg
+                    if name and (node.lineno, column) not in token_positions:
+                        add(relative, node.lineno, "python_identifier", name)
                     if isinstance(node, ast.Dict):
                         for key in node.keys:
                             if isinstance(key, ast.Constant) and isinstance(key.value, str):
@@ -193,11 +210,13 @@ def markdown_report(report: dict, scope: dict) -> str:
                   "| --- | ---: | ---: | ---: | ---: |"])
     for path, counts in sorted(per_file.items()):
         identifiers = sum(counts[k] for k in (
-            "python_identifier", "typescript_identifier", "shell_identifier", "css_identifier"))
+            "python_identifier", "typescript_identifier", "typescript_binding", "shell_identifier", "css_identifier"))
         paths = sum(counts[k] for k in ("directory_name", "file_name", "import_path"))
         lines.append(f"| `{path}` | {identifiers} | {paths} | {counts['json_key']} | {counts['string_key']} |")
     lines.extend(["", "## 下一步", "",
                   "实施批次和验收标准见 [迁移计划](naming-migration-plan.md)。",
+                  "字符串键的逐类说明见 [字符串键分类](string-key-classification.md)，",
+                  "保留的中文路径/模块见 [兼容入口登记](legacy-compatibility-registry.md)。",
                   "完整名称与行号可用 `--json-report /tmp/yubi-naming-audit.json` 导出。", ""])
     return "\n".join(lines)
 

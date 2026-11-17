@@ -57,17 +57,17 @@ MIGRATED_FILES = (
     "软件/experiment_cli.py",
     "软件/trajectory_runtime.py",
     "软件/run_experiment.py",
-    "算法库/通用/joint_pd_plain.py",
-    "算法库/通用/joint_pid_plain.py",
-    "算法库/通用/joint_pd_gravity_ff.py",
-    "算法库/通用/trajectory_target_player.py",
-    "算法库/通用/joint_pd_control.py",
-    "算法库/通用/joint_pid_control.py",
-    "算法库/通用/parameter_identification_plugin.py",
-    "算法库/通用/data_recorder.py",
-    "算法库/通用/two_point_task_space.py",
-    "算法库/通用/sinusoidal_joint_motion.py",
-    "算法库/通用/controller_template.py",
+    "controllers/common/joint_pd_plain.py",
+    "controllers/common/joint_pid_plain.py",
+    "controllers/common/joint_pd_gravity_ff.py",
+    "controllers/common/trajectory_target_player.py",
+    "controllers/common/joint_pd_control.py",
+    "controllers/common/joint_pid_control.py",
+    "controllers/common/parameter_identification_plugin.py",
+    "controllers/common/data_recorder.py",
+    "controllers/common/two_point_task_space.py",
+    "controllers/common/sinusoidal_joint_motion.py",
+    "controllers/common/controller_template.py",
     "工具/验证/experiment_registry_selfcheck.py",
     "工具/验证/project_selfcheck.py",
     "工具/验证/runtime_selfcheck.py",
@@ -94,6 +94,12 @@ REMOVED_PLUGIN_METHODS = {
 }
 REMOVED_PLUGIN_ATTRIBUTES = {"名称", "英文名", "版本", "作者", "说明", "接管控制"}
 ASCII_IDENTIFIER_FILES = (
+    "工具/import_model.py",
+    "工具/urdf_to_mjcf.py",
+    "工具/generate_frontend_assets.py",
+    "工具/验证/contract_selfcheck.py",
+    "frontend/tests/fake_backend.py",
+    "frontend/tests/browser_smoke.py",
     "软件/contract.py",
     "软件/契约.py",
     "软件/official_api.py",
@@ -181,7 +187,7 @@ def check_migration_boundary() -> int:
         for line, name in chinese_identifiers(path):
             errors.append(f"{relative}:{line} contains Chinese identifier {name}")
 
-    algorithm_directory = ROOT / "算法库" / "通用"
+    algorithm_directory = ROOT / "controllers" / "common"
     for path in algorithm_directory.glob("*.py"):
         if not path.name.isascii():
             errors.append(f"non-ASCII algorithm filename: {path.relative_to(ROOT)}")
@@ -217,9 +223,13 @@ def check_migration_boundary() -> int:
                     f"{path.relative_to(ROOT)}:{node.lineno} defines removed plugin_class alias 插件类")
 
     for directory, fields in (
-        (ROOT / "项目", ("算法",)),
+        (ROOT / "projects", ("algorithms", "算法")),
+        (ROOT / "项目", ("algorithms", "算法")),
+        (ROOT / "experiments", ("controllers", "preprocessors", "plugins")),
         (ROOT / "实验", ("controllers", "preprocessors", "plugins")),
     ):
+        if not directory.is_dir():
+            continue
         for path in directory.glob("*.json"):
             data = json.loads(path.read_text(encoding="utf-8-sig"))
             names: list[str] = []
@@ -228,8 +238,10 @@ def check_migration_boundary() -> int:
                 if not isinstance(value, list):
                     continue
                 for item in value:
-                    names.append(str(item.get("插件") or "") if isinstance(item, dict)
-                                 else str(item))
+                    if isinstance(item, dict):
+                        names.append(str(item.get("plugin") or item.get("插件") or ""))
+                    else:
+                        names.append(str(item))
             for name in names:
                 if name in LEGACY_ALGORITHM_IDS:
                     errors.append(

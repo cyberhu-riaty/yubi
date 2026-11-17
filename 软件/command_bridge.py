@@ -247,7 +247,7 @@ def forward_pending_commands(viewer: Any, print_result: bool = True) -> int:
 
 
 def status() -> dict:
-    return {"已转发": forwarded_count, "失败": failure_count}
+    return {"forwarded": forwarded_count, "failed": failure_count}
 
 
 __all__ = ["create_message", "enqueue_command", "drain_and_inject", "forward_pending_commands", "status"]

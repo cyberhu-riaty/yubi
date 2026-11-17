@@ -1,0 +1,842 @@
+/*
+ * index.css —— Tailwind 入口 + 本项目自己的语义类。
+ *
+ * 两条纪律（都是 `CONVENTIONS.md` §三 与参考项目的教训）：
+ *  ① 颜色**只**从 `生成/theme.css` 的 `var(--…)` 来 —— 写死一个颜色就换不了肤。
+ *  ② 不覆盖 Tailwind 自己的工具类。参考项目里那种
+ *     `.flex { display:block }`、满屏 `!important` 的写法，这一份里一个都没有：
+ *     需要复用就加**新**类名（`.panel` / `.section` / `.control`），而不是改别人的类。
+ *
+ * ★ 关于"类名用中文还是 ASCII"（踩过的坑，写在这里免得后人重踩）：
+ *   自定义类（`@layer components` 里的 `.panel` `.section-header`…）用中文没问题 —— 那是手写 CSS。
+ *   但 **Tailwind 的工具类必须 ASCII**：本层起初写的是 `text-次要`、`bg-框`，
+ *   实测 Tailwind 4.3 的候选提取器按 ASCII 词边界切 token，中文类名一个都扫不出来
+ *   （`@source` 显式声明内容来源也一样），`@utility text-正文` 还会直接报
+ *   "invalid utility name"。所以：**语义类中文、工具类 ASCII**，两边都不硬编码颜色。
+ *
+ * `theme.css` 由 `main.tsx` 引入（顺序在 Tailwind 之后），保证 `var(--…)` 已就绪。
+ */
+@import "tailwindcss";
+
+/*
+ * 把主题变量登记成 Tailwind 的语义 token。
+ * 右边写的是 `var(--…)`，所以换肤时工具类（`text-dim`、`bg-frame`…）
+ * 会跟着一起变 —— 工具类和下面的自定义类走同一份变量。
+ *
+ * `@theme inline` + `@utility` 为什么两件都要：
+ *   `@theme` 只登记颜色，Tailwind 仍按需生成（中文类名扫不到 → 什么都没生成）；
+ *   `@utility` 是**无条件生成**的，所以真正被组件用到的这几条写在下面。
+ */
+@theme inline {
+  --color-canvas: var(--bg);
+  --color-panel: var(--bg-panel);
+  --color-popup: var(--bg-popup);
+  --color-menu: var(--bg-menu);
+  --color-titlebar: var(--bg-title);
+  --color-header: var(--bg-header);
+  --color-frame: var(--bg-frame);
+  --color-frame-hover: var(--bg-frame-hover);
+  --color-frame-on: var(--bg-frame-on);
+  --color-tab: var(--bg-tab);
+  --color-tab-on: var(--bg-tab-on);
+  --color-tablehead: var(--bg-table-head);
+  --color-rowalt: var(--bg-row-alt);
+  --color-fg: var(--fg);
+  --color-dim: var(--fg-dim);
+  --color-link: var(--fg-link);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-on: var(--accent-on);
+  --color-grab: var(--grab);
+  --color-sel: var(--sel-bg);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-line-soft: var(--border-light);
+  --color-sep: var(--separator);
+  --font-ui2: var(--font-ui);
+  --font-mono2: var(--font-mono);
+  --radius-skin: var(--radius);
+}
+
+/*
+ * 组件真正用到的那几条工具类（中文类名扫不到，所以在这里显式声明）。
+ * 只声明**用到的**：`text-dim` / `text-fg` / 三个底色 / 两个边框色。
+ * 颜色仍然只有一个来源：`var(--…)`。
+ */
+@utility text-fg {
+  color: var(--fg);
+}
+@utility text-dim {
+  color: var(--fg-dim);
+}
+@utility bg-frame {
+  background: var(--bg-frame);
+}
+@utility bg-frame-hover {
+  background: var(--bg-frame-hover);
+}
+@utility bg-accent {
+  background: var(--accent);
+}
+@utility bg-accent-hover {
+  background: var(--accent-hover);
+}
+@utility bg-accent-on {
+  background: var(--accent-on);
+}
+@utility border-line {
+  border-color: var(--border);
+}
+@utility border-line-strong {
+  border-color: var(--border-strong);
+}
+@utility border-line-soft {
+  border-color: var(--border-light);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    font-size: calc(13px * var(--font-scale, 1));
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * Tailwind v4 的 preflight 把 border-color 定成 currentColor。
+   * 全部改回主题变量：这样声明了 `border` 宽度的元素不用每个都写颜色，
+   * 也不会因为继承文字色而在换肤时串色。
+   */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  /* 键盘可见焦点：只用主题色，不画死颜色 */
+  :focus-visible {
+    outline: 2px solid var(--grab);
+    outline-offset: 1px;
+  }
+
+  /* 滚动条跟着皮肤走（macOS 上系统滚动条太亮，和深色皮肤冲突） */
+  * {
+    scrollbar-color: var(--bg-scroll-grab) var(--bg-scroll);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-scroll);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--bg-scroll-grab);
+    border-radius: var(--radius);
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  /*
+   * 按钮的 UA 外观必须关掉：
+   *   macOS/Chrome 的 `appearance: auto` 会在我们设的深色背景上再画一层
+   *   浅色原生按钮面。实测深色皮肤下皮肤卡片仍是浅灰、文字还是深色 ——
+   *   computed style 明明是 #0E151B，屏幕却是浅色，就是这层原生外观盖住了。
+   *   select 保留原生箭头，不动。
+   */
+  button {
+    appearance: none;
+    -webkit-appearance: none;
+  }
+}
+
+/*
+ * 语义类：只描述"这是什么"，不描述"长什么样"。
+ * 一律用 `var(--…)`，并且**不改** Tailwind 的同名工具类。
+ */
+@layer components {
+  /* 一块面板容器（侧栏里的段、中区里的卡片都用它） */
+  .panel {
+    background: var(--bg-panel);
+    border: var(--border-w, 1px) solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  /* 侧栏/控制台里的一"段"（可折叠区块的外框）
+   *
+   * ★ 从"一条分隔线"改成"一张卡片"：浅灰桌面上浮一张白卡，边界立刻清楚。
+   *   原来只有一条 1px 分隔线，整屏是"一长条"—— 这是之前看起来平的主因之一。
+   */
+  .section {
+    background: var(--bg-panel);
+    border: var(--border-w, 1px) solid var(--border);
+    border-radius: var(--radius);
+    /* 少一层阴影：左栏本来就有卡片边框，再加投影只会显得"一叠纸" */
+    overflow: hidden;
+  }
+
+  /* 段落标题条：可折叠区块的按钮就是它 */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-height: 32px;
+    padding: 6px 10px;
+    background: transparent;
+    color: var(--fg);
+    border: 0;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 600;
+  }
+  .section-header:hover {
+    background: var(--bg-header-hover);
+  }
+
+  /* 两列表格：键是辅助信息，值是主角。行间用发丝线分隔，不再靠大留白。 */
+  .data-table {
+    table-layout: fixed;
+  }
+  .data-table th {
+    width: 36%;
+    padding: 3px 8px 3px 0;
+    font-size: 0.8em;
+    letter-spacing: 0.01em;
+    vertical-align: top;
+  }
+  .data-table td {
+    width: 64%;
+    padding: 3px 0;
+    font-size: 0.9em;
+    font-weight: 500;
+    vertical-align: top;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .data-table tr + tr > * {
+    border-top: 1px solid var(--border-light);
+  }
+
+  /* 长路径：文件名 + 上级目录；复制按钮常驻但低对比，悬停变亮 */
+  .path-value {
+    max-width: 100%;
+  }
+  .path-filename {
+    font-weight: 600;
+  }
+  .copy-button {
+    flex: none;
+    padding: 0 4px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--fg-dim);
+    font-size: 0.72em;
+    line-height: 1.8;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .copy-button:hover {
+    color: var(--fg);
+    background: var(--bg-frame);
+    border-color: var(--border);
+  }
+
+  /* 兼容性提示：左侧 3px 警告条 + 文字结论。颜色只是辅助，标题里写了"不兼容"。 */
+  .compatibility-bar {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--warn);
+    border-radius: var(--radius);
+    background: var(--bg-panel);
+    padding: 8px 10px;
+  }
+  .compatibility-title {
+    font-weight: 600;
+    color: var(--fg);
+  }
+
+  /* 算法行：一行放不下就换行，不把名字挤成竖排 */
+  .algorithm-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 3px 6px;
+    padding: 4px 7px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    background: var(--bg-row-alt);
+    font-size: 0.88em;
+  }
+  .algorithm-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-weight: 500;
+  }
+  .algorithm-version {
+    font-size: 0.78em;
+  }
+
+  /* 部署页顶部：把"后端已连接"和"真机未接入"分成两格，避免两个"已连接"混淆 */
+  .deployment-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-row-alt);
+  }
+  .deployment-status-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.82em;
+  }
+
+  /* 皮肤预览：节点带 data-theme，所以它自己就吃那套主题变量，不需要第二份颜色表。 */
+  .theme-preview {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    width: 76px;
+    height: 48px;
+    padding: 4px 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  .theme-preview-bar {
+    display: block;
+    width: 100%;
+    height: 5px;
+    border-radius: 1px;
+    background: var(--bg-header);
+  }
+  .theme-preview-text {
+    font-size: 9px;
+    line-height: 1;
+    font-weight: 600;
+  }
+  .theme-preview-button {
+    align-self: flex-start;
+    width: 20px;
+    height: 7px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+
+  /* 装配报告：原生 details，默认收起；summary 像一条可点的辅助行 */
+  .assembly-details {
+    border-top: 1px solid var(--border-light);
+    padding-top: 5px;
+  }
+  .assembly-details > summary {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    color: var(--fg-dim);
+    font-size: 0.8em;
+    list-style: none;
+    user-select: none;
+  }
+  .assembly-details > summary::-webkit-details-marker {
+    display: none;
+  }
+  .assembly-details > summary::before {
+    content: "▸";
+    font-family: var(--font-mono);
+  }
+  .assembly-details[open] > summary::before {
+    content: "▾";
+  }
+  .assembly-details > summary:hover {
+    color: var(--fg);
+  }
+
+  /* 侧栏顶部的一行上下文：当前项目 / 当前模型 */
+  .context-bar {
+    display: flex;
+    flex: none;
+    gap: 8px;
+    padding: 3px 10px 4px;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-menu);
+    color: var(--fg-dim);
+    font-size: 0.72em;
+    line-height: 1.5;
+  }
+  .context-item {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 0;
+    align-items: baseline;
+    gap: 3px;
+  }
+  .context-label {
+    flex: none;
+    opacity: 0.8;
+  }
+  .context-unavailable {
+    flex: none;
+    border-bottom: 1px dashed currentColor;
+    opacity: 0.9;
+  }
+
+  /* 活动栏：统一分组；编号只留在 title 里 */
+  .activity-cell {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .activity-cell:hover {
+    background: var(--bg-frame-hover) !important;
+  }
+  .activity-group {
+    padding: 7px 0 2px;
+    color: var(--fg-dim);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    text-align: center;
+    user-select: none;
+  }
+  .activity-divider {
+    margin: 4px 6px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* 活动栏和页面标题固定；滚轮只在当前页面内容里消费。
+     stable 避免滚动条出现/消失时卡片左右跳动。 */
+  .sidebar-scroll {
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  /* “定义”页不整体滚动：区块标题固定，一次只展开一块。
+     展开内容独占剩余高度，过长时只滚动该区块内部。 */
+  .define-page-fixed {
+    display: flex;
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 8px;
+    overflow: hidden;
+  }
+  .define-page-fixed > .section {
+    display: flex;
+    min-height: 0;
+    flex: 0 0 auto;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .define-page-fixed > .section-expanded {
+    flex: 1 1 0;
+  }
+  .define-page-fixed > .section-expanded > .section-content {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  /* 窗口改成"左 Web / 右 3D"之后，Web 面板只有 40% 宽（约 520~760px）。
+   * 这么窄再塞"中区仪表盘"会挤成一团 —— 而中区本来就是"3D 没地方放时的替代品"，
+   * 现在 3D 就在右边，它没有存在意义了，直接收掉。
+   * 用媒体查询而不是 JS：宽度变化是纯展示问题，不需要触发 React 重渲染。 */
+  /* 中区收掉之后，让侧栏自己撑满，卡片才有地方呼吸。
+     这条既服务窄窗口，也服务"侧栏被拖得很宽、剩余中区不够 620px"的宿主布局。 */
+  .sidebar-panel-full {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    border-right: none !important;
+  }
+
+  @media (max-width: 860px) {
+    .main-area {
+      display: none;
+    }
+    .sidebar-panel {
+      flex: 1 1 auto !important;
+      width: auto !important;
+      border-right: none !important;
+    }
+  }
+
+  /* 状态栏：整条压成主色（对应参考项目底部那条蓝），
+   * 上面所有灰字自动转成半透明白 —— 否则灰字压蓝底直接看不清。
+   * 用继承 + 透明度而不是逐处改颜色：状态栏里元素很多，漏一个就花脸。 */
+  .status-bar {
+    background: var(--bg-nav);
+    color: var(--fg-on-accent);
+    flex-wrap: nowrap;
+    min-height: 26px;
+    line-height: 1.6;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .status-bar .text-dim {
+    color: inherit;
+    opacity: 0.8;
+  }
+  .status-bar .monospace {
+    color: inherit;
+  }
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+  .status-label {
+    font-size: 0.9em;
+    opacity: 0.82;
+  }
+  .status-toggle {
+    padding: 0 7px;
+    border: 1px solid color-mix(in srgb, var(--fg-on-accent) 32%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--fg-on-accent) 14%, transparent);
+    color: inherit;
+    font-size: 0.92em;
+    line-height: 1.55;
+    cursor: pointer;
+  }
+  .status-toggle:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--fg-on-accent) 24%, transparent);
+  }
+  .status-toggle:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: none;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg-on-accent) 45%, transparent);
+  }
+  .status-unavailable {
+    border-bottom: 1px dashed currentColor;
+    opacity: 0.9;
+    font-size: 0.95em;
+  }
+
+  /* 通用可交互控件（按钮 / 开关 / 页签的公共壳） */
+  .control {
+    background: var(--bg-frame);
+    border: var(--border-w, 1px) solid var(--border);
+    border-radius: var(--radius);
+    color: var(--fg);
+    cursor: pointer;
+    padding: calc(var(--pad-y) * 0.5) calc(var(--pad-x) * 0.6);
+  }
+  .control:hover:not(:disabled) {
+    background: var(--bg-frame-hover);
+  }
+  .control:disabled {
+    color: var(--fg-dim);
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  /* 输入框（换模型路径、辨识时长…） */
+  .input {
+    background: var(--bg);
+    border: var(--border-w, 1px) solid var(--border);
+    border-radius: var(--radius);
+    color: var(--fg);
+    padding: calc(var(--pad-y) * 0.5) calc(var(--pad-x) * 0.6);
+    width: 100%;
+  }
+  .input::placeholder {
+    color: var(--fg-dim);
+  }
+
+  /* 小标签（轴数、单位、未接入…） */
+  .label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px;
+    border: var(--border-w, 1px) solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-frame);
+    color: var(--fg-dim);
+    font-size: 0.85em;
+    white-space: nowrap;
+  }
+
+  /* "未接入 / 未实现"这类诚实标注：虚线框，不与真控件混淆 */
+  .unavailable {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--fg-dim);
+    padding: var(--pad-y) var(--pad-x);
+    background: var(--bg-row-alt);
+  }
+
+  /* 数字一律等宽，避免抖动（表格、状态栏、曲线图例） */
+  .monospace {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 拖动分隔条的抓手 */
+  .splitter {
+    flex: 0 0 auto;
+    background: var(--separator);
+  }
+  .splitter:hover,
+  .splitter[data-dragging="1"] {
+    background: var(--grab);
+  }
+
+  /* ---- 底部控制台：两行日志 + 紧凑筛选 ---- */
+  /* 原生全宽工程面板打开时，Web 自己的控制台要收起（日志已镜像到原生面板）。
+     用 html[data-native-panel] 而不是等 React 状态：面板一出现就立即生效，不会出现两份日志。 */
+  html[data-native-panel="1"] .console-panel,
+  html[data-native-panel="1"] .console-recall,
+  html[data-native-panel="1"] .splitter:has(+ .console-panel) {
+    display: none !important;
+  }
+
+  .console-header {
+    min-height: 30px;
+    background: var(--bg-title);
+  }
+  .console-tab {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.88em;
+  }
+  .console-tab:hover {
+    background: var(--bg-frame);
+  }
+  .console-actions {
+    flex: none;
+    padding: 1px 5px;
+    border: 1px solid transparent;
+    border-radius: calc(var(--radius) * 0.6);
+    background: transparent;
+    color: var(--fg-dim);
+    font-size: 0.78em;
+    line-height: 1.6;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .console-actions:hover {
+    color: var(--fg);
+    background: var(--bg-frame);
+    border-color: var(--border);
+  }
+  .console-actions[aria-pressed="true"] {
+    color: var(--fg);
+    background: var(--bg-frame-on);
+    border-color: var(--border-strong);
+  }
+  .console-filter {
+    min-height: 24px;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 0.78em;
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .filter {
+    display: inline-flex;
+    min-width: 0;
+  }
+  .filter select {
+    max-width: 9.5em;
+    padding: 1px 3px;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) * 0.6);
+    background: var(--bg-frame);
+    color: var(--fg);
+    font-size: 0.95em;
+    cursor: pointer;
+  }
+  .action-feedback {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.95em;
+  }
+
+  /* 控制台收起后的召回条：必须一眼看到"有错/有警告"，也要能点回来 */
+  .console-recall {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 4px 10px;
+    border: 0;
+    border-top: 1px solid var(--border);
+    background: var(--bg-title);
+    color: var(--fg);
+    font-size: 0.9em;
+    text-align: left;
+    cursor: pointer;
+  }
+  .console-recall:hover {
+    background: var(--bg-frame);
+  }
+  .console-recall-badge {
+    flex: none;
+    font-size: 0.85em;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .log-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .log-item {
+    border-bottom: 1px solid var(--border-light);
+  }
+  .log-item:hover {
+    background: var(--bg-row-alt);
+  }
+  .log-row {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    width: 100%;
+    padding: 3px 10px;
+    border: 0;
+    background: transparent;
+    color: var(--fg);
+    text-align: left;
+    cursor: default;
+  }
+  .log-row[aria-expanded] {
+    cursor: pointer;
+  }
+  .log-row-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 6px;
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    font-size: 0.72em;
+    line-height: 1.5;
+  }
+  .log-time {
+    color: var(--fg-dim);
+  }
+  .log-level {
+    font-weight: 600;
+  }
+  .log-source {
+    padding: 0 4px;
+    border-radius: 3px;
+    background: var(--bg-frame);
+    color: var(--fg-dim);
+  }
+  .log-topic {
+    max-width: 16ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.9;
+  }
+  .log-plugin {
+    max-width: 14ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: var(--bg-frame-on);
+    color: var(--fg);
+  }
+  .log-joint {
+    flex: none;
+    padding: 0 4px;
+    border: 1px solid var(--warn);
+    border-radius: 3px;
+    color: var(--warn);
+    cursor: pointer;
+  }
+  .log-joint:hover,
+  .log-joint:focus-visible {
+    background: var(--bg-frame-on);
+    outline: none;
+  }
+  .log-text {
+    color: var(--fg);
+    font-size: 0.88em;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+  .log-details {
+    margin: 0;
+    padding: 0 10px 5px;
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    font-size: 0.78em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .rate-area {
+    padding: 6px 10px 8px;
+    border-top: 1px solid var(--border-light);
+  }
+  .problem-item {
+    padding: 7px 9px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-panel);
+  }
+}
+
+/* 参数输入框（验证视图的参数表）——颜色只来自主题变量，改皮肤自动跟随 */
+.parameter-input {
+  width: 9ch;
+  padding: 1px 4px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  color: var(--fg);
+  background: var(--bg-frame);
+  border: var(--border-w, 1px) solid var(--border);
+  border-radius: var(--radius);
+}
+.parameter-input:hover { background: var(--bg-frame-hover); }
+.parameter-input:focus-visible { background: var(--bg-frame-on); outline: 2px solid var(--accent); outline-offset: 1px; }
+.parameter-input:disabled { opacity: 0.5; }
+.parameter-input[data-dirty="true"] { border-color: var(--accent); background: var(--bg-frame-on); }
+.parameter-input[data-error="true"] { border-color: var(--danger); }
+.parameter-cell { display: inline-flex; align-items: center; gap: 3px; }
+.parameter-error { color: var(--danger); font-weight: 700; cursor: help; font-size: 0.9em; }
+.parameter-save { color: var(--warn); font-size: 0.9em; }

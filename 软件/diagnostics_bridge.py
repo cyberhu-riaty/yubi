@@ -64,7 +64,7 @@ class DiagnosticsReport(messages.Snapshot):
 SUITES: tuple[tuple[str, str], ...] = (
     ("官方层", "工具/验证/official_api_selfcheck.py"),
     ("平台层", "工具/验证/platform_selfcheck.py"),
-    ("契约", "工具/验证/契约自检.py"),
+    ("契约", "工具/验证/contract_selfcheck.py"),
     ("项目", "工具/验证/project_selfcheck.py"),
     ("作用域", "工具/验证/scope_selfcheck.py"),
     ("语言", "工具/验证/language_selfcheck.py"),

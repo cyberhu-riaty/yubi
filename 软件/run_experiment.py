@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import argparse
 import os
+import env_config
 import time
 
-os.environ.setdefault("驭臂_关Web", "1")
+os.environ.setdefault("YUBI_DISABLE_WEB", "1")
 
 import experiment_registry as _experiments
 import experiment_cli

@@ -1,0 +1,28 @@
+{
+  "schema_version": 2,
+  "_comment": "多航点轨迹对比之三：纯 PD 相同 KP/KD，只增加模型重力前馈。",
+  "project": "ur5e_pd_gravity_ff_waypoint_tracking",
+  "model": "模型/universal_robots_ur5e/ur5e_torque.xml",
+  "algorithms": [
+    {
+      "plugin": "trajectory_target_player"
+    },
+    {
+      "plugin": "joint_pd_gravity_ff"
+    },
+    {
+      "plugin": "data_recorder"
+    }
+  ],
+  "parameters": {
+    "joint_pd_gravity_ff": {
+      "KP": 400.0,
+      "KD": 15.0
+    },
+    "trajectory_target_player": {
+      "monitored_joint": 2.0
+    }
+  },
+  "notes": "与纯 PD 组使用相同 KP=400、KD=15和目标速度，唯一算法差异是重力前馈。",
+  "experiment_only": true
+}

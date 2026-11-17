@@ -93,7 +93,7 @@ def import_algorithm_file(file_path: str):
     if not os.path.isfile(file_path):
         return None, f"文件不存在：{file_path}"
 
-    for directory in (_SOFTWARE_DIRECTORY, _projects.ALGORITHM_DIRECTORY):
+    for directory in (_SOFTWARE_DIRECTORY, *_projects.algorithm_directories()):
         if os.path.isdir(directory) and directory not in sys.path:
             sys.path.insert(0, directory)
 
@@ -201,11 +201,11 @@ def find_plugin_class(module, requested_name: str = "") -> tuple[type | None, st
 def read_metadata(cls) -> dict:
     """从插件类上取元信息（面板/清单/录制元信息都要用，所以统一在这里取一次）。"""
     return {
-        "名称": str(getattr(cls, "name", None) or cls.__name__),
-        "版本": str(getattr(cls, "version", "-")),
-        "英文名": str(getattr(cls, "english_name", "") or ""),
-        "说明": str(getattr(cls, "description", "") or ""),
-        "作者": str(getattr(cls, "author", "") or ""),
+        "name": str(getattr(cls, "name", None) or cls.__name__),
+        "version": str(getattr(cls, "version", "-")),
+        "english_name": str(getattr(cls, "english_name", "") or ""),
+        "description": str(getattr(cls, "description", "") or ""),
+        "author": str(getattr(cls, "author", "") or ""),
     }
 
 
@@ -215,7 +215,7 @@ def check_compatibility(instances: list, model) -> tuple[list, list[dict]]:
     `模型` 为 None（`--检查` / `--列项目` 这种没有模型的场景）时全部放行 ——
     预检是为了少踩坑，没有模型就不该拦任何东西。
 
-    被跳过的每一项形如：`{"名称": "末端两点运动（任务空间 PD）", "原因": "需要 6 轴手臂"}`
+    被跳过的每一项形如：`{"name": "末端两点运动（任务空间 PD）", "reason": "需要 6 轴手臂"}`
     """
     if model is None:
         return list(instances), []
@@ -236,7 +236,7 @@ def check_compatibility(instances: list, model) -> tuple[list, list[dict]]:
                   f"{type(exc).__name__}: {exc}")
             compatible.append(plugin)
             continue
-        (skipped if reason else compatible).append({"名称": name, "原因": reason} if reason else plugin)
+        (skipped if reason else compatible).append({"name": name, "reason": reason} if reason else plugin)
     return compatible, skipped
 
 
@@ -247,11 +247,11 @@ def create_plugin(entry: dict | str) -> tuple[object | None, dict, str]:
     实例”的地方；注册表和项目装配不再各写一份动态导入逻辑。
     """
     if isinstance(entry, str):
-        entry = {"插件": entry}
-    module_name = _projects.normalize_algorithm_name((entry or {}).get("插件") or "")
+        entry = {"plugin": entry}
+    module_name = _projects.normalize_algorithm_name((entry or {}).get("plugin") or "")
     entry = dict(entry or {})
-    entry["插件"] = module_name
-    file_path = (entry or {}).get("文件") or _projects.algorithm_file(entry)
+    entry["plugin"] = module_name
+    file_path = (entry or {}).get("file") or _projects.algorithm_file(entry)
     if not module_name:
         return None, {}, "没有给插件注册名"
     if not file_path:
@@ -261,14 +261,16 @@ def create_plugin(entry: dict | str) -> tuple[object | None, dict, str]:
     if module is None:
         return None, {}, f"导入失败 —— {reason}"
 
-    cls, reason = find_plugin_class(module, str((entry or {}).get("类") or ""))
+    cls, reason = find_plugin_class(module, str((entry or {}).get("class") or ""))
     if cls is None:
         return None, {}, reason
 
     metadata = read_metadata(cls)
-    metadata.update({"插件": module_name, "文件": os.path.abspath(file_path), "类": cls.__name__})
+    metadata.update({"plugin": module_name, "file": os.path.abspath(file_path), "class": cls.__name__})
     try:
-        return cls(), metadata, ""
+        instance = cls()
+        instance.plugin_id = module_name
+        return instance, metadata, ""
     except Exception as exc:                                      # noqa: BLE001
         return None, metadata, f"实例化失败 —— {type(exc).__name__}: {exc}"
 
@@ -294,12 +296,12 @@ def assemble_project(project_data: dict | None, project_name: str = "",
     report: list[str] = []
     if algorithm_override is not None:
         # 用户指定的顺序就是执行顺序，**不能**在这里重排（最后一项说了算，见 项目.py）
-        entries = [{"插件": _projects.normalize_algorithm_name(str(x))}
+        entries = [{"plugin": _projects.normalize_algorithm_name(str(x))}
                  for x in algorithm_override if str(x).strip()]
-        discovered = {d["插件"]: d for d in _projects.discover_algorithms()}
+        discovered = {d["plugin"]: d for d in _projects.discover_algorithms()}
         for item in entries:
-            if item["插件"] in discovered:
-                item["文件"] = discovered[item["插件"]]["文件"]
+            if item["plugin"] in discovered:
+                item["file"] = discovered[item["plugin"]]["file"]
         report.append(f"（算法由界面指定：{len(entries)} 个，顺序即执行顺序）")
     else:
         entries = _projects.parse_algorithms(project_data)
@@ -310,27 +312,27 @@ def assemble_project(project_data: dict | None, project_name: str = "",
         return instances, report
 
     for entry in entries:
-        module_name = entry.get("插件", "")
+        module_name = entry.get("plugin", "")
         instance, metadata, reason = create_plugin(entry)
         if instance is None:
             report.append(f"✗ {module_name}：{reason}")
             continue
-        if metadata["名称"] in used_plugin_names:
+        if metadata["name"] in used_plugin_names:
             # 参数面板/消息按"插件名"寻址，重名会让它们串台 —— 直接拒绝，别留隐患
-            report.append(f"✗ {module_name}：插件名「{metadata['名称']}」和前面某个算法重名（已跳过）")
+            report.append(f"✗ {module_name}：插件名「{metadata['name']}」和前面某个算法重名（已跳过）")
             continue
 
-        used_plugin_names.add(metadata["名称"])
+        used_plugin_names.add(metadata["name"])
         instances.append(instance)
-        report.append(f"✓ {metadata['名称']} v{metadata['版本']}"
-                    + (f"  —— {metadata['作者']}" if metadata["作者"] else "")
-                    + (f"  [{os.path.basename(metadata['文件'])}]" if metadata["说明"] else ""))
+        report.append(f"✓ {metadata['name']} v{metadata['version']}"
+                    + (f"  —— {metadata['author']}" if metadata["author"] else "")
+                    + (f"  [{os.path.basename(metadata['file'])}]" if metadata["description"] else ""))
 
     # ---- 兼容性预检：跟当前模型对不上的算法**不启用**（见 检查兼容性 的说明）----
     if model is not None:
         instances, skipped = check_compatibility(instances, model)
         for skipped_item in skipped:
-            report.append(f"– {skipped_item['名称']}：与当前模型不兼容，本次不启用 —— {skipped_item['原因']}")
+            report.append(f"– {skipped_item['name']}：与当前模型不兼容，本次不启用 —— {skipped_item['reason']}")
         if skipped:
             report.append(f"（{len(skipped)} 个算法因模型不兼容被跳过；要改就编辑项目文件里的算法列表）")
 
@@ -412,15 +414,16 @@ def project_from_model(model_path: str, algorithms: object = "*", note: str = ""
     """
     name = _projects.display_model_name(model_path)
     data = {
-        "_说明": "由外壳按模型自动生成的项目（首次点开这个模型时创建）。"
-                 "算法 字段写 \"*\" = 用算法库全部；想只留几个就把它们列出来。",
-        "项目": name,
-        "模型": _projects.relative_to_package(model_path),
-        "算法": algorithms,
-        "参数": {},
+        "schema_version": 2,
+        "comment": "由外壳按模型自动生成的项目（首次点开这个模型时创建）。"
+                   "algorithms 字段写 \"*\" = 用算法库全部；想只留几个就把它们列出来。",
+        "project": name,
+        "model": _projects.relative_to_package(model_path),
+        "algorithms": algorithms,
+        "parameters": {},
     }
     if note:
-        data["备注"] = note
+        data["notes"] = note
     return data
 
 

@@ -24,6 +24,7 @@ runtime_engine.py —— 桌面、浏览器与无界面实验共用的仿真运�
 from __future__ import annotations
 
 import os
+import env_config
 import queue
 import sys
 import threading
@@ -291,8 +292,8 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
     #   宿主窗口的 **3D 视口**需要自己再装一份模型（渲染在自己的线程/上下文里，
     #   不与仿真线程共享 MjData；相关架构验证记录保留在 CHANGELOG 和 Git 历史中）。
     #   与其让两个入口各自猜路径，不如由**已经决定好的那一处**发出来。
-    os.environ["驭臂_当前模型"] = str(model_path or "")
-    os.environ["驭臂_当前项目"] = str(project_name or "")
+    env_config.write("YUBI_CURRENT_MODEL", str(model_path or ""))
+    env_config.write("YUBI_CURRENT_PROJECT", str(project_name or ""))
 
     # ---- 1. 消息通道：两种模式共用同一套"发/收"接口 ----
     #   有窗：官方线程端点（viewer 线程 ↔ 仿真线程），窗口侧每帧派发。
@@ -363,9 +364,9 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
     #     装晚了它们抓到的还是原件，Web 就一条数据都收不到。
     #   ★ 开关：环境变量 驭臂_关Web=1 打开时完全跳过（排查用）。
     _web_tap = None
-    if os.environ.get("驭臂_关Web", "") not in ("1", "true", "yes"):
+    if env_config.read("YUBI_DISABLE_WEB") not in ("1", "true", "yes"):
         try:
-            _web_port = int(os.environ.get("驭臂_Web端口", "") or _web_bridge.DEFAULT_PORT)
+            _web_port = int(env_config.read("YUBI_WEB_PORT") or _web_bridge.DEFAULT_PORT)
         except ValueError:
             _web_port = _web_bridge.DEFAULT_PORT
         try:
@@ -379,7 +380,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                 if _web_tap is not None:
                     send_outlet.install(_new_implementation)
                     send_outlet.tap_installed = True
-                print(f"【Web】数据出口已开： {_web_bridge.health()['地址']}"
+                print(f"【Web】数据出口已开： {_web_bridge.health()['address']}"
                       f"（浏览器打开即可看真实指标流；关掉：--无web 或 驭臂_关Web=1）",
                       flush=True)
             else:
@@ -591,8 +592,8 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                 if algorithm_overrides is not None:
                     run_config = [str(x) for x in algorithm_overrides if str(x).strip()]
                 else:
-                    run_config = [str(x.get("插件", "")) for x in _project.parse_algorithms(data)
-                            if isinstance(x, dict) and str(x.get("插件", "")).strip()]
+                    run_config = [str(x.get("plugin", "")) for x in _project.parse_algorithms(data)
+                            if isinstance(x, dict) and str(x.get("plugin", "")).strip()]
 
                 # ★ 重置必须在**装配之前**：多数算法的设计是"拿第一次看到的位置当基准"
                 #   （关节pd控制的 `目标`、正弦摆动的 `基准`）。先把机器人摆回默认姿态，
@@ -628,7 +629,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                 #   谁在控盘 / 谁被覆盖 —— 供界面显示（见 装配器._抢方向盘体检 的说明）。
                 #   判定依据是算法自己声明的 `接管控制`（默认 True）：
                 #   多个都声明接管时，**只有最后一个真正生效**，前面的被整体覆盖。
-                _control_disk = [a["名称"] for a in algorithm_info if a.get("接管控制", True)]
+                _control_disk = [a["name"] for a in algorithm_info if a.get("takes_control", True)]
                 control_disk = ""
                 overrides: list = []
                 if len(_control_disk) == 1:
@@ -669,14 +670,14 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                 if persist and algorithm_overrides is not None and data is not None:
                     # 【Save】：把界面上选的那组写回项目文件（只动 `算法` 字段，别的字段原样）
                     write_back = dict(data)
-                    write_back.pop("_顺序说明", None)          # 那是给人看的说明，重写一份新的
-                    write_back["算法"] = [{"插件": str(x)} for x in algorithm_overrides if str(x).strip()]
-                    write_back["_顺序说明"] = (
+                    write_back.pop("order_note", None)          # 那是给人看的说明，重写一份新的
+                    write_back["algorithms"] = [{"plugin": str(x)} for x in algorithm_overrides if str(x).strip()]
+                    write_back["order_note"] = (
                         "列表顺序 = 每步的执行顺序：最后一项最后写 ctrl[:]，所以它说了算。"
                         "（本列表由界面【Algorithms】面板的 Save 写回）")
                     if _project.save_project(write_back):
                         currently_persisted = True
-                        report.append(f"（已把这组算法写回 项目/{new_project_name}.json）")
+                        report.append(f"（已把这组算法写回 projects/{os.path.basename(_project.project_file_path(new_project_name))}）")
                     else:
                         report.append("✗ 写回项目文件失败（选择已在本次运行生效，但没记住）")
 
@@ -702,7 +703,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                         project=current_project_name,
                         model_path=new_model_path,
                         model_display_name=_project.display_model_name(new_model_path) if new_model_path else "",
-                        algorithms=algorithm_info,
+                        algorithms=plugin_framework.algorithm_info_wire(algorithm_info),
                         report=report,
                         algorithm_library=current_algorithm_library,
                         saved=currently_persisted,
@@ -745,7 +746,11 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                     return ""
                 restored_count = 0
                 for _p in instances:
-                    plugin = stored.get(str(getattr(_p, "name", ""))) or {}
+                    plugin_id = str(getattr(_p, "plugin_id", "") or "")
+                    plugin = stored.get(plugin_id) or {}
+                    if not plugin:
+                        # Version-1 projects stored parameters under the display name.
+                        plugin = stored.get(str(getattr(_p, "name", ""))) or {}
                     for _parameter_name, _value in plugin.items():
                         item = getattr(_p, "set_parameter", None)
                         if item is None:
@@ -763,7 +768,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
             #   它的用途有两个：① 发给界面做【Algorithms】面板的候选列表
             #   ② 进发布指纹，好让"往算法库里加了个 .py"这件事能被界面看见。
             try:
-                current_algorithm_library = [d["插件"] for d in _project.discover_algorithms()]
+                current_algorithm_library = [d["plugin"] for d in _project.discover_algorithms()]
                 print(f"【算法库】可选算法 {len(current_algorithm_library)} 个：{'、'.join(current_algorithm_library)}", flush=True)
             except Exception as exc:                                      # noqa: BLE001
                 print(f"⚠ 算法库扫描失败（界面上的算法列表会是空的）：{type(exc).__name__}: {exc}")
@@ -928,7 +933,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                     if current_project_name and path:
                         current_config = _project.load_project(current_project_name)
                         if current_config:
-                            declared_path = str(current_config.get("模型") or "")
+                            declared_path = str(current_config.get("model") or "")
                             current_project_uses_model = (
                                 bool(declared_path)
                                 and os.path.normpath(_project.absolute_path(declared_path)) == os.path.normpath(path))
@@ -1192,8 +1197,8 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                         import command_bridge as _command_bridge
                         _command_bridge.drain_and_inject(command_queue_obj)
                     except Exception as exc:                             # noqa: BLE001
-                        if not errors.get("命令桥已报"):
-                            errors["命令桥已报"] = True
+                        if not errors.get("command_bridge_reported"):
+                            errors["command_bridge_reported"] = True
                             print(f"⚠ 命令注入失败（Web 端的按钮会没反应）："
                                   f"{type(exc).__name__}: {exc}", flush=True)
 
@@ -1300,7 +1305,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                         project=current_project_name,
                         model_path=(model_applier.current_path if model_applier is not None else ""),
                         model_display_name=(model_applier.current_display_name if model_applier is not None else ""),
-                        algorithms=current_algorithm_info,
+                        algorithms=plugin_framework.algorithm_info_wire(current_algorithm_info),
                         algorithm_library=current_algorithm_library,
                         saved=currently_persisted,
                         active_controller=current_control_disk,
@@ -1347,7 +1352,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
         except KeyboardInterrupt:
             print("\n【仿真线程】收到 Ctrl+C，正在退出…", flush=True)
         except Exception as exc:                             # noqa: BLE001
-            errors["异常"] = exc
+            errors["error"] = exc
             session.error = exc
             session.ready.set()
             print(f"\n✗ 仿真线程出错：{type(exc).__name__}: {exc}")
@@ -1382,7 +1387,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
         except KeyboardInterrupt:
             print("\n收到 Ctrl+C，正在退出…", flush=True)
         stop_event.set()
-        if "异常" in errors:
+        if "error" in errors:
             return 1
         print("无窗运行结束。")
         return 0
@@ -1448,7 +1453,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
 
     stop_event.set()
     thread.join(timeout=2.0)
-    if "异常" in errors:
+    if "error" in errors:
         print(f"（仿真线程的异常已在上面打印）")
         return 1
     print("窗口已关闭。")

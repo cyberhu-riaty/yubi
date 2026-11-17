@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      // 生成物（contract.ts / themes.ts）落在 软件/web/ —— 由 Python 侧生成，
+      // 这里用别名指过去，前端就不必"抄一份契约"。
+      "@generated/*": ["./src/generated/*"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}

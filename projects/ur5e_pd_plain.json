@@ -1,0 +1,22 @@
+{
+  "schema_version": 2,
+  "_comment": "三组控制对比实验之一：纯 PD，无积分、无重力前馈。",
+  "project": "ur5e_pd_plain",
+  "model": "模型/universal_robots_ur5e/ur5e_torque.xml",
+  "algorithms": [
+    {
+      "plugin": "joint_pd_plain"
+    },
+    {
+      "plugin": "data_recorder"
+    }
+  ],
+  "parameters": {
+    "joint_pd_plain": {
+      "KP": 350.0,
+      "KD": 50.0
+    }
+  },
+  "notes": "与 PD＋重力前馈组使用完全相同的 KP/KD。",
+  "experiment_only": true
+}
