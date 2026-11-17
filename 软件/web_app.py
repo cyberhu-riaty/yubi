@@ -253,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     # ---- 3. 决定模型与项目 ----
     model_path, description = find_model()
     if not model_path:
-        print("✗ 一个模型都没找到：用 --模型 指定一个，或先跑 工具/导入模型.py", flush=True)
+        print("✗ 一个模型都没找到：用 --模型 指定一个，或先跑 工具/import_model.py", flush=True)
         return 1
     project_name = select_project(model_path, args.project)
     if args.enable_gravity:

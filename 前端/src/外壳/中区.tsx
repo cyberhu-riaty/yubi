@@ -22,7 +22,7 @@ import { Button } from "../组件/按钮";
 import { ValueTable, NumericText, type ValueRow } from "../组件/数值表";
 import { 命令, 用仓库 } from "../数据/仓库";
 import { 命令收尾, 记命令发出 } from "../数据/日志";
-import type { SamplePoint } from "../数据/连接";
+import type { SamplePoint } from "../数据/connection";
 import { 契约版本, 协议版本 } from "@生成/契约";
 import { 用风格 } from "../生成/外观";
 import { connectionTranslationKeys, useTranslation } from "../视图/文案";

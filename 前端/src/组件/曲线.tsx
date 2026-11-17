@@ -13,7 +13,7 @@
  * ⚠️ 这里**不做**平滑、不做外推、不做滤波：图上的每一个像素都必须能追到一个真实采样点。
  */
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { SamplePoint } from "../数据/连接";
+import type { SamplePoint } from "../数据/connection";
 import { formatNumber, useTranslation } from "../视图/文案";
 
 export interface LineChartProps {

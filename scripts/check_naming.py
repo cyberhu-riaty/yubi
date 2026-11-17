@@ -94,6 +94,12 @@ REMOVED_PLUGIN_METHODS = {
 }
 REMOVED_PLUGIN_ATTRIBUTES = {"名称", "英文名", "版本", "作者", "说明", "接管控制"}
 ASCII_IDENTIFIER_FILES = (
+    "工具/import_model.py",
+    "工具/urdf_to_mjcf.py",
+    "工具/generate_frontend_assets.py",
+    "工具/验证/contract_selfcheck.py",
+    "前端/测试/fake_backend.py",
+    "前端/测试/browser_smoke.py",
     "软件/contract.py",
     "软件/契约.py",
     "软件/official_api.py",

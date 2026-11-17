@@ -28,8 +28,8 @@ import {
 } from "../数据/日志";
 import { Tag } from "../组件/标签";
 import { 命令, 用仓库, type ProjectState, type 诊断报告 } from "../数据/仓库";
-import { 请求跳步 } from "./跳步";
-import { 用节拍 } from "../数据/时钟";
+import { requestStepNavigation } from "./step_navigation";
+import { useClock } from "../数据/clock";
 import { connectionTranslationKeys, useTranslation, formatTime } from "../视图/文案";
 
 export type 控制台页签 = "输出" | "事件" | "问题" | "诊断";
@@ -115,7 +115,7 @@ export function 控制台({ 页签, on换页签, on收起 }: 控制台参数) {
   const 握手 = 用仓库((s) => s.握手);
   const 项目 = 用仓库((s) => s.项目.数据);
   const 诊断报告 = 用仓库((s) => s.诊断.数据);
-  const 节拍 = 用节拍();
+  const 节拍 = useClock();
 
   const [等级筛, 设等级筛] = useState<等级筛>("全部");
   const [来源筛, 设来源筛] = useState<string>("全部");
@@ -503,7 +503,7 @@ export function 控制台({ 页签, on换页签, on收起 }: 控制台参数) {
 
 function 速率表({ 行 }: { 行: 速率行[] }) {
   const t = useTranslation();
-  const 节拍 = 用节拍();
+  const 节拍 = useClock();
   void 节拍; // 每秒重画一次：年龄列要跟着走
   return (
     <div className="等宽 mt-1 text-[0.82em]">
@@ -821,7 +821,7 @@ function 诊断页({ 报告 }: { 报告: 诊断报告 | null }) {
         >
           {运行中 ? t("控制台.诊断.运行中") : t("控制台.诊断.运行")}
         </button>
-        <button type="button" className="控制台动作" onClick={() => 请求跳步("诊断")}>
+        <button type="button" className="控制台动作" onClick={() => requestStepNavigation("诊断")}>
           {t("控制台.诊断.完整")}
         </button>
       </div>

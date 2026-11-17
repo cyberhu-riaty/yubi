@@ -12,17 +12,17 @@
  *   组标题说明它们各自属于哪一组。
  */
 import type { ReactNode } from "react";
-import { 底部步骤, 任务步骤, 运行步骤, type 步骤id } from "./任务流";
+import { 底部步骤, 任务步骤, 运行步骤, type StepId } from "./任务流";
 import { useTranslation } from "../视图/文案";
 
 export interface 活动栏参数 {
-  当前: 步骤id;
+  当前: StepId;
   侧栏开: boolean;
-  on选步: (id: 步骤id) => void;
+  on选步: (id: StepId) => void;
 }
 
 /** 16×16 视图框，1.5 描边；只画轮廓，不填色（跟随 currentColor） */
-function 图标({ 名 }: { 名: 步骤id }) {
+function 图标({ 名 }: { 名: StepId }) {
   const 公共 = {
     width: 18,
     height: 18,
@@ -141,7 +141,7 @@ function 格子({
   on按下,
   快捷键,
 }: {
-  名: 步骤id;
+  名: StepId;
   短名: string;
   说明: string;
   当前: boolean;

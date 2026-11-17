@@ -242,8 +242,8 @@ class MyController(ControlPlugin):
 模型来源与许可见各模型目录内的 `LICENSE`。需要导入更多模型：
 
 ```bash
-.venv/bin/python 工具/导入模型.py --列表
-.venv/bin/python 工具/导入模型.py universal_robots_ur5e
+.venv/bin/python 工具/import_model.py --列表
+.venv/bin/python 工具/import_model.py universal_robots_ur5e
 ```
 
 ## 验证
@@ -251,7 +251,7 @@ class MyController(ControlPlugin):
 界面「诊断」页可以一键跑 11 套检查。也可以在终端单独跑：
 
 ```bash
-.venv/bin/python 工具/验证/契约自检.py
+.venv/bin/python 工具/验证/contract_selfcheck.py
 .venv/bin/python 工具/验证/project_selfcheck.py
 .venv/bin/python 工具/验证/trajectory_planning_selfcheck.py
 .venv/bin/python 工具/验证/parameter_transaction_selfcheck.py

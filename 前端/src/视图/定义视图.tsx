@@ -23,7 +23,7 @@ import { Tag } from "../组件/标签";
 import { PathValue } from "../组件/路径值";
 import { 命令, 用仓库 } from "../数据/仓库";
 import { 命令收尾, 记命令发出, 记注意 } from "../数据/日志";
-import type { 回执 } from "../数据/连接";
+import type { CommandReceipt } from "../数据/connection";
 import { useTranslation } from "./文案";
 
 /** 从 `算法` 那一列里取一个字段（后端给的是 `Record<string, unknown>[]`，形状由插件定） */
@@ -93,9 +93,9 @@ export function 定义视图() {
   const [显示名, 设显示名] = useState("");
   const [忙, 设忙] = useState(false);
   const [算法忙, 设算法忙] = useState<"应用" | "保存" | null>(null);
-  const [回执条, 设回执条] = useState<回执 | null>(null);
-  const [算法回执, 设算法回执] = useState<回执 | null>(null);
-  const [目标回执, 设目标回执] = useState<回执 | null>(null);
+  const [回执条, 设回执条] = useState<CommandReceipt | null>(null);
+  const [算法回执, 设算法回执] = useState<CommandReceipt | null>(null);
+  const [目标回执, 设目标回执] = useState<CommandReceipt | null>(null);
   const [目标忙, 设目标忙] = useState(false);
   const [目标草稿, 设目标草稿] = useState<string[]>([]);
   const [报告开, 设报告开] = useState(false);

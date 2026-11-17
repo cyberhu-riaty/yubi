@@ -9,7 +9,7 @@
  * 注意**没有**任何数据逻辑：视图自己去 `数据/仓库.ts` 订阅自己关心的那一小块
  * （`约定.md` §二：不把整个 state 往下传）。
  */
-import type { 步骤id } from "./任务流";
+import type { StepId } from "./任务流";
 import { 取步骤 } from "./任务流";
 import { 上下文条 } from "./上下文条";
 import { useTranslation } from "../视图/文案";
@@ -28,12 +28,12 @@ import { 帮助视图 } from "../视图/帮助视图";
 import { 关于视图 } from "../视图/关于视图";
 
 export interface 侧栏参数 {
-  步骤: 步骤id;
+  步骤: StepId;
   开: boolean;
   on收起: () => void;
 }
 
-function 画视图(步骤: 步骤id) {
+function 画视图(步骤: StepId) {
   switch (步骤) {
     case "定义":
       return <定义视图 />;

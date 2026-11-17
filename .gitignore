@@ -125,7 +125,7 @@ research_*.md
 #   为什么可以进库：它们来自 mujoco_menagerie，**每个模型目录都自带 LICENSE**
 #   （BSD 类许可，允许再分发）—— 随资产一起提交符合许可要求。
 #   代价：108 MB 二进制进历史后永久占用，之后每次 clone/备份都背着它。
-#   若日后想瘦身：把 模型/ 移出仓库、改用 `工具/导入模型.py` 按 `工具/模型清单.json`
+#   若日后想瘦身：把 模型/ 移出仓库、改用 `工具/import_model.py` 按 `工具/模型清单.json`
 #   里钉住的 menagerie commit 重建（注意 robotiq_2f85 不在导入清单里，需单独处理）。
 #
 # 项目/   —— 算法与模型的绑定声明，**是项目内容**，必须进库。
@@ -147,3 +147,6 @@ research_*.md
 # pnpm 的虚拟存储：某些 pnpm 版本会无视 store-dir 设置，直接落在仓库根上。
 # 它是纯缓存（几百 MB），绝不该入库。
 .pnpm-store/
+
+# Local publishing archives and cached copies
+归档/

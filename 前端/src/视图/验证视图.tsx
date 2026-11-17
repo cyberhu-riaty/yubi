@@ -17,10 +17,10 @@ import { Button } from "../组件/按钮";
 import { Tag } from "../组件/标签";
 import { DataTable, NumericText, formatValue, type TableColumn } from "../组件/数值表";
 import { 命令, 用仓库 } from "../数据/仓库";
-import { 用节拍 } from "../数据/时钟";
-import { 请求跳步 } from "../外壳/跳步";
+import { useClock } from "../数据/clock";
+import { requestStepNavigation } from "../外壳/step_navigation";
 import type { ParameterItem } from "../数据/仓库";
-import { 提示错误 } from "../数据/提示";
+import { showError } from "../数据/toasts";
 import { useTranslation } from "./文案";
 
 /** `s.曲线` 的环形缓冲窗口（`数据/仓库.ts` 里就是 120 秒） */
@@ -162,7 +162,7 @@ export function 验证视图() {
   const 参数 = 用仓库((s) => s.参数.数据);
   const 参数帧号 = 用仓库((s) => s.参数.帧号);
   const 仿真运行 = 用仓库((s) => s.仿真.数据?.state === "running");
-  const 节拍 = 用节拍();
+  const 节拍 = useClock();
 
   const 名们 = useMemo(() => Object.keys(曲线数).sort(), [曲线数]);
   const [隐藏, 设隐藏] = useState<Set<string>>(new Set());
@@ -292,12 +292,12 @@ export function 验证视图() {
     try {
       const 回执 = await 命令.updateParameters({ [全名]: 新值 });
       if (!回执.通过) {
-        提示错误(回执.说明);
+        showError(回执.说明);
         return false;
       }
       return true;
     } catch (异常) {
-      提示错误(`改参数失败：${String(异常)}`);
+      showError(`改参数失败：${String(异常)}`);
       return false;
     } finally {
       设改中(null);
@@ -445,7 +445,7 @@ export function 验证视图() {
           <div className="mt-2 未接入 space-y-1">
             <div>{t("验证.没有指标")}</div>
             <div className="text-[0.85em]">{t("验证.空原因")}</div>
-            <Button size="small" variant="ghost" onPress={() => 请求跳步("插件")}>
+            <Button size="small" variant="ghost" onPress={() => requestStepNavigation("插件")}>
               {t("验证.去插件")}
             </Button>
           </div>

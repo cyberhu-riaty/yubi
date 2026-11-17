@@ -12,7 +12,7 @@
  */
 import type { TranslationKey } from "../视图/文案";
 
-export type 步骤id =
+export type StepId =
   | "定义"
   | "规划"
   | "验证"
@@ -26,7 +26,7 @@ export type 步骤id =
   | "关于";
 
 export interface 步骤 {
-  id: 步骤id;
+  id: StepId;
   /** 活动栏/侧栏的标题文案键 */
   名键: TranslationKey;
   /** 悬停说明的文案键 */
@@ -60,7 +60,7 @@ export const 任务步骤 = 步骤表.filter((s) => s.组 === "任务");
 export const 运行步骤 = 步骤表.filter((s) => s.组 === "运行");
 export const 底部步骤 = 步骤表.filter((s) => s.组 === "底部");
 
-export function 取步骤(id: 步骤id): 步骤 {
+export function 取步骤(id: StepId): 步骤 {
   const 找 = 步骤表.find((s) => s.id === id);
   if (!找) throw new Error(`任务流里没有这一步：${id}`);
   return 找;

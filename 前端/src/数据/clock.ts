@@ -9,36 +9,36 @@
  */
 import { useSyncExternalStore } from "react";
 
-const 订阅者 = new Set<() => void>();
-let 定时器: number | null = null;
-let 最近 = Date.now();
+const subscribers = new Set<() => void>();
+let timers: number | null = null;
+let latest = Date.now();
 
-function 起步(): void {
-  if (定时器 !== null) return;
-  定时器 = window.setInterval(() => {
-    最近 = Date.now();
-    for (const f of 订阅者) f();
+function startTicker(): void {
+  if (timers !== null) return;
+  timers = window.setInterval(() => {
+    latest = Date.now();
+    for (const f of subscribers) f();
   }, 1000);
 }
 
-function 停步(): void {
-  if (定时器 === null) return;
-  window.clearInterval(定时器);
-  定时器 = null;
+function stopTicker(): void {
+  if (timers === null) return;
+  window.clearInterval(timers);
+  timers = null;
 }
 
 /** 订阅 1 Hz 节拍，返回当前毫秒时间戳（每秒变一次，可直接进依赖） */
-export function 用节拍(): number {
+export function useClock(): number {
   return useSyncExternalStore(
-    (回调) => {
-      订阅者.add(回调);
-      起步();
+    (callback) => {
+      subscribers.add(callback);
+      startTicker();
       return () => {
-        订阅者.delete(回调);
-        if (!订阅者.size) 停步();
+        subscribers.delete(callback);
+        if (!subscribers.size) stopTicker();
       };
     },
-    () => 最近,
-    () => 最近,
+    () => latest,
+    () => latest,
   );
 }

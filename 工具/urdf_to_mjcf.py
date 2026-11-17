@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-urdf_转_mjcf.py —— 把 URDF 脚本化转成 MJCF，并把「URDF 表达不了、必须手工补」的东西补上。
+urdf_to_mjcf.py —— 把 URDF 脚本化转成 MJCF，并把「URDF 表达不了、必须手工补」的东西补上。
 
 为什么需要这个脚本（而不是一行 model = mujoco.MjModel.from_xml_path("x.urdf")）：
   1. MuJoCo 能「读」URDF，但它不会替你写回 MJCF；写出必须走 MjSpec 两段式
@@ -18,9 +18,9 @@ urdf_转_mjcf.py —— 把 URDF 脚本化转成 MJCF，并把「URDF 表达不�
   · 一个 dcmotor 执行器（MuJoCo 3.12+ 内置，直接建真电机的电气+机械模型）
 
 用法：
-  python3 urdf_转_mjcf.py 输入.urdf -o 输出.xml
-  python3 urdf_转_mjcf.py 输入.urdf -o 输出.xml --report          # 打印丢失/改动清单
-  python3 urdf_转_mjcf.py 输入.urdf -o 输出.xml --参数 参数.json    # 覆盖关节/电机参数
+  python3 urdf_to_mjcf.py 输入.urdf -o 输出.xml
+  python3 urdf_to_mjcf.py 输入.urdf -o 输出.xml --report          # 打印丢失/改动清单
+  python3 urdf_to_mjcf.py 输入.urdf -o 输出.xml --参数 参数.json    # 覆盖关节/电机参数
 
 参数.json 格式（都可省略）：
   {
@@ -69,7 +69,7 @@ def _import_mujoco():
 _DCMOTOR_CACHE: dict = {}
 
 
-def _dcmotor可用(mujoco) -> bool:
+def _dcmotor_available(mujoco) -> bool:
     """探测本机 MuJoCo 的 dcmotor 是否接受 R>0。
 
     实测 mujoco 3.13.0 / macOS / arm64：R>0 会报
@@ -92,7 +92,7 @@ def _dcmotor可用(mujoco) -> bool:
     return _DCMOTOR_CACHE["v"]
 
 
-def 读_urdf摘要(path: pathlib.Path) -> dict:
+def read_urdf_summary(path: pathlib.Path) -> dict:
     """在 MuJoCo 介入之前，先把 URDF 自己的账记下来，用于事后对账。"""
     root = ET.parse(path).getroot()
     links = {}
@@ -132,40 +132,40 @@ def 读_urdf摘要(path: pathlib.Path) -> dict:
     return {"links": links, "joints": joints, "extras": extras}
 
 
-def 找根连杆(summary: dict) -> str | None:
-    子 = {v["子"] for v in summary["joints"].values() if v["子"]}
+def find_root_link(summary: dict) -> str | None:
+    child = {v["子"] for v in summary["joints"].values() if v["子"]}
     for name in summary["links"]:
-        if name not in 子:
+        if name not in child:
             return name
     return None
 
 
-def 转换(输入: pathlib.Path, 输出: pathlib.Path, 参数: dict, 打报告: bool) -> int:
+def convert(input_path: pathlib.Path, output_path: pathlib.Path, config: dict, print_report: bool) -> int:
     mujoco = _import_mujoco()
 
-    摘要 = 读_urdf摘要(输入)
+    summary = read_urdf_summary(input_path)
 
     # ---------- 第 1 段：MuJoCo 读 URDF 成 MjSpec ----------
     try:
-        spec = mujoco.MjSpec.from_file(str(输入))
+        spec = mujoco.MjSpec.from_file(str(input_path))
     except Exception as e:
         sys.stderr.write(f"MuJoCo 读入 URDF 失败：{type(e).__name__}: {e}\n")
         return 3
 
-    丢失 = {"根连杆惯性": None, "关节armature": [], "执行器": 0}
-    编译前关节数 = 0
+    omissions = {"根连杆惯性": None, "关节armature": [], "执行器": 0}
+    joint_count_before_compile = 0
 
     # ---------- 第 2 段：补 URDF 表达不了、或读入时丢掉的东西 ----------
-    关节参数 = 参数.get("关节", {})
-    电机参数 = 参数.get("电机", {})
+    joint_config = config.get("关节", {})
+    motor_config = config.get("电机", {})
 
     # 2.1 逐个关节补 armature / damping / frictionloss
     for j in spec.joints:
-        编译前关节数 += 1
-        cfg = 关节参数.get(j.name, {})
+        joint_count_before_compile += 1
+        cfg = joint_config.get(j.name, {})
         if cfg.get("armature") is not None:
             j.armature = float(cfg["armature"])
-            丢失["关节armature"].append(j.name)
+            omissions["关节armature"].append(j.name)
         if cfg.get("damping") is not None:
             d = float(cfg["damping"])
             j.damping = [d, d, d]
@@ -173,36 +173,36 @@ def 转换(输入: pathlib.Path, 输出: pathlib.Path, 参数: dict, 打报告: 
             j.frictionloss = float(cfg["frictionloss"])
 
     # 2.2 给每个关节建一个 dcmotor 执行器
-    警告 = []
-    for 关节名, cfg in 电机参数.items():
+    warnings = []
+    for joint_name, cfg in motor_config.items():
         try:
-            j = spec.joint(关节名)
+            j = spec.joint(joint_name)
         except Exception:
-            sys.stderr.write(f"警告：参数里给了 {关节名}，但 URDF 里没有这个关节，已跳过\n")
+            sys.stderr.write(f"警告：参数里给了 {joint_name}，但 URDF 里没有这个关节，已跳过\n")
             continue
         Kt = cfg.get("Kt")
         Ke = cfg.get("Ke", Kt)
         R = cfg.get("R")
-        电压 = cfg.get("电压")
-        堵转 = cfg.get("堵转扭矩")
-        空载rpm = cfg.get("空载转速rpm")
+        voltage = cfg.get("电压")
+        stall_torque = cfg.get("堵转扭矩")
+        no_load_rpm = cfg.get("空载转速rpm")
 
         # 先判断参数够不够，不够就不建执行器（避免建了再删）
-        if Kt is None and None in (电压, 堵转, 空载rpm):
-            警告.append(
-                f"{关节名}: 电机参数不全（需要 Kt+Ke，或 电压+堵转扭矩+空载转速rpm），已跳过该执行器"
+        if Kt is None and None in (voltage, stall_torque, no_load_rpm):
+            warnings.append(
+                f"{joint_name}: 电机参数不全（需要 Kt+Ke，或 电压+堵转扭矩+空载转速rpm），已跳过该执行器"
             )
             continue
 
         act = spec.add_actuator()
-        act.name = f"{关节名}_motor"
-        act.target = 关节名
+        act.name = f"{joint_name}_motor"
+        act.target = joint_name
         act.trntype = mujoco.mjtTrn.mjTRN_JOINT
         gear = float(cfg.get("gear", 1.0))
         act.gear = [gear, 0, 0, 0, 0, 0]
 
         if Kt is not None:
-            if _dcmotor可用(mujoco) and R and float(R) > 0:
+            if _dcmotor_available(mujoco) and R and float(R) > 0:
                 # 本机 MuJoCo 支持带电阻的 dcmotor：真正的电气动力学
                 act.set_to_dcmotor([float(Kt), float(Ke or Kt)], float(R))
             else:
@@ -214,21 +214,21 @@ def 转换(输入: pathlib.Path, 输出: pathlib.Path, 参数: dict, 打报告: 
                 act.gainprm = [float(Kt), float(Ke or Kt), 0, 0, 0, 0, 0, 0, 0, 0]
                 act.biasprm = [0.0] * 10
                 act.dynprm = [0.0] * 10
-                退因 = (
+                fallback_reason = (
                     "本机 mujoco 的 dcmotor 无法接受 R≠0（报 inconsistent state array dimension）"
                     if R else "未提供相电阻 R"
                 )
-                警告.append(
-                    f"{关节名}: 退回 <motor>（{退因}）。ctrl 现在是**电流指令(A)**，"
+                warnings.append(
+                    f"{joint_name}: 退回 <motor>（{fallback_reason}）。ctrl 现在是**电流指令(A)**，"
                     f"输出力矩 = gear × Kt × ctrl = {gear} × {Kt} × ctrl。"
                     + (f"铭牌 R={R} Ω 已写进 MJCF 注释备查。" if R else "")
                 )
         else:
             # 只有铭牌三项：gainprm 保持 [1,1]，把 nominal 记进注释待人工确认
-            act.set_to_dcmotor([1.0, 1.0], 0.0, nominal=[float(电压), float(堵转), float(空载rpm) * RPM])
-            警告.append(
-                f"{关节名}: 走 nominal 路线（电压 {电压}V / 堵转 {堵转}N·m / 空载 {空载rpm}rpm）。"
-                f"nominal 第三项单位是 rad/s，脚本已换算为 {float(空载rpm) * RPM:.6g} rad/s；"
+            act.set_to_dcmotor([1.0, 1.0], 0.0, nominal=[float(voltage), float(stall_torque), float(no_load_rpm) * RPM])
+            warnings.append(
+                f"{joint_name}: 走 nominal 路线（电压 {voltage}V / 堵转 {stall_torque}N·m / 空载 {no_load_rpm}rpm）。"
+                f"nominal 第三项单位是 rad/s，脚本已换算为 {float(no_load_rpm) * RPM:.6g} rad/s；"
                 f"gainprm 需按 MuJoCo 官方文档手工确认后再改。"
             )
 
@@ -239,37 +239,37 @@ def 转换(输入: pathlib.Path, 输出: pathlib.Path, 参数: dict, 打报告: 
         sys.stderr.write(f"MuJoCo 编译失败：{type(e).__name__}: {e}\n")
         return 3
 
-    输出.parent.mkdir(parents=True, exist_ok=True)
-    spec.to_file(str(输出))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    spec.to_file(str(output_path))
 
     # 3.1 把不支持的 R 以注释形式记在 MJCF 里，避免参数丢失
-    if 警告 or 参数:
-        txt = 输出.read_text(encoding="utf-8")
-        注 = ["<!-- 由 urdf_转_mjcf.py 生成；以下为 URDF 表达不了、需手工确认的量 -->"]
-        for 关节名, cfg in 电机参数.items():
+    if warnings or config:
+        txt = output_path.read_text(encoding="utf-8")
+        notes = ["<!-- 由 urdf_to_mjcf.py 生成；以下为 URDF 表达不了、需手工确认的量 -->"]
+        for joint_name, cfg in motor_config.items():
             if cfg.get("R"):
-                注.append(f"<!-- {关节名}: 相电阻 R = {cfg['R']} Ω（mujoco 3.13.0 无法写入 dcmotor） -->")
+                notes.append(f"<!-- {joint_name}: 相电阻 R = {cfg['R']} Ω（mujoco 3.13.0 无法写入 dcmotor） -->")
             if cfg.get("堵转扭矩") and cfg.get("空载转速rpm"):
-                注.append(
-                    f"<!-- {关节名}: 铭牌 电压={cfg.get('电压')}V 堵转={cfg['堵转扭矩']}N·m "
+                notes.append(
+                    f"<!-- {joint_name}: 铭牌 电压={cfg.get('电压')}V 堵转={cfg['堵转扭矩']}N·m "
                     f"空载={cfg['空载转速rpm']}rpm -->"
                 )
-        txt = txt.replace("<mujoco", "\n".join(注) + "\n<mujoco", 1)
-        输出.write_text(txt, encoding="utf-8")
+        txt = txt.replace("<mujoco", "\n".join(notes) + "\n<mujoco", 1)
+        output_path.write_text(txt, encoding="utf-8")
 
     # ---------- 第 4 段：对账报告 ----------
-    m = mujoco.MjModel.from_xml_path(str(输出))
-    if 打报告:
+    m = mujoco.MjModel.from_xml_path(str(output_path))
+    if print_report:
         print("=" * 72)
-        print(f"URDF   : {输入}")
-        print(f"MJCF   : {输出}")
+        print(f"URDF   : {input_path}")
+        print(f"MJCF   : {output_path}")
         print("=" * 72)
         print("\n【URDF 原始内容】")
-        print(f"  link 数          : {len(摘要['links'])}")
-        print(f"  joint 数         : {len(摘要['joints'])}")
-        有质量 = [k for k, v in 摘要["links"].items() if v["质量"] is not None]
-        print(f"  带质量信息的 link: {len(有质量)} / {len(摘要['links'])}  {有质量}")
-        print(f"  URDF 里 MUJOCO 读不懂的元素: {摘要['extras']}")
+        print(f"  link 数          : {len(summary['links'])}")
+        print(f"  joint 数         : {len(summary['joints'])}")
+        mass_links = [k for k, v in summary["links"].items() if v["质量"] is not None]
+        print(f"  带质量信息的 link: {len(mass_links)} / {len(summary['links'])}  {mass_links}")
+        print(f"  URDF 里 MUJOCO 读不懂的元素: {summary['extras']}")
 
         print("\n【转换后 MJCF】")
         print(f"  body  : {[mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, i) for i in range(m.nbody)]}")
@@ -279,50 +279,50 @@ def 转换(输入: pathlib.Path, 输出: pathlib.Path, 参数: dict, 打报告: 
         print(f"  dof_armature: {m.dof_armature}")
         print(f"  dof_frictionloss: {m.dof_frictionloss}")
 
-        urdf总质量 = sum(v["质量"] for v in 摘要["links"].values() if v["质量"])
-        print(f"\n【对账】URDF 总质量 {urdf总质量:.6g} kg  vs  MJCF 总质量 {m.body_subtreemass[0]:.6g} kg")
-        if abs(urdf总质量 - m.body_subtreemass[0]) > 1e-9:
+        urdf_total_mass = sum(v["质量"] for v in summary["links"].values() if v["质量"])
+        print(f"\n【对账】URDF 总质量 {urdf_total_mass:.6g} kg  vs  MJCF 总质量 {m.body_subtreemass[0]:.6g} kg")
+        if abs(urdf_total_mass - m.body_subtreemass[0]) > 1e-9:
             print("  ⚠️ 对不上。常见原因：根连杆的 <inertial> 被 MuJoCo 丢掉了")
             print("     （根杆带质量时会被降级成 worldbody 下的裸 geom，不再是 body）。")
             print("     → 解决办法：在 URDF 里给根杆加一个 <link name='world'/> 作父级，")
             print("       或转换后手工把根杆重新包成 body，或直接改 MJCF。")
         print("\n【必须手工补的东西】")
-        if 丢失["关节armature"]:
-            print(f"  已按 --参数 补 armature: {丢失['关节armature']}")
+        if omissions["关节armature"]:
+            print(f"  已按 --参数 补 armature: {omissions['关节armature']}")
         else:
             print("  · 关节 armature（转子折算惯量）：URDF 没有这个概念，本脚本未补 → 请用 --参数 给")
         print("  · 电气参数 Kt/Ke/R/L：URDF 里没有，只能从厂商 datasheet 或自己辨识填")
         print("  · 传动背隙 / 齿槽转矩 / 库仑-粘滞摩擦：URDF 里没有，要辨识（frictionloss 只是一阶近似）")
         print("  · <transmission> / <ros2_control>：MuJoCo 完全不读，减速比得折进 armature 或 gear")
 
-    if 警告:
+    if warnings:
         print("\n【警告】")
-        for w in 警告:
+        for w in warnings:
             print("  ⚠️ " + w)
 
-    print(f"\n✅ 写出 {输出}（可编译，nq={m.nq} nv={m.nv} nu={m.nu}）")
+    print(f"\n✅ 写出 {output_path}（可编译，nq={m.nq} nv={m.nv} nu={m.nu}）")
     return 0
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="URDF → MJCF 转换（含丢失项对账）")
-    ap.add_argument("输入", type=pathlib.Path, help="输入 .urdf")
-    ap.add_argument("-o", "--输出", type=pathlib.Path, required=True, help="输出 .xml")
-    ap.add_argument("--参数", type=pathlib.Path, help="覆盖参数的 JSON（关节 armature/damping/frictionloss、电机 Kt/R/gear）")
+    ap.add_argument("input_path", metavar="输入", type=pathlib.Path, help="输入 .urdf")
+    ap.add_argument("-o", "--output", "--输出", dest="output_path", type=pathlib.Path, required=True, help="输出 .xml")
+    ap.add_argument("--config", "--参数", dest="config", type=pathlib.Path, help="覆盖参数的 JSON（关节 armature/damping/frictionloss、电机 Kt/R/gear）")
     ap.add_argument("--report", action="store_true", help="打印丢失/改动对账清单")
     a = ap.parse_args()
 
-    if not a.输入.is_file():
-        sys.stderr.write(f"输入不存在：{a.输入}\n")
+    if not a.input_path.is_file():
+        sys.stderr.write(f"输入不存在：{a.input_path}\n")
         return 2
-    参数 = {}
-    if a.参数:
-        if not a.参数.is_file():
-            sys.stderr.write(f"参数文件不存在：{a.参数}\n")
+    config = {}
+    if a.config:
+        if not a.config.is_file():
+            sys.stderr.write(f"参数文件不存在：{a.config}\n")
             return 2
-        参数 = json.loads(a.参数.read_text(encoding="utf-8"))
+        config = json.loads(a.config.read_text(encoding="utf-8"))
 
-    return 转换(a.输入, a.输出, 参数, a.report)
+    return convert(a.input_path, a.output_path, config, a.report)
 
 
 if __name__ == "__main__":

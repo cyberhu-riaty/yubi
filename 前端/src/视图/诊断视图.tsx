@@ -9,7 +9,7 @@
  */
 import { useState } from "react";
 import { CollapsibleSection } from "../组件/可折叠区块";
-import { 用节拍 } from "../数据/时钟";
+import { useClock } from "../数据/clock";
 import { Tag } from "../组件/标签";
 import { Button } from "../组件/按钮";
 import { 命令, 用仓库 } from "../数据/仓库";
@@ -20,7 +20,7 @@ export function 诊断视图() {
   const t = useTranslation();
   const 报告 = 用仓库((s) => s.诊断.数据);
   const 连接 = 用仓库((s) => s.连接);
-  const 节拍 = 用节拍();
+  const 节拍 = useClock();
   const [忙, 设忙] = useState(false);
   const [开始时刻, 设开始时刻] = useState<number | null>(null);
   const 已用时 = 报告?.运行中 && 开始时刻 ? Math.max(0, Math.round((节拍 - 开始时刻) / 1000)) : undefined;

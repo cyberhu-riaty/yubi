@@ -18,8 +18,8 @@
  */
 import { useSyncExternalStore } from "react";
 import { 后端, 取状态 } from "./仓库";
-import type { 回执 } from "./连接";
-import { 提示错误 } from "./提示";
+import type { CommandReceipt } from "./connection";
+import { showError } from "./toasts";
 import { translate } from "../视图/文案";
 
 export type 日志等级 = "信息" | "注意" | "错误";
@@ -224,10 +224,10 @@ export function 记命令发出(): number {
  */
 export function 命令收尾(
   主题: string,
-  回执: 回执,
+  回执: CommandReceipt,
   起于: number,
   结构?: 结构字段,
-): 回执 {
+): CommandReceipt {
   const 耗时 = Date.now() - 起于;
   if (回执.通过) {
     记("信息", "回执", translate("日志.回执通过", { 主题, 耗时 }), 主题, 回执.说明 || undefined, 结构);
@@ -235,7 +235,7 @@ export function 命令收尾(
     // 失败必须"两个出口都亮"：控制台留痕 + 右下角顶一条提示。
     const 说明 = 回执.说明 || translate("日志.无说明");
     记("错误", "回执", translate("日志.回执失败", { 主题, 说明 }), 主题, translate("日志.耗时", { 值: 耗时 }), 结构);
-    提示错误(translate("提示.命令失败", { 主题 }), 说明);
+    showError(translate("提示.命令失败", { 主题 }), 说明);
   }
   return 回执;
 }
@@ -280,55 +280,55 @@ export function 起日志(): () => void {
   let 上次规划事件 = "";
   let 上次诊断事件 = "";
 
-  const 取消订阅 = 后端.订阅((e) => {
-    if (e.状态) {
-      if (e.状态 === "已连接") {
+  const 取消订阅 = 后端.subscribe((e) => {
+    if (e.state) {
+      if (e.state === "已连接") {
         连接起始 = Date.now();
         记("信息", "连接", translate("日志.已连接"));
-      } else if (e.状态 === "已断开") {
+      } else if (e.state === "已断开") {
         记("注意", "连接", translate("日志.已断开"));
       } else {
         记("信息", "连接", translate("日志.连接中"));
       }
     }
-    if (e.握手) {
-      const 主题数 = e.握手.可用主题?.length ?? 0;
-      const 契约版本 = e.握手.契约?.版本;
+    if (e.handshake) {
+      const 主题数 = e.handshake.可用主题?.length ?? 0;
+      const 契约版本 = e.handshake.契约?.版本;
       记(
         "信息",
         "握手",
         translate("日志.握手", {
           主题数,
-          间隔: e.握手.广播间隔,
+          间隔: e.handshake.广播间隔,
           契约: 契约版本 === undefined ? "" : translate("日志.握手契约", { 版本: 契约版本 }),
         }),
         "__问候__",
-        e.握手.可用主题?.join(" · "),
+        e.handshake.可用主题?.join(" · "),
       );
     }
-    if (e.回执) {
+    if (e.receipt) {
       记(
-        e.回执.通过 ? "信息" : "错误",
+        e.receipt.通过 ? "信息" : "错误",
         "回执",
-        e.回执.通过
-          ? translate("日志.回执简单通过", { 主题: e.回执.主题 })
-          : translate("日志.回执失败", { 主题: e.回执.主题, 说明: e.回执.说明 || translate("日志.无说明") }),
-        e.回执.主题,
-        e.回执.说明 || undefined,
+        e.receipt.通过
+          ? translate("日志.回执简单通过", { 主题: e.receipt.主题 })
+          : translate("日志.回执失败", { 主题: e.receipt.主题, 说明: e.receipt.说明 || translate("日志.无说明") }),
+        e.receipt.主题,
+        e.receipt.说明 || undefined,
       );
     }
-    if (e.错误) {
-      记("错误", "错误", e.错误, undefined, translate("日志.后端错误细节"));
+    if (e.error) {
+      记("错误", "错误", e.error, undefined, translate("日志.后端错误细节"));
     }
-    if (e.帧?.主题) {
-      最近帧.set(e.帧.主题, Date.now());
-      const 数据 = (e.帧.数据 ?? {}) as Record<string, unknown>;
+    if (e.frame?.主题) {
+      最近帧.set(e.frame.主题, Date.now());
+      const 数据 = (e.frame.数据 ?? {}) as Record<string, unknown>;
       const 串 = (v: unknown) => (typeof v === "string" ? v : "");
       const 数 = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 
       // 规划结果里的真实关节信息：失败 / 估算限位时产生一条结构化事件。
       // 这不是"解析日志猜关节"，而是直接读后端规划结果的 `瓶颈关节`。
-      if (e.帧.主题 === "planning.result") {
+      if (e.frame.主题 === "planning.result") {
         const 状态 = 串(数据.status);
         const 原因 = 串(数据.reason);
         const 限位 = 串(数据.limit_source);
@@ -358,7 +358,7 @@ export function 起日志(): () => void {
       }
 
       // 诊断报告里的失败项：同样来自真实报告，不解析自由文本。
-      if (e.帧.主题 === "诊断") {
+      if (e.frame.主题 === "诊断") {
         const 项们 = Array.isArray(数据.项) ? (数据.项 as Record<string, unknown>[]) : [];
         const 失败项 = 项们.filter((x) => x && x.通过 === false);
         const 出错 = 串(数据.出错);

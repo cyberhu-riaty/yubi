@@ -27,8 +27,8 @@ import { 中区, 仿真工具栏 } from "./中区";
 import { 控制台, 控制台召回, type 控制台页签 } from "./控制台";
 import { 状态栏 } from "./状态栏";
 import { 提示区 } from "./提示区";
-import { 任务步骤, type 步骤id } from "./任务流";
-import { 跳步事件 } from "./跳步";
+import { 任务步骤, type StepId } from "./任务流";
+import { STEP_NAVIGATION_EVENT } from "./step_navigation";
 
 
 const 存储键 = "驭臂.外壳";
@@ -189,7 +189,7 @@ function 分隔条({
 }
 
 export function App() {
-  const [步骤, 设步骤] = useState<步骤id>("定义");
+  const [步骤, 设步骤] = useState<StepId>("定义");
   // Windows/macOS 宿主的右下区域承担常看信息；完整 Web 控制台仍可随时展开。
   const [控制台开, 设控制台开] = useState(false);
   const [页签, 设页签] = useState<控制台页签>("输出");
@@ -228,7 +228,7 @@ export function App() {
     };
   }, []);
 
-  const 选步 = useCallback((id: 步骤id) => {
+  const 选步 = useCallback((id: StepId) => {
     设步骤(id);
     设偏好((旧) => (旧.侧栏开 ? 旧 : { ...旧, 侧栏开: true }));
   }, []);
@@ -246,11 +246,11 @@ export function App() {
   // 视图内部请求切步（例如验证页的"去插件配指标"）。只做导航，不碰数据。
   useEffect(() => {
     const 听 = (事件: Event) => {
-      const 目标 = (事件 as CustomEvent<步骤id>).detail;
-      if (typeof 目标 === "string") 选步(目标 as 步骤id);
+      const 目标 = (事件 as CustomEvent<StepId>).detail;
+      if (typeof 目标 === "string") 选步(目标 as StepId);
     };
-    window.addEventListener(跳步事件, 听);
-    return () => window.removeEventListener(跳步事件, 听);
+    window.addEventListener(STEP_NAVIGATION_EVENT, 听);
+    return () => window.removeEventListener(STEP_NAVIGATION_EVENT, 听);
   }, [选步]);
 
   // ④ 快捷键（输入框里不抢键）

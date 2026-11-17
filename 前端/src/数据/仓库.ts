@@ -16,7 +16,7 @@
  *   （用墙钟而不是仿真时间：物理暂停时仿真时间不动，曲线会挤成一坨）。
  */
 import { useSyncExternalStore } from "react";
-import { 连接, 猜地址, type 回执, type 帧, type 握手, type 连接状态, type SamplePoint } from "./连接";
+import { BackendConnection, guessBackendUrl, type CommandReceipt, type WireFrame, type WireHandshake, type ConnectionState, type SamplePoint } from "./connection";
 
 export interface ProjectState {
   project?: string;
@@ -291,9 +291,9 @@ export interface 快照域<T> {
 }
 
 export interface 界面状态 {
-  连接: 连接状态;
+  连接: ConnectionState;
   错误: string | null;
-  握手: 握手 | null;
+  握手: WireHandshake | null;
   主题计数: Record<string, number>;
   主题速率: Record<string, number>;
   项目: 快照域<ProjectState>;
@@ -330,7 +330,7 @@ export interface 界面状态 {
   /** {曲线名: 采样点[]} —— 只留最近 N 个点 */
   曲线: Record<string, SamplePoint[]>;
   曲线总帧: number;
-  回执: 回执 | null;
+  回执: CommandReceipt | null;
 }
 
 /** 每条曲线保留的最大点数（30 Hz × 120 秒 = 3600；曲线一多就很占内存） */
@@ -400,30 +400,30 @@ export function 用仓库<T>(选择器: (s: 界面状态) => T): T {
 // ---------------------------------------------------------------------------
 // 连接实例
 // ---------------------------------------------------------------------------
-export const 后端 = new 连接(猜地址());
+export const 后端 = new BackendConnection(guessBackendUrl());
 
 export function 起连接(): () => void {
-  const 取消 = 后端.订阅((e) => {
-    if (e.状态) 换((s) => ({ ...s, 连接: e.状态! }));
-    if (e.错误) 换((s) => ({ ...s, 错误: e.错误! }));
-    if (e.握手) 换((s) => ({ ...s, 握手: e.握手!, 错误: null }));
-    if (e.回执) 换((s) => ({ ...s, 回执: e.回执! }));
-    if (e.帧) 收帧(e.帧);
+  const 取消 = 后端.subscribe((e) => {
+    if (e.state) 换((s) => ({ ...s, 连接: e.state! }));
+    if (e.error) 换((s) => ({ ...s, 错误: e.error! }));
+    if (e.handshake) 换((s) => ({ ...s, 握手: e.handshake!, 错误: null }));
+    if (e.receipt) 换((s) => ({ ...s, 回执: e.receipt! }));
+    if (e.frame) 收帧(e.frame);
   });
-  后端.连();
+  后端.connect();
 
   const 心跳 = window.setInterval(() => {
-    换((s) => ({ ...s, 主题计数: { ...后端.计数 }, 主题速率: { ...后端.速率 } }));
+    换((s) => ({ ...s, 主题计数: { ...后端.counts }, 主题速率: { ...后端.rates } }));
   }, 1000);
 
   return () => {
     取消();
     window.clearInterval(心跳);
-    后端.关();
+    后端.close();
   };
 }
 
-function 收帧(帧: 帧): void {
+function 收帧(帧: WireFrame): void {
   const 墙钟 = (帧.墙钟 ?? Date.now() / 1000) as number;
   switch (帧.主题) {
     case "model.library":
@@ -542,38 +542,38 @@ function 淘汰(点: SamplePoint[], 现在: number): SamplePoint[] {
 // ---------------------------------------------------------------------------
 export const 命令 = {
   loadExperiment(experiment: string) {
-    return 后端.发命令("command.experiment", { action: "load", experiment });
+    return 后端.sendCommand("command.experiment", { action: "load", experiment });
   },
   controlSimulation(action: "run" | "pause" | "reset") {
-    return 后端.发命令("command.simulation", { action });
+    return 后端.sendCommand("command.simulation", { action });
   },
   setSimulationSpeed(speedMultiplier: number) {
-    return 后端.发命令("command.simulation", {
+    return 后端.sendCommand("command.simulation", {
       action: "speed", speed_multiplier: speedMultiplier,
     });
   },
   setGravity(enabled: boolean) {
-    return 后端.发命令("command.gravity", { gravity_enabled: enabled });
+    return 后端.sendCommand("command.gravity", { gravity_enabled: enabled });
   },
   设置控制目标(目标: number[]) {
-    return 后端.发命令("命令.控制目标", { target: 目标 });
+    return 后端.sendCommand("命令.控制目标", { target: 目标 });
   },
   recordWaypoint() {
-    return 后端.发命令("command.planning", { action: "record_waypoint" });
+    return 后端.sendCommand("command.planning", { action: "record_waypoint" });
   },
   clearWaypoints() {
-    return 后端.发命令("command.planning", { action: "clear_waypoints" });
+    return 后端.sendCommand("command.planning", { action: "clear_waypoints" });
   },
   executeTrajectory() {
-    return 后端.发命令("command.planning", { action: "execute" });
+    return 后端.sendCommand("command.planning", { action: "execute" });
   },
   stopTrajectory() {
-    return 后端.发命令("command.planning", { action: "stop_execution" });
+    return 后端.sendCommand("command.planning", { action: "stop_execution" });
   },
   planCartesian(points: { xyz: number[] }[], limits?: {
     velocity_limits?: number[]; acceleration_limits?: number[];
   }) {
-    return 后端.发命令("command.planning", {
+    return 后端.sendCommand("command.planning", {
       action: "plan",
       cartesian_waypoints: points,
       ...(limits?.velocity_limits ? { velocity_limits: limits.velocity_limits } : {}),
@@ -589,7 +589,7 @@ export const 命令 = {
       jerk_limits?: number[];
     },
   ) {
-    return 后端.发命令("command.planning", {
+    return 后端.sendCommand("command.planning", {
       action: "plan",
       ...(waypoints?.length ? { waypoints } : {}),
       ...(limits?.velocity_limits ? { velocity_limits: limits.velocity_limits } : {}),
@@ -599,43 +599,43 @@ export const 命令 = {
     });
   },
   设备动作(动作: string, 参数?: Record<string, number>) {
-    return 后端.发命令("命令.设备", { 动作, ...(参数 ?? {}) });
+    return 后端.sendCommand("命令.设备", { 动作, ...(参数 ?? {}) });
   },
   导出部署包() {
-    return 后端.发命令("命令.部署", { 动作: "导出" });
+    return 后端.sendCommand("命令.部署", { 动作: "导出" });
   },
   跑诊断() {
-    return 后端.发命令("命令.诊断", { 动作: "运行" });
+    return 后端.sendCommand("命令.诊断", { 动作: "运行" });
   },
   /** 在原生 3D 里高亮一个关节（视觉诊断；后端夹到 0..60s） */
   高亮关节(关节: number, 秒 = 8) {
-    return 后端.发命令("命令.高亮", { 关节, 秒 });
+    return 后端.sendCommand("命令.高亮", { 关节, 秒 });
   },
   switchModel(path: string, displayName = "") {
-    return 后端.发命令("command.model", { path, display_name: displayName });
+    return 后端.sendCommand("command.model", { path, display_name: displayName });
   },
   /** 改参数：键必须是参数表里的全名（形如「插件名·参数名」） */
   updateParameters(updates: Record<string, number>) {
-    return 后端.发命令("command.parameters", { updates });
+    return 后端.sendCommand("command.parameters", { updates });
   },
   applyAlgorithms(algorithms: string[], persist = false, resetPose = true) {
-    return 后端.发命令("command.algorithms", {
+    return 后端.sendCommand("command.algorithms", {
       algorithms: algorithms.map((name) => ({ plugin: name })),
       persist,
       reset_pose: resetPose,
     });
   },
   开始辨识(时长秒 = 10) {
-    return 后端.发命令("命令.辨识", { 动作: "开始", 时长: 时长秒 });
+    return 后端.sendCommand("命令.辨识", { 动作: "开始", 时长: 时长秒 });
   },
   停止辨识() {
-    return 后端.发命令("命令.辨识", { 动作: "停止", 时长: 0 });
+    return 后端.sendCommand("命令.辨识", { 动作: "停止", 时长: 0 });
   },
   开始录制(频率 = 100, 备注 = "") {
-    return 后端.发命令("命令.录制", { 动作: "开始", 频率, 备注 });
+    return 后端.sendCommand("命令.录制", { 动作: "开始", 频率, 备注 });
   },
   停止录制() {
-    return 后端.发命令("命令.录制", { 动作: "停止", 频率: 100, 备注: "" });
+    return 后端.sendCommand("命令.录制", { 动作: "停止", 频率: 100, 备注: "" });
   },
 };
 

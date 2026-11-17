@@ -1,4 +1,4 @@
-// ⚠️ 本文件由 `工具/生成前端资产.py` 生成，**不要手改**。
+// ⚠️ 本文件由 `工具/generate_frontend_assets.py` 生成，**不要手改**。
 // 来源：`软件/风格表.json`。
 
 export interface 风格元 {

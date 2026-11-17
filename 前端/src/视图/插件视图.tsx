@@ -18,7 +18,7 @@ import { CollapsibleSection } from "../组件/可折叠区块";
 import { Tag } from "../组件/标签";
 import { Button } from "../组件/按钮";
 import { 用仓库 } from "../数据/仓库";
-import { 请求跳步 } from "../外壳/跳步";
+import { requestStepNavigation } from "../外壳/step_navigation";
 import { useTranslation } from "./文案";
 
 export function 插件视图() {
@@ -40,7 +40,7 @@ export function 插件视图() {
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[0.82em] text-dim">
           <span>{t("插件.只读说明")}</span>
-          <Button size="small" variant="ghost" onPress={() => 请求跳步("定义")}>
+          <Button size="small" variant="ghost" onPress={() => requestStepNavigation("定义")}>
             {t("插件.去定义")}
           </Button>
         </div>

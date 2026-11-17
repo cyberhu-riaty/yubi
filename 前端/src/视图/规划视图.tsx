@@ -17,7 +17,7 @@ import { Button } from "../组件/按钮";
 import { ValueTable, type ValueRow } from "../组件/数值表";
 import { useRef } from "react";
 import { 命令, 用仓库 } from "../数据/仓库";
-import { 解析航点文本, type 解析结果 } from "../数据/航点文件";
+import { parseWaypointText, type WaypointParseResult } from "../数据/waypoint_file";
 import { 命令收尾, 记命令发出 } from "../数据/日志";
 import { useTranslation } from "./文案";
 
@@ -27,7 +27,7 @@ export function 规划视图() {
   const 模型 = 用仓库((s) => s.模型.数据);
   const 连接 = 用仓库((s) => s.连接);
   const [忙, 设忙] = useState(false);
-  const [导入, 设导入] = useState<解析结果 | null>(null);
+  const [导入, 设导入] = useState<WaypointParseResult | null>(null);
   // 约束：空 = 用后端按模型推算的默认值（界面上写明是"估算"）。
   //   ★ 给用户的是关节空间的量（rad/s、rad/s²），不是 s 空间的 ——
   //     s 空间的数与实际快慢差一个路径长度，用户从界面上的数推不出会发生什么。
@@ -46,12 +46,12 @@ export function 规划视图() {
     设忙(true);
     try {
       const 文本 = await 文件.text();
-      const 果 = 解析航点文本(文本, 规划?.dof || 模型?.dof);
+      const 果 = parseWaypointText(文本, 规划?.dof || 模型?.dof);
       设导入(果);
-      if (!果.问题) {
+      if (!果.error) {
         const 起于 = 记命令发出();
         命令收尾("command.planning",
-          await 命令.planTrajectory(果.航点.map((关节) => ({ q: 关节 }))), 起于);
+          await 命令.planTrajectory(果.waypoints.map((关节) => ({ q: 关节 }))), 起于);
       }
     } finally {
       设忙(false);
@@ -88,7 +88,7 @@ export function 规划视图() {
   const 跑笛卡尔 = async () => {
     const { 点们, 问题 } = 解析笛卡尔(笛卡尔文本);
     if (问题) {
-      设导入({ 航点: [], 行数: 0, 列数: 0, 跳过: 0, 问题 });
+      设导入({ waypoints: [], rowCount: 0, columnCount: 0, skipped: 0, error: 问题 });
       return;
     }
     设导入(null);
@@ -289,11 +289,11 @@ export function 规划视图() {
         {导入 ? (
           <div
             className="mt-2 text-[0.82em]"
-            style={{ color: 导入.问题 ? "var(--danger)" : "var(--fg-dim)" }}
+            style={{ color: 导入.error ? "var(--danger)" : "var(--fg-dim)" }}
           >
-            {导入.问题
-              ? `${t("规划.导入失败")}：${导入.问题}`
-              : `${t("规划.导入成功")}：${导入.行数} 个航点 × ${导入.列数} 列（跳过 ${导入.跳过} 行注释/表头）`}
+            {导入.error
+              ? `${t("规划.导入失败")}：${导入.error}`
+              : `${t("规划.导入成功")}：${导入.rowCount} 个航点 × ${导入.columnCount} 列（跳过 ${导入.skipped} 行注释/表头）`}
           </div>
         ) : null}
 
