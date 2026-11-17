@@ -591,8 +591,8 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                 if algorithm_overrides is not None:
                     run_config = [str(x) for x in algorithm_overrides if str(x).strip()]
                 else:
-                    run_config = [str(x.get("插件", "")) for x in _project.parse_algorithms(data)
-                            if isinstance(x, dict) and str(x.get("插件", "")).strip()]
+                    run_config = [str(x.get("plugin", "")) for x in _project.parse_algorithms(data)
+                            if isinstance(x, dict) and str(x.get("plugin", "")).strip()]
 
                 # ★ 重置必须在**装配之前**：多数算法的设计是"拿第一次看到的位置当基准"
                 #   （关节pd控制的 `目标`、正弦摆动的 `基准`）。先把机器人摆回默认姿态，
@@ -669,14 +669,14 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                 if persist and algorithm_overrides is not None and data is not None:
                     # 【Save】：把界面上选的那组写回项目文件（只动 `算法` 字段，别的字段原样）
                     write_back = dict(data)
-                    write_back.pop("_顺序说明", None)          # 那是给人看的说明，重写一份新的
-                    write_back["算法"] = [{"插件": str(x)} for x in algorithm_overrides if str(x).strip()]
-                    write_back["_顺序说明"] = (
+                    write_back.pop("order_note", None)          # 那是给人看的说明，重写一份新的
+                    write_back["algorithms"] = [{"plugin": str(x)} for x in algorithm_overrides if str(x).strip()]
+                    write_back["order_note"] = (
                         "列表顺序 = 每步的执行顺序：最后一项最后写 ctrl[:]，所以它说了算。"
                         "（本列表由界面【Algorithms】面板的 Save 写回）")
                     if _project.save_project(write_back):
                         currently_persisted = True
-                        report.append(f"（已把这组算法写回 项目/{new_project_name}.json）")
+                        report.append(f"（已把这组算法写回 项目/{os.path.basename(_project.project_file_path(new_project_name))}）")
                     else:
                         report.append("✗ 写回项目文件失败（选择已在本次运行生效，但没记住）")
 
@@ -745,7 +745,11 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                     return ""
                 restored_count = 0
                 for _p in instances:
-                    plugin = stored.get(str(getattr(_p, "name", ""))) or {}
+                    plugin_id = str(getattr(_p, "plugin_id", "") or "")
+                    plugin = stored.get(plugin_id) or {}
+                    if not plugin:
+                        # Version-1 projects stored parameters under the display name.
+                        plugin = stored.get(str(getattr(_p, "name", ""))) or {}
                     for _parameter_name, _value in plugin.items():
                         item = getattr(_p, "set_parameter", None)
                         if item is None:
@@ -763,7 +767,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
             #   它的用途有两个：① 发给界面做【Algorithms】面板的候选列表
             #   ② 进发布指纹，好让"往算法库里加了个 .py"这件事能被界面看见。
             try:
-                current_algorithm_library = [d["插件"] for d in _project.discover_algorithms()]
+                current_algorithm_library = [d["plugin"] for d in _project.discover_algorithms()]
                 print(f"【算法库】可选算法 {len(current_algorithm_library)} 个：{'、'.join(current_algorithm_library)}", flush=True)
             except Exception as exc:                                      # noqa: BLE001
                 print(f"⚠ 算法库扫描失败（界面上的算法列表会是空的）：{type(exc).__name__}: {exc}")
@@ -928,7 +932,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                     if current_project_name and path:
                         current_config = _project.load_project(current_project_name)
                         if current_config:
-                            declared_path = str(current_config.get("模型") or "")
+                            declared_path = str(current_config.get("model") or "")
                             current_project_uses_model = (
                                 bool(declared_path)
                                 and os.path.normpath(_project.absolute_path(declared_path)) == os.path.normpath(path))

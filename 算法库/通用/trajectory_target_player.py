@@ -172,8 +172,8 @@ class ExperimentTrajectoryPlayer(ControlPlugin):
     def adjustable_parameters(self) -> dict:
         upper = max(0, int(self._last_target.size or len(self._joint_names) or 1) - 1)
         return {
-            "监看关节": {"value": self.monitored_joint, "range": (0.0, float(upper)),
-                       "step": 1.0, "unit": "关节索引"},
+            "monitored_joint": {"value": self.monitored_joint, "range": (0.0, float(upper)),
+                                "step": 1.0, "unit": "关节索引", "label": "监看关节"},
         }
 
 

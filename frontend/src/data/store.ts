@@ -270,9 +270,14 @@ export interface ModelState {
  */
 export interface ParameterItem {
   plugin?: string;
+  /** 稳定英文模块标识；参数表全名以它为前缀（机器键） */
+  plugin_id?: string;
   plugin_english?: string;
   plugin_version?: string;
+  /** 英文参数标识（机器键） */
   parameter?: string;
+  /** 中文显示名；为空时界面退回参数标识 */
+  label?: string;
   value?: number;
   /** [最小, 最大] —— 注意是**数组**，不是两个字段 */
   range?: number[];

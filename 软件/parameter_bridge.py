@@ -30,8 +30,18 @@ def _plugin_name(plugin: Any) -> str:
     return str(getattr(plugin, "name", None) or "")
 
 
+def _plugin_id(plugin: Any) -> str:
+    """Stable ASCII identifier (module name); display names are never addresses."""
+    return str(getattr(plugin, "plugin_id", None) or "")
+
+
 def _plugin_english_name(plugin: Any) -> str:
     return str(getattr(plugin, "english_name", None) or "")
+
+
+def _canonical_parameter_name(plugin: Any, name: str) -> str:
+    aliases = getattr(plugin, "parameter_aliases", None) or {}
+    return str(aliases.get(name, name))
 
 
 def _plugin_version(plugin: Any) -> str:
@@ -74,9 +84,9 @@ class ParameterUpdate(messages.Snapshot):
 def collect_parameters(registry) -> dict[str, dict]:
     """向每个插件问一次"你有哪些可调参数"，合并成一张表。
 
-    同名参数（比如两个插件都有 KP）会带上插件名前缀区分：
-        "关节 PD 位置控制·KP"
-    这样界面上不会互相串。
+    同名参数（比如两个插件都有 KP）会带上插件标识前缀区分：
+        "joint_pd_control·KP"
+    界面显示用 `plugin`（中文名）与 `label`（参数显示名），机器键保持英文。
 
     ★ 只问**有 `名称` 的**对象，也就是项目声明的那些用户算法：
       注册表里还混着 StepControl / 模型应用器 / 参数应用器这些内部插件，
@@ -95,6 +105,7 @@ def collect_parameters(registry) -> dict[str, dict]:
         if not callable(getattr(plugin, "adjustable_parameters", None)):
             continue
         name = str(name)
+        plugin_id = _plugin_id(plugin) or name
         english_name = _plugin_english_name(plugin)
         try:
             items = _adjustable_parameters(plugin)
@@ -103,11 +114,13 @@ def collect_parameters(registry) -> dict[str, dict]:
             continue
         for parameter_name, info in items.items():
             value_range = info.get("range") or (0.0, 1.0)
-            table[f"{name}·{parameter_name}"] = {
+            table[f"{plugin_id}·{parameter_name}"] = {
                 "plugin": name,
+                "plugin_id": plugin_id,
                 "plugin_english": english_name,
                 "plugin_version": _plugin_version(plugin),
                 "parameter": parameter_name,
+                "label": str(info.get("label", "") or ""),
                 "value": float(info.get("value", 0.0)),
                 "range": (float(value_range[0]), float(value_range[1])),
                 "step": float(info.get("step", 0.0)),
@@ -185,11 +198,14 @@ class ParameterApplier:
         绑定时跳过没有 `名称` 的对象（注册表里混着 StepControl / 模型应用器 /
         参数应用器自己这些内部插件，它们本来也不该出现在参数面板上）。
         """
-        self._plugin_by_name = {
-            _plugin_name(p): p
-            for p in getattr(registry, "_targets", [])
-            if _plugin_name(p)
-        }
+        self._plugin_by_name = {}
+        for plugin in getattr(registry, "_targets", []):
+            plugin_id = _plugin_id(plugin)
+            name = _plugin_name(plugin)
+            if plugin_id:
+                self._plugin_by_name[plugin_id] = plugin
+            if name:
+                self._plugin_by_name.setdefault(name, plugin)
         return self
 
     @messages.handler
@@ -197,14 +213,15 @@ class ParameterApplier:
         updates = getattr(message, "updates", None) or {}
         grouped_by_plugin: dict[str, dict] = {}
         for full_name, value in updates.items():
-            plugin_name, _, parameter_name = full_name.partition("·")
-            plugin = self._plugin_by_name.get(plugin_name)
+            plugin_key, _, parameter_name = full_name.partition("·")
+            plugin = self._plugin_by_name.get(plugin_key)
             if plugin is None:
                 # ★ 不再静默 continue：换项目/换算法组之后如果忘了重绑，
                 #   这里就是"滑杆拖了没反应"的地方 —— 至少要说一声。
-                print(f"ℹ 参数「{full_name}」没有对应的算法实例（当前这一组里没有【{plugin_name}】）—— "
+                print(f"ℹ 参数「{full_name}」没有对应的算法实例（当前这一组里没有【{plugin_key}】）—— "
                       f"已忽略；如果刚换过模型，这是正常的（那个算法不在本项目里）")
                 continue
+            parameter_name = _canonical_parameter_name(plugin, parameter_name)
             error = _set_parameter(plugin, parameter_name, float(value))
             if error:
                 if error not in self.errors:
@@ -213,7 +230,8 @@ class ParameterApplier:
                 continue
             self.applied_count += 1
             self.latest[full_name] = float(value)
-            grouped_by_plugin.setdefault(plugin_name, {})[parameter_name] = float(value)
+            persist_key = _plugin_id(plugin) or plugin_key
+            grouped_by_plugin.setdefault(persist_key, {})[parameter_name] = float(value)
 
         # 存回项目文件（"上次调好的参数"要能延续到下次打开这个项目）
         if grouped_by_plugin and self._persist_parameters is not None:
@@ -258,11 +276,12 @@ class ParameterApplier:
         plan: list[tuple[Any, str, str, float, float]] = []
         failures: list[str] = []
         for full_name, requested_value in updates.items():
-            plugin_name, _, parameter_name = str(full_name).partition("·")
-            plugin = self._plugin_by_name.get(plugin_name)
+            plugin_key, _, parameter_name = str(full_name).partition("·")
+            plugin = self._plugin_by_name.get(plugin_key)
             if plugin is None:
-                failures.append(f"{full_name}：当前这组算法里没有【{plugin_name}】")
+                failures.append(f"{full_name}：当前这组算法里没有【{plugin_key}】")
                 continue
+            parameter_name = _canonical_parameter_name(plugin, parameter_name)
             try:
                 table = _adjustable_parameters(plugin)
             except Exception as exc:                                     # noqa: BLE001
@@ -309,7 +328,7 @@ class ParameterApplier:
             changes.append({"full_name": full_name, "old_value": old_value, "new_value": new_value})
             self.applied_count += 1
             self.latest[full_name] = new_value
-            grouped_by_plugin.setdefault(full_name.partition("·")[0], {})[parameter_name] = new_value
+            grouped_by_plugin.setdefault(_plugin_id(plugin) or full_name.partition("·")[0], {})[parameter_name] = new_value
 
         if failures:
             # 回滚：按**写入顺序的逆序**退回，保证互相依赖的参数也回到一致状态

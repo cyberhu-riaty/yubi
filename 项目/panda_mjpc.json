@@ -1,0 +1,22 @@
+{
+  "schema_version": 2,
+  "_comment": "Panda 的 MJPC 任务模型（夹爪 + 方块 + 目标）。它不是关节力矩模型，不能挂 `关节pd控制`；算法列表先留空，等 MPC 移植插件写好后再挂。",
+  "project": "Panda_MJPC",
+  "model": "模型/panda_mjpc/task.xml",
+  "algorithms": [
+    {
+      "plugin": "panda_mjpc_port"
+    }
+  ],
+  "parameters": {
+    "panda_pick_place": {
+      "position_gain": 1000.0
+    }
+  },
+  "appearance": {
+    "style": "现代深色",
+    "theme": "dark"
+  },
+  "notes": "MJPC 任务模型：6 维末端力控 + 夹爪；用于官方 MPC 的 Python 移植与流程验证。",
+  "_default_note": "算法列表为空是刻意的：这个模型的动作语义与普通关节 PD 插件不兼容，等 `Panda_官方MPC移植.py` 写好后再挂。"
+}

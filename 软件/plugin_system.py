@@ -152,7 +152,12 @@ class ControlPlugin:
     #   · 像"数据录制"这种**平时不写、回放时才写**的，仍算 False
     #     —— 回放是用户主动点的，不是它的默认行为。
     takes_control = True
-    # Persisted parameter labels may outlive an internal attribute rename.
+    # Set by the assembler to the stable module identifier (ASCII).  Parameter
+    # tables and persisted project parameters are addressed by this identifier,
+    # never by the Chinese display `name`.
+    plugin_id = ""
+    # Legacy persisted parameter names map to the current English identifier.
+    # Old project files keep loading after the parameter IDs were migrated.
     parameter_aliases: dict[str, str] = {}
 
     # ---- 插件自己的状态（比如"跑了多少步"），由外壳负责收集 ----
@@ -191,14 +196,15 @@ class ControlPlugin:
           校验点放在基类而不是各插件里：`adjustable_parameters()` 声明的范围就是契约，
           基类照着执行一次，所有插件自动受益，也让"范围"这个字段真的有意义。
         """
-        attribute_name = self.parameter_aliases.get(name, name)
+        canonical_name = self.parameter_aliases.get(name, name)
+        attribute_name = canonical_name
         if not hasattr(self, attribute_name):
             return f"插件 {type(self).__name__} 没有参数「{name}」"
         numeric_value = float(value)
         value_range = None
         try:
             declarations = self.adjustable_parameters() or {}
-            item = declarations.get(name) or {}
+            item = declarations.get(canonical_name) or {}
             value_range = item.get("range")
         except Exception:                                                # noqa: BLE001
             # 参数声明出错不该让"改参数"整个失败：退回旧行为（不校验）

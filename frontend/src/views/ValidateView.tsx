@@ -308,11 +308,16 @@ export function ValidateView() {
     {
       title: t("验证.参数.名"),
       width: "w-[20ch] max-w-[20ch]",
-      render: (row) => (
-        <span className="block truncate" title={String(row.fullName)}>
-          {String(row.fullName)}
-        </span>
-      ),
+      render: (row) => {
+        // 显示用「插件中文名·参数中文标签」；命令仍用 fullName 里的英文机器键。
+        const plugin = String(row.plugin ?? "");
+        const label = String((row as unknown as ParameterItem).label || row.name || "");
+        return (
+          <span className="block truncate" title={String(row.fullName)}>
+            {plugin ? `${plugin}·${label}` : label}
+          </span>
+        );
+      },
     },
     {
       title: t("验证.参数.值"),
@@ -364,7 +369,8 @@ export function ValidateView() {
   function flattened(fullName: string, item: ParameterItem): Record<string, unknown> {
     const plugins = String(item.plugin ?? fullName.split("·")[0] ?? "");
     const name = String(item.parameter ?? fullName.split("·")[1] ?? fullName);
-    const known = ["plugin", "plugin_english", "plugin_version", "parameter", "value", "range", "step", "unit"];
+    const known = ["plugin", "plugin_id", "plugin_english", "plugin_version", "parameter", "label",
+      "value", "range", "step", "unit"];
     const extra = Object.keys(item).filter((k) => !known.includes(k));
     const range = item.range;
     const min = Array.isArray(range) && typeof range[0] === "number" ? range[0] : undefined;
@@ -373,6 +379,7 @@ export function ValidateView() {
       fullName: fullName,
       plugin: plugins,
       name: name,
+      label: item.label,
       value: item.value,
       min: min,
       max: max,

@@ -83,19 +83,19 @@ class _Planner:
         self._action = np.zeros(int(model.nu), dtype=float)
         self._action_time = 0.0
         self._statistics = {
-            "规划次数": 0.0,
-            "规划耗时ms": 0.0,
+            "planning_count": 0.0,
+            "planning_time_ms": 0.0,
             "cost": 0.0,
-            "hand-box(mm)": 0.0,
-            "box-target(mm)": 0.0,
-            "cost_手": 0.0,
-            "cost_目标": 0.0,
-            "cost_动作": 0.0,
-            "动作范数": 0.0,
-            "动作峰值": 0.0,
-            "夹爪": 0.0,
-            "动作年龄ms": 0.0,
-            "错误次数": 0.0,
+            "hand_box_mm": 0.0,
+            "box_target_mm": 0.0,
+            "cost_hand": 0.0,
+            "cost_target": 0.0,
+            "cost_action": 0.0,
+            "action_norm": 0.0,
+            "action_peak": 0.0,
+            "gripper": 0.0,
+            "action_age_ms": 0.0,
+            "error_count": 0.0,
         }
         self._error = ""
         self._parameters = dict(parameters)
@@ -120,7 +120,7 @@ class _Planner:
             action = self._action.copy()
             age = (time.monotonic() - self._action_time) * 1000.0 if self._action_time else 1e9
             statistics = dict(self._statistics)
-            statistics["错误信息"] = self._error
+            statistics["error_message"] = self._error
             return action, age, statistics
 
     def set_parameter(self, name: str, value: float) -> None:
@@ -156,14 +156,14 @@ class _Planner:
                     self.data.mocap_quat[:] = mocap_quat
                 mujoco.mj_forward(self.model, self.data)
 
-                sample_count = max(2, int(parameters.get("采样数", 48)))
-                step_count = max(1, int(parameters.get("规划步数", 20)))
-                iteration_count = max(1, int(parameters.get("CEM迭代", 2)))
-                elite_fraction = min(0.9, max(0.05, float(parameters.get("精英比例", 0.2))))
-                initial_stddev = max(0.01, float(parameters.get("采样标准差", 0.35)))
-                hand_weight = float(parameters.get("手方块权重", 5.0))
-                target_weight = float(parameters.get("方块目标权重", 1.0))
-                control_weight = float(parameters.get("控制权重", 0.001))
+                sample_count = max(2, int(parameters.get("sample_count", 48)))
+                step_count = max(1, int(parameters.get("horizon_steps", 20)))
+                iteration_count = max(1, int(parameters.get("cem_iterations", 2)))
+                elite_fraction = min(0.9, max(0.05, float(parameters.get("elite_fraction", 0.2))))
+                initial_stddev = max(0.01, float(parameters.get("sampling_stddev", 0.35)))
+                hand_weight = float(parameters.get("hand_box_weight", 5.0))
+                target_weight = float(parameters.get("box_target_weight", 1.0))
+                control_weight = float(parameters.get("control_weight", 0.001))
                 weights = np.array([hand_weight] * 3 + [target_weight] * 6, dtype=float)
 
                 lower = np.asarray(self.model.actuator_ctrlrange[:, 0], dtype=float)
@@ -237,7 +237,7 @@ class _Planner:
                 gripper = float(best_action[0, 6])
             except Exception as exc:                                  # noqa: BLE001
                 with self._lock:
-                    self._statistics["错误次数"] += 1
+                    self._statistics["error_count"] += 1
                     self._error = f'{type(exc).__name__}: {exc}'
                 self._stop.wait(0.05)
                 continue
@@ -245,19 +245,19 @@ class _Planner:
             with self._lock:
                 self._action = np.array(best_action[0], dtype=float, copy=True)
                 self._action_time = time.monotonic()
-                self._statistics["规划次数"] += 1
-                self._statistics["规划耗时ms"] = (time.perf_counter() - started) * 1000.0
+                self._statistics["planning_count"] += 1
+                self._statistics["planning_time_ms"] = (time.perf_counter() - started) * 1000.0
                 self._statistics["cost"] = float(best_cost)
-                self._statistics["hand-box(mm)"] = hand_to_box * 1000.0
-                self._statistics["box-target(mm)"] = box_to_target * 1000.0
-                self._statistics["cost_手"] = hand_cost
-                self._statistics["cost_目标"] = target_cost
-                self._statistics["cost_动作"] = action_cost
-                self._statistics["动作范数"] = action_norm
-                self._statistics["动作峰值"] = max(
-                    float(self._statistics.get("动作峰值", 0.0)), action_norm)
-                self._statistics["夹爪"] = gripper
-                self._statistics["动作年龄ms"] = 0.0
+                self._statistics["hand_box_mm"] = hand_to_box * 1000.0
+                self._statistics["box_target_mm"] = box_to_target * 1000.0
+                self._statistics["cost_hand"] = hand_cost
+                self._statistics["cost_target"] = target_cost
+                self._statistics["cost_action"] = action_cost
+                self._statistics["action_norm"] = action_norm
+                self._statistics["action_peak"] = max(
+                    float(self._statistics.get("action_peak", 0.0)), action_norm)
+                self._statistics["gripper"] = gripper
+                self._statistics["action_age_ms"] = 0.0
                 self._error = ""
 
             # 限频：规划频率默认 20 Hz；算得快也不要空转烧 CPU
@@ -318,21 +318,22 @@ class PandaMPCController(ControlPlugin):
 
     def _parameter_snapshot(self) -> dict:
         return {
-            "采样数": self.sample_count,
-            "规划步数": self.horizon_steps,
-            "CEM迭代": self.cem_iterations,
-            "精英比例": self.elite_fraction,
-            "采样标准差": self.sampling_stddev,
-            "手方块权重": self.hand_box_weight,
-            "方块目标权重": self.box_target_weight,
-            "控制权重": self.control_weight,
-            "规划频率": self.planning_frequency,
+            "sample_count": self.sample_count,
+            "horizon_steps": self.horizon_steps,
+            "cem_iterations": self.cem_iterations,
+            "elite_fraction": self.elite_fraction,
+            "sampling_stddev": self.sampling_stddev,
+            "hand_box_weight": self.hand_box_weight,
+            "box_target_weight": self.box_target_weight,
+            "control_weight": self.control_weight,
+            "planning_frequency": self.planning_frequency,
         }
 
     def set_parameter(self, name: str, value: float) -> str:
         reason = super().set_parameter(name, value)
+        canonical_name = self.parameter_aliases.get(name, name)
         if not reason and self._Planner is not None:
-            self._Planner.set_parameter(name, getattr(self, self.parameter_aliases.get(name, name)))
+            self._Planner.set_parameter(canonical_name, getattr(self, canonical_name))
         return reason
 
     # ------------------------------------------------------------------
@@ -369,16 +370,16 @@ class PandaMPCController(ControlPlugin):
     # ------------------------------------------------------------------
     def adjustable_parameters(self) -> dict:
         return {
-            "采样数": {"value": self.sample_count, "range": (2.0, 200.0), "step": 1.0},
-            "规划步数": {"value": self.horizon_steps, "range": (1.0, 60.0), "step": 1.0},
-            "CEM迭代": {"value": self.cem_iterations, "range": (1.0, 6.0), "step": 1.0},
-            "精英比例": {"value": self.elite_fraction, "range": (0.05, 0.9)},
-            "采样标准差": {"value": self.sampling_stddev, "range": (0.05, 1.0)},
-            "手方块权重": {"value": self.hand_box_weight, "range": (0.0, 100.0)},
-            "方块目标权重": {"value": self.box_target_weight, "range": (0.0, 100.0)},
-            "控制权重": {"value": self.control_weight, "range": (0.0, 1.0)},
-            "规划频率": {"value": self.planning_frequency, "range": (1.0, 100.0), "unit": "Hz"},
-            "超时秒": {"value": self.timeout_seconds, "range": (0.05, 2.0), "unit": "s"},
+            "sample_count": {"value": self.sample_count, "range": (2.0, 200.0), "step": 1.0, "label": "采样数"},
+            "horizon_steps": {"value": self.horizon_steps, "range": (1.0, 60.0), "step": 1.0, "label": "规划步数"},
+            "cem_iterations": {"value": self.cem_iterations, "range": (1.0, 6.0), "step": 1.0, "label": "CEM迭代"},
+            "elite_fraction": {"value": self.elite_fraction, "range": (0.05, 0.9), "label": "精英比例"},
+            "sampling_stddev": {"value": self.sampling_stddev, "range": (0.05, 1.0), "label": "采样标准差"},
+            "hand_box_weight": {"value": self.hand_box_weight, "range": (0.0, 100.0), "label": "手方块权重"},
+            "box_target_weight": {"value": self.box_target_weight, "range": (0.0, 100.0), "label": "方块目标权重"},
+            "control_weight": {"value": self.control_weight, "range": (0.0, 1.0), "label": "控制权重"},
+            "planning_frequency": {"value": self.planning_frequency, "range": (1.0, 100.0), "unit": "Hz", "label": "规划频率"},
+            "timeout_seconds": {"value": self.timeout_seconds, "range": (0.05, 2.0), "unit": "s", "label": "超时秒"},
         }
 
     def metrics(self) -> dict:
@@ -386,20 +387,20 @@ class PandaMPCController(ControlPlugin):
             return {"规划次数": 0.0, "回退次数": float(self._fallback_count)}
         action, age_ms, statistics = self._Planner.get_action()
         return {
-            "规划次数": statistics.get("规划次数", 0.0),
-            "规划耗时(ms)": statistics.get("规划耗时ms", 0.0),
+            "规划次数": statistics.get("planning_count", 0.0),
+            "规划耗时(ms)": statistics.get("planning_time_ms", 0.0),
             "cost": statistics.get("cost", 0.0),
-            "hand-box(mm)": statistics.get("hand-box(mm)", 0.0),
-            "box-target(mm)": statistics.get("box-target(mm)", 0.0),
-            "cost_手": statistics.get("cost_手", 0.0),
-            "cost_目标": statistics.get("cost_目标", 0.0),
-            "cost_动作": statistics.get("cost_动作", 0.0),
-            "动作范数": statistics.get("动作范数", 0.0),
-            "动作峰值": statistics.get("动作峰值", 0.0),
-            "夹爪": statistics.get("夹爪", 0.0),
+            "hand-box(mm)": statistics.get("hand_box_mm", 0.0),
+            "box-target(mm)": statistics.get("box_target_mm", 0.0),
+            "cost_手": statistics.get("cost_hand", 0.0),
+            "cost_目标": statistics.get("cost_target", 0.0),
+            "cost_动作": statistics.get("cost_action", 0.0),
+            "动作范数": statistics.get("action_norm", 0.0),
+            "动作峰值": statistics.get("action_peak", 0.0),
+            "夹爪": statistics.get("gripper", 0.0),
             "动作年龄(ms)": age_ms,
             "回退次数": float(self._fallback_count),
-            "错误次数": statistics.get("错误次数", 0.0),
+            "错误次数": statistics.get("error_count", 0.0),
         }
 
     def status(self) -> dict:
@@ -410,9 +411,9 @@ class PandaMPCController(ControlPlugin):
         action, age_ms, statistics = self._Planner.get_action()
         return {
             "步数": self._step_count,
-            "规划次数": int(statistics.get("规划次数", 0)),
-            "hand-box": f"{statistics.get('hand-box(mm)', 0.0):.0f} mm",
-            "box-target": f"{statistics.get('box-target(mm)', 0.0):.0f} mm",
+            "规划次数": int(statistics.get("planning_count", 0)),
+            "hand-box": f"{statistics.get('hand_box_mm', 0.0):.0f} mm",
+            "box-target": f"{statistics.get('box_target_mm', 0.0):.0f} mm",
             "动作年龄": f'{age_ms:.0f} ms',
             "回退": self._fallback_count,
         }

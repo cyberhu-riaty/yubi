@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "_comment": "项目索引（给人看的对照表，不是外壳运行必需的）。外壳按每个项目文件里的 `模型` 字段反查。（机器键已英文化；项目名与显示名仍是给人看的值。）",
+  "projects": [
+    {
+      "project": "UR5e_基础PD",
+      "model": "模型/universal_robots_ur5e/ur5e_torque.xml",
+      "display_name": "Universal Robots UR5e"
+    },
+    {
+      "project": "UR10e_基础PD",
+      "model": "模型/universal_robots_ur10e/ur10e_torque.xml",
+      "display_name": "Universal Robots UR10e"
+    },
+    {
+      "project": "UR10_基础PD",
+      "model": "模型/universal_robots_ur10/ur10_torque.xml",
+      "display_name": "Universal Robots UR10"
+    },
+    {
+      "project": "xArm7_基础PD",
+      "model": "模型/ufactory_xarm7/xarm7_torque.xml",
+      "display_name": "xArm7"
+    },
+    {
+      "project": "Panda_基础PD",
+      "model": "模型/franka_emika_panda/panda_torque.xml",
+      "display_name": "Franka Emika Panda"
+    },
+    {
+      "project": "Panda_MJPC",
+      "model": "模型/panda_mjpc/task.xml",
+      "display_name": "Panda（MJPC 任务模型）"
+    },
+    {
+      "project": "iiwa14_基础PD",
+      "model": "模型/kuka_iiwa_14/iiwa14_torque.xml",
+      "display_name": "KUKA LBR iiwa 14"
+    },
+    {
+      "project": "Panda_抓取演示",
+      "model": "模型/panda_mjpc/task.xml",
+      "display_name": "Panda（抓取演示）"
+    }
+  ]
+}

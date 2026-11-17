@@ -109,19 +109,19 @@ def export(package_root: str, project_name: str) -> dict:
     record("项目.json", "模型路径 / 算法清单 / 参数")
 
     # ② 算法源码（真源码，不是名字）
-    discovered = {d["插件"]: d for d in _project.discover_algorithms()}
+    discovered = {d["plugin"]: d for d in _project.discover_algorithms()}
     used_plugins = []
-    for items in (config.get("算法") or []):
-        name = str((items or {}).get("插件") or "") if isinstance(items, dict) else ""
+    for items in (config.get("algorithms") or []):
+        name = str((items or {}).get("plugin") or "") if isinstance(items, dict) else ""
         if name and name in discovered:
-            source = discovered[name]["文件"]
+            source = discovered[name]["file"]
             if os.path.exists(source):
                 shutil.copyfile(source, os.path.join(algorithm_directory, f"{name}.py"))
                 record(f"算法/{name}.py", f"算法源码（{name}）")
                 used_plugins.append(name)
 
     # ③ 模型清单（不复制本体，给校验和）
-    relative_model_path = str(config.get("模型") or "")
+    relative_model_path = str(config.get("model") or "")
     absolute_model_path = _project.absolute_path(relative_model_path) if relative_model_path else ""
     lines = ["| 文件 | 大小 | sha256 |", "|---|---|---|"]
     for path, label in ((absolute_model_path, "入口模型"),):
@@ -142,7 +142,7 @@ def export(package_root: str, project_name: str) -> dict:
     record("模型清单.md", "模型文件的路径 / 大小 / sha256")
 
     # ④ 从这里开始.md —— 第一屏就说清楚"缺什么"
-    parameters = config.get("参数") or {}
+    parameters = config.get("parameters") or {}
     algorithm_lines = "\n".join(f"- `{n}`" for n in used_plugins) or "- （这个项目没挂算法）"
     parameter_lines = ("\n".join(f'- `{plugins}`：{len(values or {})} 个参数'
                         for plugins, values in parameters.items())

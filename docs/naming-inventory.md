@@ -2,7 +2,7 @@
 
 由 `scripts/audit_naming.py` 从当前工作区生成。
 
-扫描 216 个源码与配置文件；非 ASCII 名称出现位置共 5813 处。次数表示位置数量，不是迁移完成百分比。
+扫描 218 个源码与配置文件；非 ASCII 名称出现位置共 5547 处。次数表示位置数量，不是迁移完成百分比。
 
 中文界面、普通字符串值、注释和文档不计为标识符。字符串键是人工确认项，可能是机器字段，也可能是显示标签；JSON 键列入迁移范围。
 
@@ -13,9 +13,9 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | 类别 | 出现位置 |
 | --- | ---: |
 | `directory_name` | 10 |
-| `file_name` | 37 |
-| `json_key` | 578 |
-| `string_key` | 5188 |
+| `file_name` | 27 |
+| `json_key` | 367 |
+| `string_key` | 5143 |
 
 ## 按文件迁移
 
@@ -37,6 +37,7 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `scripts/tests/test_frontend_state.cjs` | 0 | 0 | 0 | 9 |
 | `scripts/tests/test_model_import.py` | 0 | 0 | 0 | 7 |
 | `scripts/tests/test_official_api.py` | 0 | 0 | 0 | 3 |
+| `scripts/tests/test_project_schema.py` | 0 | 0 | 0 | 32 |
 | `scripts/tests/test_wire_compatibility.cjs` | 0 | 0 | 0 | 81 |
 | `scripts/tests/test_wire_compatibility.py` | 0 | 0 | 0 | 5 |
 | `实验` | 0 | 1 | 0 | 0 |
@@ -56,7 +57,7 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `工具/验证/latency_sensitivity.py` | 0 | 0 | 0 | 8 |
 | `工具/验证/observation_selfcheck.py` | 0 | 0 | 0 | 2 |
 | `工具/验证/parameter_transaction_selfcheck.py` | 0 | 0 | 0 | 4 |
-| `工具/验证/project_selfcheck.py` | 0 | 0 | 0 | 7 |
+| `工具/验证/project_selfcheck.py` | 0 | 0 | 0 | 2 |
 | `工具/验证/runtime_selfcheck.py` | 0 | 0 | 0 | 1 |
 | `工具/验证/theme_selfcheck.py` | 0 | 0 | 0 | 8 |
 | `算法库` | 0 | 1 | 0 | 0 |
@@ -66,20 +67,20 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `算法库/通用/joint_pd_control.py` | 0 | 0 | 0 | 8 |
 | `算法库/通用/joint_pd_gravity_ff.py` | 0 | 0 | 0 | 3 |
 | `算法库/通用/joint_pd_plain.py` | 0 | 0 | 0 | 2 |
-| `算法库/通用/joint_pid_control.py` | 0 | 0 | 0 | 10 |
-| `算法库/通用/joint_pid_plain.py` | 0 | 0 | 0 | 5 |
-| `算法库/通用/panda_mjpc_port.py` | 0 | 0 | 0 | 69 |
-| `算法库/通用/panda_pick_place.py` | 0 | 0 | 0 | 20 |
+| `算法库/通用/joint_pid_control.py` | 0 | 0 | 0 | 9 |
+| `算法库/通用/joint_pid_plain.py` | 0 | 0 | 0 | 4 |
+| `算法库/通用/panda_mjpc_port.py` | 0 | 0 | 0 | 29 |
+| `算法库/通用/panda_pick_place.py` | 0 | 0 | 0 | 13 |
 | `算法库/通用/parameter_identification_plugin.py` | 0 | 0 | 0 | 13 |
 | `算法库/通用/sinusoidal_joint_motion.py` | 0 | 0 | 0 | 3 |
-| `算法库/通用/trajectory_target_player.py` | 0 | 0 | 0 | 9 |
+| `算法库/通用/trajectory_target_player.py` | 0 | 0 | 0 | 8 |
 | `算法库/通用/two_point_task_space.py` | 0 | 0 | 0 | 4 |
 | `软件` | 0 | 1 | 0 | 0 |
 | `软件/Web桥.py` | 0 | 1 | 0 | 130 |
 | `软件/ascii_text.py` | 0 | 0 | 0 | 48 |
 | `软件/command_bridge.py` | 0 | 0 | 0 | 8 |
 | `软件/contract.py` | 0 | 0 | 0 | 31 |
-| `软件/deployment_bridge.py` | 0 | 0 | 0 | 15 |
+| `软件/deployment_bridge.py` | 0 | 0 | 0 | 13 |
 | `软件/desktop_app.py` | 0 | 0 | 0 | 8 |
 | `软件/devices/connection_bridge.py` | 0 | 0 | 0 | 4 |
 | `软件/devices/safety.py` | 0 | 0 | 0 | 9 |
@@ -96,13 +97,14 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `软件/platform_adapters/windows.py` | 0 | 0 | 0 | 11 |
 | `软件/platform_adapters/windows_runtime_info.py` | 0 | 0 | 0 | 1 |
 | `软件/platform_adapters/windows_viewport.py` | 0 | 0 | 0 | 13 |
-| `软件/plugin_assembler.py` | 0 | 0 | 0 | 35 |
+| `软件/plugin_assembler.py` | 0 | 0 | 0 | 21 |
 | `软件/plugin_bridge.py` | 0 | 0 | 0 | 21 |
 | `软件/plugin_system.py` | 0 | 0 | 0 | 14 |
-| `软件/project_registry.py` | 0 | 0 | 0 | 26 |
+| `软件/project_registry.py` | 0 | 0 | 0 | 9 |
+| `软件/project_schema.py` | 0 | 0 | 0 | 15 |
 | `软件/run_experiment.py` | 0 | 0 | 0 | 4 |
 | `软件/runloop_timers.py` | 0 | 0 | 0 | 8 |
-| `软件/runtime_engine.py` | 0 | 0 | 0 | 12 |
+| `软件/runtime_engine.py` | 0 | 0 | 0 | 8 |
 | `软件/simulation_control.py` | 0 | 0 | 0 | 3 |
 | `软件/ui_bridge.py` | 0 | 0 | 0 | 3 |
 | `软件/web_app.py` | 0 | 0 | 0 | 3 |
@@ -133,23 +135,6 @@ TypeScript/TSX 使用编译器语法树；Python 使用语法树与 token。CSS/
 | `软件/骨架/官方接口清单.py` | 0 | 1 | 0 | 96 |
 | `软件/高亮桥.py` | 0 | 1 | 0 | 64 |
 | `项目` | 0 | 1 | 0 | 0 |
-| `项目/Panda_MJPC.json` | 0 | 0 | 13 | 0 |
-| `项目/Panda_基础PD.json` | 0 | 1 | 11 | 0 |
-| `项目/Panda_抓取演示.json` | 0 | 1 | 12 | 0 |
-| `项目/UR10_基础PD.json` | 0 | 1 | 10 | 0 |
-| `项目/UR10e_基础PD.json` | 0 | 1 | 12 | 0 |
-| `项目/UR5e_PD跟踪实验.json` | 0 | 1 | 14 | 0 |
-| `项目/UR5e_PID跟踪实验.json` | 0 | 1 | 10 | 0 |
-| `项目/UR5e_基础PD.json` | 0 | 1 | 11 | 0 |
-| `项目/iiwa14_基础PD.json` | 0 | 1 | 11 | 0 |
-| `项目/ur5e_pd_gravity_ff.json` | 0 | 0 | 10 | 0 |
-| `项目/ur5e_pd_gravity_ff_waypoint_tracking.json` | 0 | 0 | 13 | 0 |
-| `项目/ur5e_pd_plain.json` | 0 | 0 | 10 | 0 |
-| `项目/ur5e_pd_waypoint_tracking.json` | 0 | 0 | 13 | 0 |
-| `项目/ur5e_pid_plain.json` | 0 | 0 | 11 | 0 |
-| `项目/ur5e_pid_waypoint_tracking.json` | 0 | 0 | 12 | 0 |
-| `项目/xArm7_基础PD.json` | 0 | 1 | 12 | 0 |
-| `项目/索引.json` | 0 | 1 | 26 | 0 |
 
 ## 下一步
 

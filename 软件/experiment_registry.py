@@ -67,7 +67,7 @@ class Experiment:
             errors.append(f"项目不存在：{self.project or '（空）'}")
         else:
             configured = tuple(
-                str(item.get("插件") or "") for item in _projects.parse_algorithms(project)
+                str(item.get("plugin") or "") for item in _projects.parse_algorithms(project)
                 if isinstance(item, dict)
             )
             if configured != self.algorithm_names:

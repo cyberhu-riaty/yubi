@@ -48,7 +48,7 @@ class ControllerRegistry:
         self._metadata.pop(str(name), None)
 
     def keys(self) -> tuple[str, ...]:
-        discovered = {str(item.get("插件") or "") for item in _projects.discover_algorithms()}
+        discovered = {str(item.get("plugin") or "") for item in _projects.discover_algorithms()}
         return tuple(sorted(({x for x in discovered if x} | set(self._factories))))
 
     def create(self, name: str, **kwargs: Any) -> object:

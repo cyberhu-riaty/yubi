@@ -73,7 +73,7 @@ def find_model() -> tuple[str, str]:
     try:
         for name in sorted(project_registry.list_projects() or []):
             project = project_registry.load_project(name) or {}
-            path = project.get("模型") or ""
+            path = project.get("model") or ""
             absolute_path = project_registry.absolute_path(path) if path else ""
             if absolute_path and os.path.exists(absolute_path):
                 return absolute_path, f"项目「{name}」声明的模型"

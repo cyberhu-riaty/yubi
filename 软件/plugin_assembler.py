@@ -247,11 +247,11 @@ def create_plugin(entry: dict | str) -> tuple[object | None, dict, str]:
     实例”的地方；注册表和项目装配不再各写一份动态导入逻辑。
     """
     if isinstance(entry, str):
-        entry = {"插件": entry}
-    module_name = _projects.normalize_algorithm_name((entry or {}).get("插件") or "")
+        entry = {"plugin": entry}
+    module_name = _projects.normalize_algorithm_name((entry or {}).get("plugin") or "")
     entry = dict(entry or {})
-    entry["插件"] = module_name
-    file_path = (entry or {}).get("文件") or _projects.algorithm_file(entry)
+    entry["plugin"] = module_name
+    file_path = (entry or {}).get("file") or _projects.algorithm_file(entry)
     if not module_name:
         return None, {}, "没有给插件注册名"
     if not file_path:
@@ -261,14 +261,16 @@ def create_plugin(entry: dict | str) -> tuple[object | None, dict, str]:
     if module is None:
         return None, {}, f"导入失败 —— {reason}"
 
-    cls, reason = find_plugin_class(module, str((entry or {}).get("类") or ""))
+    cls, reason = find_plugin_class(module, str((entry or {}).get("class") or ""))
     if cls is None:
         return None, {}, reason
 
     metadata = read_metadata(cls)
     metadata.update({"插件": module_name, "文件": os.path.abspath(file_path), "类": cls.__name__})
     try:
-        return cls(), metadata, ""
+        instance = cls()
+        instance.plugin_id = module_name
+        return instance, metadata, ""
     except Exception as exc:                                      # noqa: BLE001
         return None, metadata, f"实例化失败 —— {type(exc).__name__}: {exc}"
 
@@ -294,12 +296,12 @@ def assemble_project(project_data: dict | None, project_name: str = "",
     report: list[str] = []
     if algorithm_override is not None:
         # 用户指定的顺序就是执行顺序，**不能**在这里重排（最后一项说了算，见 项目.py）
-        entries = [{"插件": _projects.normalize_algorithm_name(str(x))}
+        entries = [{"plugin": _projects.normalize_algorithm_name(str(x))}
                  for x in algorithm_override if str(x).strip()]
-        discovered = {d["插件"]: d for d in _projects.discover_algorithms()}
+        discovered = {d["plugin"]: d for d in _projects.discover_algorithms()}
         for item in entries:
-            if item["插件"] in discovered:
-                item["文件"] = discovered[item["插件"]]["文件"]
+            if item["plugin"] in discovered:
+                item["file"] = discovered[item["plugin"]]["file"]
         report.append(f"（算法由界面指定：{len(entries)} 个，顺序即执行顺序）")
     else:
         entries = _projects.parse_algorithms(project_data)
@@ -310,7 +312,7 @@ def assemble_project(project_data: dict | None, project_name: str = "",
         return instances, report
 
     for entry in entries:
-        module_name = entry.get("插件", "")
+        module_name = entry.get("plugin", "")
         instance, metadata, reason = create_plugin(entry)
         if instance is None:
             report.append(f"✗ {module_name}：{reason}")
@@ -412,15 +414,16 @@ def project_from_model(model_path: str, algorithms: object = "*", note: str = ""
     """
     name = _projects.display_model_name(model_path)
     data = {
-        "_说明": "由外壳按模型自动生成的项目（首次点开这个模型时创建）。"
-                 "算法 字段写 \"*\" = 用算法库全部；想只留几个就把它们列出来。",
-        "项目": name,
-        "模型": _projects.relative_to_package(model_path),
-        "算法": algorithms,
-        "参数": {},
+        "schema_version": 2,
+        "comment": "由外壳按模型自动生成的项目（首次点开这个模型时创建）。"
+                   "algorithms 字段写 \"*\" = 用算法库全部；想只留几个就把它们列出来。",
+        "project": name,
+        "model": _projects.relative_to_package(model_path),
+        "algorithms": algorithms,
+        "parameters": {},
     }
     if note:
-        data["备注"] = note
+        data["notes"] = note
     return data
 
 

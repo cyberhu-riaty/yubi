@@ -356,13 +356,13 @@ class PandaPickPlaceController(ControlPlugin):
     def adjustable_parameters(self) -> dict:
         """声明界面滑杆：键必须是本类的属性名，范围用于基类校验。"""
         return {
-            "位置增益": {"value": self.position_gain, "range": (10.0, 2000.0)},
-            "速度阻尼": {"value": self.velocity_damping, "range": (0.0, 300.0)},
-            "朝向增益": {"value": self.orientation_gain, "range": (0.0, 20.0)},
-            "朝向阻尼": {"value": self.orientation_damping, "range": (0.0, 5.0)},
-            "目标高度": {"value": self.target_height, "range": (0.0, 0.10), "unit": "m"},
-            "目标偏置X": {"value": self.target_offset_x, "range": (-0.10, 0.10), "unit": "m"},
-            "目标偏置Y": {"value": self.target_offset_y, "range": (-0.10, 0.10), "unit": "m"},
+            "position_gain": {"value": self.position_gain, "range": (10.0, 2000.0), "label": "位置增益"},
+            "velocity_damping": {"value": self.velocity_damping, "range": (0.0, 300.0), "label": "速度阻尼"},
+            "orientation_gain": {"value": self.orientation_gain, "range": (0.0, 20.0), "label": "朝向增益"},
+            "orientation_damping": {"value": self.orientation_damping, "range": (0.0, 5.0), "label": "朝向阻尼"},
+            "target_height": {"value": self.target_height, "range": (0.0, 0.10), "unit": "m", "label": "目标高度"},
+            "target_offset_x": {"value": self.target_offset_x, "range": (-0.10, 0.10), "unit": "m", "label": "目标偏置X"},
+            "target_offset_y": {"value": self.target_offset_y, "range": (-0.10, 0.10), "unit": "m", "label": "目标偏置Y"},
         }
 
     def metrics(self) -> dict:

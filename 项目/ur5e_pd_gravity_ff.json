@@ -1,21 +1,22 @@
 {
-  "_说明": "三组控制对比实验之三：PD＋模型重力前馈。",
-  "项目": "ur5e_pd_gravity_ff",
-  "模型": "模型/universal_robots_ur5e/ur5e_torque.xml",
-  "实验专用": true,
-  "算法": [
+  "schema_version": 2,
+  "_comment": "三组控制对比实验之三：PD＋模型重力前馈。",
+  "project": "ur5e_pd_gravity_ff",
+  "model": "模型/universal_robots_ur5e/ur5e_torque.xml",
+  "algorithms": [
     {
-      "插件": "joint_pd_gravity_ff"
+      "plugin": "joint_pd_gravity_ff"
     },
     {
-      "插件": "data_recorder"
+      "plugin": "data_recorder"
     }
   ],
-  "参数": {
-    "关节 PD＋重力前馈": {
+  "parameters": {
+    "joint_pd_gravity_ff": {
       "KP": 350.0,
       "KD": 50.0
     }
   },
-  "备注": "与纯 PD 组使用完全相同的 KP/KD，唯一差异是重力前馈。"
+  "notes": "与纯 PD 组使用完全相同的 KP/KD，唯一差异是重力前馈。",
+  "experiment_only": true
 }

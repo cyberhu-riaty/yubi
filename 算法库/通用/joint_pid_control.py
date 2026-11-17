@@ -90,7 +90,8 @@ class JointPIDController(ControlPlugin):
             "KP": {"value": self.KP, "range": (1.0, 5000.0), "step": 1.0},
             "KI": {"value": self.KI, "range": (0.0, 1000.0), "step": 0.5},
             "KD": {"value": self.KD, "range": (0.0, 500.0), "step": 0.5},
-            "积分上限": {"value": self.integral_limit, "range": (0.01, 2.0), "step": 0.01, "unit": "rad·s"},
+            "integral_limit": {"value": self.integral_limit, "range": (0.01, 2.0), "step": 0.01,
+                               "unit": "rad·s", "label": "积分上限"},
         }
 
     def metrics(self) -> dict:
