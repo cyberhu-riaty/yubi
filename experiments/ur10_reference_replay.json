@@ -1,0 +1,19 @@
+{
+  "key": "ur10_reference_replay",
+  "name": "UR10 参考实验回放对比",
+  "description": "按处理后的实机参考 q/dq 回放 3D 运动，并在验证页显示六关节实测电流/估算力矩、模型无摩擦/含摩擦预测与 UR 目标力矩。这是离线回放，不是实时采集，也不是正向控制复现。",
+  "model": "ur10/models/ur10_extfric.xml",
+  "project": "ur10_reference_replay",
+  "preprocessors": ["reference_replay_player"],
+  "controllers": [],
+  "plugins": [],
+  "trajectory": {
+    "type": "reference_playback",
+    "index": 0,
+    "source": "ur10/experiments/legacy/outputs/results/trajectory_*_identified_results.mat"
+  },
+  "initial_state": {"type": "keyframe_or_qpos0", "keyframe": "home"},
+  "stop_condition": {"type": "simulation_time", "seconds": 9.2},
+  "recording": {"enabled": true, "frequency_hz": 100},
+  "result": {"directory": "输出/UR10参考回放", "files": ["states.csv", "metrics.json", "experiment.json"]}
+}

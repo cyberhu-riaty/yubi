@@ -16,6 +16,7 @@
  *   （用墙钟而不是仿真时间：物理暂停时仿真时间不动，曲线会挤成一坨）。
  */
 import { useSyncExternalStore } from "react";
+import { emptyTrackingHistory, receiveTracking, type TrackingHistory } from "./live_tracking";
 import { BackendConnection, guessBackendUrl, type CommandReceipt, type MessageFrame, type Handshake, type ConnectionState, type SamplePoint } from "./connection";
 
 export interface ProjectAlgorithm extends Record<string, unknown> {
@@ -318,6 +319,8 @@ export interface UIState {
   simulation: SnapshotDomain<SimulationState>;
   /** 当前注册实验及自动运行结果 */
   experiment: SnapshotDomain<ExperimentState>;
+  /** Dedicated tracking history keyed by backend run ID, in simulation time. */
+  liveTracking: TrackingHistory;
   /** 简单关节控制目标与当前状态 */
   control: SnapshotDomain<ControlState>;
   /** 自检报告 */
@@ -364,6 +367,7 @@ let state: UIState = {
   system: { ...emptySnapshot },
   simulation: { ...emptySnapshot },
   experiment: { ...emptySnapshot },
+  liveTracking: emptyTrackingHistory(),
   control: { ...emptySnapshot },
   diagnostics: { ...emptySnapshot },
   plugins: { ...emptySnapshot },
@@ -438,6 +442,9 @@ export function startConnection(): () => void {
 function receiveFrame(frame: MessageFrame): void {
   const timestamp = (frame.timestamp ?? Date.now() / 1000) as number;
   switch (frame.topic) {
+    case "tracking.state":
+      updateState((s) => ({ ...s, liveTracking: receiveTracking(s.liveTracking, frame.data, Date.now()) }));
+      return;
     case "model.library":
       updateState((s) => ({ ...s, assets: { data: frame.data as AssetLibrary, frameId: frame.sequence ?? 0, timestamp: timestamp } }));
       return;

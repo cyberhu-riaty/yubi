@@ -61,15 +61,18 @@ class ContractTests(unittest.TestCase):
         self.addCleanup(canonical.stop)
         return self.load_source("legacy/contract.py", "legacy_contract_under_test")
 
-    def test_wire_payload_and_version_are_unchanged(self):
+    def test_v22_adds_tracking_and_preserves_existing_v21_payloads(self):
         wire = self.contract.to_dict()
-        self.assertEqual(self.contract.VERSION, 21)
-        self.assertEqual(len(self.contract.ALL_TOPICS), 33)
+        self.assertEqual(self.contract.VERSION, 22)
+        self.assertEqual(len(self.contract.ALL_TOPICS), 34)
         self.assertEqual(list(wire), ["版本", "类型记号", "下行", "上行"])
-        self.assertEqual(digest(wire), WIRE_V21_SHA256)
+        self.assertEqual(self.contract.get_topic("tracking.state").class_name, "LiveTrackingState")
+        previous = dict(wire, 版本=21)
+        previous["下行"] = [topic for topic in wire["下行"] if topic["名"] != "tracking.state"]
+        self.assertEqual(digest(previous), WIRE_V21_SHA256)
 
     def test_validation_results_match_pre_migration_snapshot(self):
-        rows = validation_rows(self.contract)
+        rows = [row for row in validation_rows(self.contract) if row[0] != "tracking.state"]
         self.assertEqual(len(rows), 5767)
         self.assertEqual(digest(rows), VALIDATION_V21_SHA256)
 
@@ -110,7 +113,7 @@ class ContractTests(unittest.TestCase):
             for field in topic.fields:
                 self.assertEqual(getattr(field, "名"), field.name)
                 self.assertEqual(getattr(field, "类型"), field.type)
-        self.assertEqual(digest(getattr(legacy, "转字典")()), WIRE_V21_SHA256)
+        self.assertEqual(getattr(legacy, "转字典")(), self.contract.to_dict())
 
     def test_legacy_constructor_keywords_and_isinstance_are_supported(self):
         legacy = self.load_legacy()

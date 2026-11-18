@@ -80,6 +80,12 @@ class ExperimentRunner:
         self._result_directory = ""
         self._next_publish_wall_time = 0.0
         self._available = self._read_available()
+        self._tracking_revision = 0
+
+    def tracking_context(self):
+        """Read-only identity and time origin for the independent display stream."""
+        return (self._experiment, self._tracking_revision,
+                self._start_simulation_time, self._status)
 
     @staticmethod
     def _read_available() -> list[dict]:
@@ -101,6 +107,18 @@ class ExperimentRunner:
         return items
 
     def receive_model(self, event) -> None:
+        new_model = getattr(event, "model", None)
+        if new_model is not self._model:
+            self._tracking_revision += 1
+            self._recorder = None
+            self._start_simulation_time = float(getattr(getattr(event, "data", None), "time", 0.0))
+            # A model lifecycle event has no file path. Any replacement of an
+            # existing model invalidates its experiment. Loading an experiment
+            # explicitly selects the new definition after model assembly.
+            if self._model is not None:
+                self._experiment = None
+                self._status = "not_selected"
+                self._description = "模型已切换；请重新加载实验"
         self._model = getattr(event, "model", None)
         self._data = getattr(event, "data", None)
 
@@ -119,6 +137,7 @@ class ExperimentRunner:
             self.publish(force=True)
             return False
         self._experiment = experiment
+        self._tracking_revision += 1
         self._recorder = None
         self._start_simulation_time = float(getattr(self._data, "time", 0.0))
         self._status = "loaded"
@@ -151,6 +170,7 @@ class ExperimentRunner:
             self._status = "paused"
             self._description = "记录保留；再次开始将继续本次实验"
         elif action in ("复位", "reset"):
+            self._tracking_revision += 1
             if self._clear_observations is not None:
                 self._clear_observations()
             self._recorder = None

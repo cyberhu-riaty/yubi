@@ -52,7 +52,8 @@ from typing import Any
 #  19（2026-11-02）：模型/项目状态及模型/算法命令迁移为英文；删除中文模型桥模块。
 #  20（2026-11-02）：仿真运行/重力消息迁移为英文；删除中文重力桥模块。
 #  21（2026-11-02）：参数表、参数修改与参数事务迁移为英文；删除中文参数桥模块。
-VERSION = 21
+#  22（2026-11-17）：补 tracking.state，使用运行编号和仿真时间发布逐关节跟踪历史。
+VERSION = 22
 
 
 @dataclasses.dataclass(frozen=True)
@@ -287,6 +288,22 @@ _OUTBOUND = (
             Field("elapsed_s", "number", "从本次点击开始累计的仿真时间"),
             Field("result_directory", "string", "自动导出完成后的目录"),
             Field("description", "string", "最近一次实验操作说明"),
+        ),
+    ),
+    Topic(
+        name="tracking.state", class_name="LiveTrackingState", direction="下行", kind="快照",
+        summary="运行段内的关节跟踪数据；仿真时间、短期重复样本尾部与真实执行器力矩",
+        fields=(
+            Field("run_id", "string", "复位、重载、换模型或后端重启后变化的运行编号"),
+            Field("experiment_name", "string", "当前实验显示名"),
+            Field("model_name", "string", "MuJoCo 模型名"),
+            Field("status", "string", "idle / loading / ready / running / paused / completed / error"),
+            Field("joint_names", "string[]", "按显式地址映射的 hinge 关节名"),
+            Field("elapsed_s", "number", "运行段内的仿真时间，暂停时不变"),
+            Field("duration_s", "any", "实验时长秒；未知时为 null"),
+            Field("compensation_state", "string", "unavailable / disabled / enabled"),
+            Field("samples", "object[]", "带 sample_index 的重复尾部；elapsed_s 及逐关节 position_rad/reference_rad/velocity_rad_s/error_rad/actuator_torque_nm/compensation_torque_nm；缺失值 null"),
+            Field("description", "string", "数据来源说明"),
         ),
     ),
     Topic(
@@ -618,6 +635,7 @@ def find_drift() -> list[str]:
         "GravityState": "simulation_control", "SimulationState": "simulation_control",
         "SimulationControlCommand": "simulation_control",
         "ExperimentState": "experiment_bridge", "ExperimentCommand": "experiment_bridge",
+        "LiveTrackingState": "live_tracking_bridge",
         "PlanningResult": "planning_bridge", "PlanningCommand": "planning_bridge",
         "ControlState": "control_bridge", "ControlTargetCommand": "control_bridge",
         "SwitchModelCommand": "model_bridge", "ApplyAlgorithmsCommand": "model_bridge",

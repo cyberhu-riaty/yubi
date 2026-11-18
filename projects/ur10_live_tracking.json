@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "project": "ur10_live_tracking",
+  "model": "ur10/models/ur10.xml",
+  "algorithms": [
+    {"plugin": "trajectory_target_player"},
+    {"plugin": "joint_position_servo"}
+  ],
+  "parameters": {},
+  "notes": "使用已有辨识动力学与内置简化摩擦的位置伺服模型，ctrl 为 rad，图中力矩来自 qfrc_actuator。",
+  "experiment_only": true
+}

@@ -339,6 +339,42 @@ class Server:
         while not self._stop.is_set():
             await asyncio.sleep(0.1)
 
+    @staticmethod
+    def _serve_reference(clean_path: str, raw_path: str, response_type, headers_type):
+        """只读参考数据 API：列表 / 单条轨迹（含可选独立重算）。"""
+        from urllib.parse import parse_qs, urlsplit
+
+        import reference_replay
+
+        def reply(status: int, payload: dict):
+            body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            header = headers_type({"Content-Type": "application/json; charset=utf-8",
+                                   "Content-Length": str(len(body)),
+                                   "Cache-Control": "no-store"})
+            return response_type(status, "OK" if status == 200 else "Error", header, body)
+
+        try:
+            if clean_path == "/api/reference/summary":
+                return reply(200, reference_replay.reference_summary())
+            if clean_path == "/api/reference/trajectories":
+                return reply(200, {"trajectories": reference_replay.list_trajectories(),
+                                   "directory": str(reference_replay.reference_directory()),
+                                   "raw_rtde_available": False})
+            prefix = "/api/reference/trajectory/"
+            if clean_path.startswith(prefix):
+                suffix = clean_path[len(prefix):].strip("/")
+                if not suffix.isdigit():
+                    return reply(400, {"error": "trajectory index must be an integer"})
+                query = parse_qs(urlsplit(raw_path).query)
+                recompute = query.get("recompute", ["1"])[0] not in ("0", "false", "False")
+                return reply(200, reference_replay.reference_payload(int(suffix), include_recompute=recompute))
+            return reply(404, {"error": "unknown reference endpoint"})
+        except FileNotFoundError as exc:
+            return reply(404, {"error": str(exc)})
+        except Exception as exc:                                      # noqa: BLE001
+            print(f"⚠ 参考数据接口失败：{type(exc).__name__}: {exc}", flush=True)
+            return reply(500, {"error": f"{type(exc).__name__}: {exc}"})
+
     # ---- HTTP：同一个端口提供仪表盘，省掉第二个进程/端口 ----
     async def _serve_http(self, connection, request):
         """只要不是 WebSocket 升级请求，就当静态请求处理。
@@ -377,6 +413,13 @@ class Server:
                           "Content-Length": str(len(body)),
                           "Cache-Control": "no-store"})
             return Response(200, "OK", header, body)
+
+        # ---- UR10 参考实验（离线回放/对比）----
+        # 数据是原始脚本处理后的 MAT（不是原始 RTDE）。这里只读本地已知目录，
+        # 不在 URL 里接受任意路径；每次请求按文件 mtime 缓存，首屏不会重复解 MATLAB。
+        clean_path = path.split("?", 1)[0]
+        if clean_path.startswith("/api/reference"):
+            return self._serve_reference(clean_path, path, Response, Headers)
 
         # ---- 前端静态产物（P1 起）----
         #   `runtime/web/` 是 Vite 构建出来的 React 应用。有它就用它；

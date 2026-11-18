@@ -1,0 +1,12 @@
+{
+  "schema_version": 2,
+  "project": "ur10_reference_replay",
+  "model": "ur10/models/ur10_extfric.xml",
+  "algorithms": [
+    {
+      "plugin": "reference_replay_player"
+    }
+  ],
+  "notes": "处理后的实机参考轨迹回放；q/dq 来自 trajectory_N_identified_results.mat，不代表正向控制器复现。",
+  "experiment_only": true
+}

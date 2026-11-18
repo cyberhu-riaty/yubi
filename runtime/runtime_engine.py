@@ -1038,7 +1038,8 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                     if str(experiment.trajectory.get("type") or "") != "joint_waypoints":
                         return
                     _trajectory_runtime.prepare_trajectory_visualization(
-                        model, experiment.key, experiment.trajectory, plugin_framework.mujoco)
+                        current_model if headless else handle.model,
+                        experiment.key, experiment.trajectory, plugin_framework.mujoco)
 
                 def _load_experiment(name: str):
                     try:
@@ -1084,6 +1085,9 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                 print(f"⚠ 实验运行器不可用（普通模型/控制功能不受影响）："
                       f"{type(exc).__name__}: {exc}", flush=True)
                 experiment_runner = None
+
+            from live_tracking_bridge import LiveTrackingPublisher
+            tracking_publisher = LiveTrackingPublisher(_publish_outlet)
 
             # 参数通道：把"插件声明了哪些可调参数"周期性发给界面（第 4 步 参数面板）
             try:
@@ -1210,11 +1214,29 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
 
                 if not headless and handle.model is None:
                     break
-                if not headless:
+                if headless:
+                    # A model-load command can replace both objects while the
+                    # inbox is drained. Never sample/step the old pair once more.
+                    model, data = current_model, current_data
+                    handle.model, handle.data = model, data
+                else:
                     model, data = handle.model, handle.data
 
                 # 派发 StepEvent：StepControl（内置）推进物理 + 你的插件写控制量
                 registry.process_message(messages.StepEvent(model=model, data=data))
+
+                # The controller and reference have now been evaluated at the
+                # current state. Sampling uses a private MjData, never mutating
+                # the plant to refresh derived actuator forces.
+                if gravity_applier is not None:
+                    try:
+                        tracking_publisher.maybe_publish(
+                            model, data, experiment_runner, gravity_applier,
+                            _time.perf_counter())
+                    except Exception as exc:                             # noqa: BLE001
+                        if not errors.get("tracking_reported"):
+                            errors["tracking_reported"] = True
+                            print(f"⚠ 实时跟踪采样失败：{type(exc).__name__}: {exc}", flush=True)
 
                 # 「记录航点」需要 `data.qpos`，只有这里拿得到 —— 所以由循环消费。
                 #   ★ 插件自己拿不到 data（那是外壳的局部变量），这是刻意的分层：

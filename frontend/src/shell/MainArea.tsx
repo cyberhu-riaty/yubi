@@ -26,6 +26,7 @@ import type { SamplePoint } from "../data/connection";
 import { CONTRACT_VERSION, PROTOCOL_VERSION } from "@generated/contract";
 import { useTheme } from "../generated/appearance";
 import { connectionTranslationKeys, useTranslation } from "../views/i18n";
+import { requestStepNavigation } from "./step_navigation";
 
 export interface MainAreaProps {
   /** 迷你走势条最多显示多少条（再多就只报总数） */
@@ -153,6 +154,10 @@ export function SimulationToolbar() {
     .map((item) => item.key ?? "").join("|");
 
   useEffect(() => {
+    if (experiment?.current) requestStepNavigation("验证");
+  }, [experiment?.current]);
+
+  useEffect(() => {
     const next = experiment?.current || experiment?.available?.[0]?.key || "";
     if (next) setSelectedExperiment(next);
   }, [experiment?.current, experimentOptionsSignature]);
@@ -179,8 +184,10 @@ export function SimulationToolbar() {
     setExperimentBusy(true);
     try {
       const startedAt = recordCommandStart();
-      finishCommand("command.experiment", await commands.loadExperiment(selectedExperiment), startedAt,
+      const receipt = await commands.loadExperiment(selectedExperiment);
+      finishCommand("command.experiment", receipt, startedAt,
         { module: "仿真·实验" });
+      if (receipt.passed) requestStepNavigation("验证");
     } finally {
       setExperimentBusy(false);
     }

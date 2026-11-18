@@ -1,0 +1,6 @@
+{
+  "bodies": {},
+  "joints": {
+    "shoulder_pan_joint": {"armature": 0.0628}
+  }
+}

@@ -1,0 +1,150 @@
+{
+  "model": "C:\\Users\\asteroid\\Desktop\\ur10\\ur10_extfric.xml",
+  "data_dir": "C:\\Users\\asteroid\\Desktop\\ur10数据-2106采集\\ur10数据-2106采集",
+  "torque_constant_Nm_per_A": [
+    14.7336,
+    14.33,
+    11.5476,
+    11.2487,
+    11.5,
+    11.5
+  ],
+  "friction_Fc": [
+    10.0974,
+    0.0001,
+    5.0802,
+    2.4161,
+    1.63,
+    1.5899
+  ],
+  "friction_Fv": [
+    21.4908,
+    26.2056,
+    15.251,
+    3.2302,
+    3.8445,
+    3.7069
+  ],
+  "friction_B": [
+    -0.3424,
+    0.1266,
+    0.2008,
+    0.6767,
+    0.6249,
+    0.5755
+  ],
+  "friction_alpha": [
+    0.5779,
+    0.2727,
+    0.6048,
+    0.8441,
+    0.7126,
+    0.7176
+  ],
+  "current_cutoff_hz": 10.0,
+  "state_cutoff_hz": 10.0,
+  "savgol_window_seconds": 0.25,
+  "trim_seconds_each_end": 0.5,
+  "datasets": [
+    {
+      "file": "ur_rtde_newtraj_2021_0_data_noload.mat",
+      "raw_samples": 2240,
+      "unique_samples": 1253,
+      "duplicate_samples_removed": 987,
+      "sample_rate_hz": 124.99999999940314,
+      "start_time_s": 735.048,
+      "duration_s": 10.015999999999963,
+      "analyzed_samples": 1129
+    },
+    {
+      "file": "ur_rtde_newtraj_2021_1_data_noload.mat",
+      "raw_samples": 2249,
+      "unique_samples": 1254,
+      "duplicate_samples_removed": 995,
+      "sample_rate_hz": 124.99999999940314,
+      "start_time_s": 904.448,
+      "duration_s": 10.024000000000001,
+      "analyzed_samples": 1130
+    },
+    {
+      "file": "ur_rtde_newtraj_2021_2_data_noload.mat",
+      "raw_samples": 2252,
+      "unique_samples": 1260,
+      "duplicate_samples_removed": 992,
+      "sample_rate_hz": 124.99999999940314,
+      "start_time_s": 1074.44,
+      "duration_s": 10.071999999999889,
+      "analyzed_samples": 1136
+    },
+    {
+      "file": "ur_rtde_newtraj_2021_3_data_noload.mat",
+      "raw_samples": 2249,
+      "unique_samples": 1258,
+      "duplicate_samples_removed": 991,
+      "sample_rate_hz": 124.99999999940314,
+      "start_time_s": 1211.6,
+      "duration_s": 10.05600000000004,
+      "analyzed_samples": 1134
+    },
+    {
+      "file": "ur_rtde_newtraj_2021_4_data_noload.mat",
+      "raw_samples": 2245,
+      "unique_samples": 1254,
+      "duplicate_samples_removed": 991,
+      "sample_rate_hz": 124.99999999940314,
+      "start_time_s": 1379.504,
+      "duration_s": 10.024000000000115,
+      "analyzed_samples": 1130
+    },
+    {
+      "file": "ur_rtde_newtraj_2021_5_data_noload.mat",
+      "raw_samples": 2251,
+      "unique_samples": 1261,
+      "duplicate_samples_removed": 990,
+      "sample_rate_hz": 124.99999999940314,
+      "start_time_s": 1561.512,
+      "duration_s": 10.079999999999927,
+      "analyzed_samples": 1137
+    },
+    {
+      "file": "ur_rtde_newtraj_2021_6_data_noload.mat",
+      "raw_samples": 2253,
+      "unique_samples": 1261,
+      "duplicate_samples_removed": 992,
+      "sample_rate_hz": 124.99999999940314,
+      "start_time_s": 1681.136,
+      "duration_s": 10.079999999999927,
+      "analyzed_samples": 1137
+    },
+    {
+      "file": "ur_rtde_newtraj_2021_7_data_noload.mat",
+      "raw_samples": 2256,
+      "unique_samples": 1263,
+      "duplicate_samples_removed": 993,
+      "sample_rate_hz": 124.99999999940314,
+      "start_time_s": 1855.472,
+      "duration_s": 10.096000000000004,
+      "analyzed_samples": 1139
+    },
+    {
+      "file": "ur_rtde_newtraj_2021_8_data_noload.mat",
+      "raw_samples": 2245,
+      "unique_samples": 1253,
+      "duplicate_samples_removed": 992,
+      "sample_rate_hz": 124.99999999940314,
+      "start_time_s": 1986.288,
+      "duration_s": 10.015999999999849,
+      "analyzed_samples": 1129
+    },
+    {
+      "file": "ur_rtde_newtraj_2021_9_data_noload.mat",
+      "raw_samples": 2255,
+      "unique_samples": 1260,
+      "duplicate_samples_removed": 995,
+      "sample_rate_hz": 125.00000000295586,
+      "start_time_s": 2152.2,
+      "duration_s": 10.072000000000116,
+      "analyzed_samples": 1134
+    }
+  ]
+}

@@ -113,6 +113,11 @@ pdf*.py
 *.pptx
 .~*.pptx
 projects/
+# 本轮新增的可复现实验项目需要随源码保存，其余本地项目继续忽略。
+!/projects/
+/projects/*
+!/projects/ur10_live_tracking.json
+!/projects/ur10_reference_replay.json
 actuator-module-research-*.md
 inspire_robots_joint_module_research.md
 research_*.md

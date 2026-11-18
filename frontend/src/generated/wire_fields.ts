@@ -78,6 +78,7 @@ export const serverFieldAliases: Record<string, Record<string, string>> = {
   },
   "simulation.state": {},
   "experiment.state": {},
+  "tracking.state": {},
   "控制状态": {
     "关节名": "joint_names",
     "当前位置": "current_position",

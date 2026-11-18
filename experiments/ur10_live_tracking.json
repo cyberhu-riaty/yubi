@@ -1,0 +1,88 @@
+{
+  "key": "ur10_live_tracking",
+  "name": "UR10 实时轨迹跟踪",
+  "description": "14 秒合成六关节往返演示轨迹（不是参考实验的实机轨迹，也不等同于参考图回放）；如果要复现参考图的六关节电流/力矩对比，请选择「UR10 参考实验回放对比」。",
+  "model": "ur10/models/ur10.xml",
+  "project": "ur10_live_tracking",
+  "preprocessors": [
+    "trajectory_target_player"
+  ],
+  "controllers": [
+    "joint_position_servo"
+  ],
+  "plugins": [],
+  "trajectory": {
+    "type": "joint_waypoints",
+    "interpolation": "quintic_smoothstep",
+    "source": "ur10_simulation_joint_demo_v1",
+    "times": [
+      0,
+      3,
+      6,
+      9,
+      12
+    ],
+    "waypoints": [
+      [
+        0,
+        -1.5708,
+        1.5708,
+        -1.5708,
+        -1.5708,
+        0
+      ],
+      [
+        0.3,
+        -1.37,
+        1.32,
+        -1.42,
+        -1.37,
+        0.25
+      ],
+      [
+        -0.25,
+        -1.77,
+        1.82,
+        -1.72,
+        -1.77,
+        -0.25
+      ],
+      [
+        0.2,
+        -1.42,
+        1.37,
+        -1.37,
+        -1.42,
+        0.2
+      ],
+      [
+        0,
+        -1.5708,
+        1.5708,
+        -1.5708,
+        -1.5708,
+        0
+      ]
+    ]
+  },
+  "initial_state": {
+    "type": "keyframe_or_qpos0",
+    "keyframe": "home"
+  },
+  "stop_condition": {
+    "type": "simulation_time",
+    "seconds": 14
+  },
+  "recording": {
+    "enabled": true,
+    "frequency_hz": 100
+  },
+  "result": {
+    "directory": "输出/实验",
+    "files": [
+      "states.csv",
+      "metrics.json",
+      "curves.html"
+    ]
+  }
+}

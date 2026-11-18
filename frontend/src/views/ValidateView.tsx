@@ -22,6 +22,8 @@ import { requestStepNavigation } from "../shell/step_navigation";
 import type { ParameterItem } from "../data/store";
 import { showError } from "../data/toasts";
 import { useTranslation } from "./i18n";
+import { LiveTrackingView } from "./LiveTrackingView";
+import { ReferenceComparisonView } from "./ReferenceComparisonView";
 
 /** `s.曲线` 的环形缓冲窗口（`数据/store.ts` 里就是 120 秒） */
 const windowSeconds = 120;
@@ -157,11 +159,14 @@ function ParameterValueEditor({
 }
 
 export function ValidateView() {
+  const currentExperiment = useStore((s) => s.experiment.data?.current ?? "");
+  const referenceMode = currentExperiment === "ur10_reference_replay";
   const t = useTranslation();
   const chartCount = useStore((s) => s.charts);
   const parameters = useStore((s) => s.parameters.data);
   const parameterFrameId = useStore((s) => s.parameters.frameId);
   const simulationRunning = useStore((s) => s.simulation.data?.state === "running");
+  const trackingActive = useStore((s) => !!s.liveTracking.experimentName);
   const tick = useClock();
 
   const names = useMemo(() => Object.keys(chartCount).sort(), [chartCount]);
@@ -392,8 +397,11 @@ export function ValidateView() {
 
   return (
     <div>
+      {trackingActive ? (referenceMode ? <ReferenceComparisonView /> : <LiveTrackingView />) : null}
       <CollapsibleSection
+        key={trackingActive ? "experiment-metrics" : "plugin-metrics"}
         title={t("验证.曲线")}
+        defaultOpen={!trackingActive}
         badge={
           <span className="monospace">
             {names.length ? `${names.length} · ${windowSeconds}s` : ""}

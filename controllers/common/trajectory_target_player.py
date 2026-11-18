@@ -8,6 +8,7 @@ import numpy as np
 import plugin_system as studio
 from plugin_system import ControlPlugin, step_handler
 from ui_bridge import PanelTargetMessage
+from simulation_control import SimulationControlCommand
 from experiment_registry import experiment_registry
 from trajectory_runtime import (
     JointTrajectory,
@@ -111,6 +112,18 @@ class ExperimentTrajectoryPlayer(ControlPlugin):
                   if endpoint_type == "site" else event.data.xpos[endpoint_id])
         append_actual_trajectory_point(self._experiment_key, source)
         self._last_trace_time = elapsed
+
+    @step_handler
+    def on_simulation_command(self, command: SimulationControlCommand) -> bool:
+        if command.action in ("run", "运行") and self._start_time is None and self._data is not None:
+            self._load_selected_experiment()
+            if self._trajectory is not None:
+                # Establish the origin before the first physical step, exactly
+                # like ExperimentRunner and the tracking display. Pausing and
+                # resuming keep this origin, so no phase offset accumulates.
+                self._start_time = float(self._data.time)
+                publish_reference(self._data, self._trajectory.sample(0.0))
+        return False
 
     @step_handler
     def step(self, event: studio.messages.StepEvent) -> bool:
