@@ -1,0 +1,149 @@
+<mujoco model="ur10">
+  <compiler angle="radian" />
+  <option integrator="implicitfast" />
+  <default>
+    <default class="ur10">
+      <joint axis="0 0 1" range="-6.28319 6.28319" armature="0.1" damping="2" />
+      <general biastype="affine" gaintype="fixed" ctrlrange="-6.2831 6.2831" gainprm="5000" biasprm="0 -5000 -500" />
+      <default class="size4">
+        <joint damping="10" />
+        <general forcerange="-330 330" />
+      </default>
+      <default class="size3">
+        <joint damping="5" />
+        <general forcerange="-150 150" />
+        <default class="size3_limited">
+          <joint range="-3.1415 3.1415" />
+          <general ctrlrange="-3.1415 3.1415" />
+        </default>
+      </default>
+      <default class="size2">
+        <joint damping="2" />
+        <general forcerange="-56 56" />
+      </default>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2" />
+      </default>
+      <default class="collision">
+        <geom type="mesh" group="3" />
+      </default>
+    </default>
+  </default>
+  <asset>
+    <mesh name="base" content_type="model/stl" file="meshes/ur10/collision/base.stl" />
+    <mesh name="shoulder" content_type="model/stl" file="meshes/ur10/collision/shoulder.stl" />
+    <mesh name="upperarm" content_type="model/stl" file="meshes/ur10/collision/upperarm.stl" />
+    <mesh name="forearm" content_type="model/stl" file="meshes/ur10/collision/forearm.stl" />
+    <mesh name="wrist1" content_type="model/stl" file="meshes/ur10/collision/wrist1.stl" />
+    <mesh name="wrist2" content_type="model/stl" file="meshes/ur10/collision/wrist2.stl" />
+    <mesh name="wrist3" content_type="model/stl" file="meshes/ur10/collision/wrist3.stl" />
+    <mesh name="v_base_0" file="meshes/ur10/visual/base_0.obj" />
+    <mesh name="v_shoulder_0" file="meshes/ur10/visual/shoulder_0.obj" />
+    <mesh name="v_shoulder_1" file="meshes/ur10/visual/shoulder_1.obj" />
+    <mesh name="v_shoulder_2" file="meshes/ur10/visual/shoulder_2.obj" />
+    <mesh name="v_upperarm_0" file="meshes/ur10/visual/upperarm_0.obj" />
+    <mesh name="v_upperarm_1" file="meshes/ur10/visual/upperarm_1.obj" />
+    <mesh name="v_upperarm_2" file="meshes/ur10/visual/upperarm_2.obj" />
+    <mesh name="v_upperarm_3" file="meshes/ur10/visual/upperarm_3.obj" />
+    <mesh name="v_forearm_0" file="meshes/ur10/visual/forearm_0.obj" />
+    <mesh name="v_forearm_1" file="meshes/ur10/visual/forearm_1.obj" />
+    <mesh name="v_forearm_2" file="meshes/ur10/visual/forearm_2.obj" />
+    <mesh name="v_forearm_3" file="meshes/ur10/visual/forearm_3.obj" />
+    <mesh name="v_forearm_4" file="meshes/ur10/visual/forearm_4.obj" />
+    <mesh name="v_wrist1_0" file="meshes/ur10/visual/wrist1_0.obj" />
+    <mesh name="v_wrist1_1" file="meshes/ur10/visual/wrist1_1.obj" />
+    <mesh name="v_wrist1_2" file="meshes/ur10/visual/wrist1_2.obj" />
+    <mesh name="v_wrist2_0" file="meshes/ur10/visual/wrist2_0.obj" />
+    <mesh name="v_wrist2_1" file="meshes/ur10/visual/wrist2_1.obj" />
+    <mesh name="v_wrist2_2" file="meshes/ur10/visual/wrist2_2.obj" />
+    <mesh name="v_wrist3_0" file="meshes/ur10/visual/wrist3_0.obj" />
+  </asset>
+  <!-- 动力学参数来源：表 3-11；带 [标定] 的为相对官方 URDF 的改动
+       关节 damping / frictionloss 全部置 0，
+       摩擦按论文摩擦模型在外部施加 -->
+  <worldbody>
+    <frame quat="0 0 0 1">
+      <geom quat="0 0 0 1" mesh="v_base_0" rgba="0.373 0.373 0.373 1.0" class="visual" />
+      <geom quat="0 0 0 1" mesh="base" rgba="0 0 0 0" class="collision" />
+      <body name="shoulder_link" pos="0 0 0.1273">
+        <!-- [标定] 质量/质心/惯量 -->
+        <inertial pos="-9.83504422085801e-12 -9.22532004855208e-12 6.43071566613215e-11" mass="6.27122770063464" fullinertia="0.552045951194 0.552045950293 0.0538031155778 0 0 -1.22578824933e-16" />
+        <!-- [标定] I_a；摩擦外挂 -->
+        <joint name="shoulder_pan_joint" class="size4" armature="0.0627915382827069" damping="0" frictionloss="0" />
+        <geom quat="0 0 0 1" mesh="v_shoulder_0" rgba="0.224 0.224 0.224 1.0" class="visual" />
+        <geom quat="0 0 0 1" mesh="v_shoulder_1" rgba="0.392 0.541 0.639 1.0" class="visual" />
+        <geom quat="0 0 0 1" mesh="v_shoulder_2" rgba="0.463 0.463 0.463 1.0" class="visual" />
+        <geom quat="0 0 0 1" mesh="shoulder" rgba="0 0 0 0" class="collision" />
+        <body name="upper_arm_link" quat="0.707107 0.707107 0 0">
+          <!-- [标定] 质量/质心/惯量 -->
+          <inertial pos="-0.125990968945605 0.00662746617830477 0.0621619482701467" mass="11.3194198228337" fullinertia="0.389854246784 0.776576413886 0.717490162992 -0.0224479871029 0.22630239644 -0.13798094539" />
+          <!-- [标定] I_a；摩擦外挂 -->
+          <joint name="shoulder_lift_joint" class="size4" armature="1.58852991634102" damping="0" frictionloss="0" />
+          <geom pos="0 0 0.220941" quat="0.5 0.5 -0.5 -0.5" mesh="v_upperarm_0" rgba="0.224 0.224 0.224 1.0" class="visual" />
+          <geom pos="0 0 0.220941" quat="0.5 0.5 -0.5 -0.5" mesh="v_upperarm_1" rgba="0.392 0.541 0.639 1.0" class="visual" />
+          <geom pos="0 0 0.220941" quat="0.5 0.5 -0.5 -0.5" mesh="v_upperarm_2" rgba="0.463 0.463 0.463 1.0" class="visual" />
+          <geom pos="0 0 0.220941" quat="0.5 0.5 -0.5 -0.5" mesh="v_upperarm_3" rgba="0.655 0.655 0.655 1.0" class="visual" />
+          <geom pos="0 0 0.220941" quat="0.5 0.5 -0.5 -0.5" mesh="upperarm" rgba="0 0 0 0" class="collision" />
+          <body name="forearm_link" pos="-0.612 0 0">
+            <!-- [标定] 质量/质心/惯量 -->
+            <inertial pos="-0.171369271923145 0.000786572025455481 0.0729857437567675" mass="5.99998859877808" fullinertia="0.484692211945 0.791833845116 0.323515532699 -0.0159039742885 0.00462276546963 0.0595492750907" />
+            <!-- [标定] I_a；摩擦外挂 -->
+            <joint name="elbow_joint" class="size3_limited" armature="0.192350434187023" damping="0" frictionloss="0" />
+            <geom pos="0 0 0.049042" quat="0.5 0.5 -0.5 -0.5" mesh="v_forearm_0" rgba="0.224 0.224 0.224 1.0" class="visual" />
+            <geom pos="0 0 0.049042" quat="0.5 0.5 -0.5 -0.5" mesh="v_forearm_1" rgba="0.392 0.541 0.639 1.0" class="visual" />
+            <geom pos="0 0 0.049042" quat="0.5 0.5 -0.5 -0.5" mesh="v_forearm_2" rgba="0.463 0.463 0.463 1.0" class="visual" />
+            <geom pos="0 0 0.049042" quat="0.5 0.5 -0.5 -0.5" mesh="v_forearm_3" rgba="0.655 0.655 0.655 1.0" class="visual" />
+            <geom pos="0 0 0.049042" quat="0.5 0.5 -0.5 -0.5" mesh="v_forearm_4" rgba="0.078 0.078 0.078 1.0" class="visual" />
+            <geom pos="0 0 0.049042" quat="0.5 0.5 -0.5 -0.5" mesh="forearm" rgba="0 0 0 0" class="collision" />
+            <body name="wrist_1_link" pos="-0.5723 0 0.163941">
+              <!-- [标定] 质量/质心/惯量 -->
+              <inertial pos="-0.00474473701740812 -0.0370784267169722 -0.0199999345355795" mass="2.99999960569911" fullinertia="0.994675408097 0.993466499878 0.00151654938067 0.000457837349013 0.0123608847176 -0.0367915171887" />
+              <!-- [标定] I_a；摩擦外挂 -->
+              <joint name="wrist_1_joint" class="size2" armature="9.99998647432893e-05" damping="0" frictionloss="0" />
+              <geom pos="0 0 -0.1149" quat="0.707107 0.707107 0 0" mesh="v_wrist1_0" rgba="0.224 0.224 0.224 1.0" class="visual" />
+              <geom pos="0 0 -0.1149" quat="0.707107 0.707107 0 0" mesh="v_wrist1_1" rgba="0.392 0.541 0.639 1.0" class="visual" />
+              <geom pos="0 0 -0.1149" quat="0.707107 0.707107 0 0" mesh="v_wrist1_2" rgba="0.463 0.463 0.463 1.0" class="visual" />
+              <geom pos="0 0 -0.1149" quat="0.707107 0.707107 0 0" mesh="wrist1" rgba="0 0 0 0" class="collision" />
+              <body name="wrist_2_link" pos="0 -0.1157 -2.37305e-11" quat="0.707107 0.707107 0 0">
+                <!-- [标定] 质量/质心/惯量 -->
+                <inertial pos="0.00542243283876307 0.0295627476896408 -0.0315476044849752" mass="1.90188726796477" diaginertia="1e-10 1e-10 1e-10" />
+                <!-- [标定] I_a；摩擦外挂 -->
+                <joint name="wrist_2_joint" class="size2" armature="9.99996188539516e-05" damping="0" frictionloss="0" />
+                <geom pos="0 0 -0.1158" quat="1 0 0 0" mesh="v_wrist2_0" rgba="0.224 0.224 0.224 1.0" class="visual" />
+                <geom pos="0 0 -0.1158" quat="1 0 0 0" mesh="v_wrist2_1" rgba="0.392 0.541 0.639 1.0" class="visual" />
+                <geom pos="0 0 -0.1158" quat="1 0 0 0" mesh="v_wrist2_2" rgba="0.463 0.463 0.463 1.0" class="visual" />
+                <geom pos="0 0 -0.1158" quat="1 0 0 0" mesh="wrist2" rgba="0 0 0 0" class="collision" />
+                <body name="wrist_3_link" pos="0 0.0922 -1.89105e-11" quat="0.707107 -0.707107 0 0">
+                  <!-- [标定] 质量/质心/惯量 -->
+                  <inertial pos="0.0244629356818033 0.00469957325080026 -0.0619172597727419" mass="0.100002641410188" fullinertia="3.7127800236e-05 8.17829085538e-07 3.79422598438e-05 5.48471252755e-06 3.59155943345e-08 -2.37589823133e-07" />
+                  <!-- [标定] I_a；摩擦外挂 -->
+                  <joint name="wrist_3_joint" class="size2" armature="9.99996470734339e-05" damping="0" frictionloss="0" />
+                  <geom pos="0 0.001 -0.0922" quat="0.707107 0.707107 0 0" mesh="v_wrist3_0" rgba="0.463 0.463 0.463 1.0" class="visual" />
+                  <geom pos="0 0.001 -0.0922" quat="0.707107 0.707107 0 0" mesh="wrist3" rgba="0 0 0 0" class="collision" />
+                  <frame quat="0 1 0 0" />
+                  <frame quat="0.5 -0.5 -0.5 -0.5">
+                    <frame quat="0.5 0.5 0.5 0.5" />
+                  </frame>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </frame>
+    <frame quat="0 0 0 1" />
+  </worldbody>
+  <actuator>
+    <general name="shoulder_pan" joint="shoulder_pan_joint" class="size4" />
+    <general name="shoulder_lift" joint="shoulder_lift_joint" class="size4" />
+    <general name="elbow" joint="elbow_joint" class="size3_limited" />
+    <general name="wrist_1" joint="wrist_1_joint" class="size2" />
+    <general name="wrist_2" joint="wrist_2_joint" class="size2" />
+    <general name="wrist_3" joint="wrist_3_joint" class="size2" />
+  </actuator>
+  <keyframe>
+    <key name="home" qpos="0 -1.5708 1.5708 -1.5708 -1.5708 0" ctrl="0 -1.5708 1.5708 -1.5708 -1.5708 0" />
+    <!--  论文初始位姿 -->
+    <key name="paper_home" qpos="0 -1.5708 0 -1.5708 0 0" ctrl="0 -1.5708 0 -1.5708 0 0" />
+  </keyframe>
+</mujoco>

@@ -5,7 +5,7 @@ from functools import wraps
 import recording_bridge as _implementation
 
 _ALIASES = {'录制命令': 'RecordingCommand', '动作': 'action', '频率': 'frequency', '备注': 'note'}
-_KEYWORDS = {'录制命令': 'RecordingCommand', '动作': 'action', '频率': 'frequency', '备注': 'note'}
+_KEYWORDS = _ALIASES
 
 def __getattr__(name):
     value = getattr(_implementation, _ALIASES.get(name, name))

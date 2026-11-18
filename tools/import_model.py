@@ -274,11 +274,16 @@ def generate_torque_variant(model_id: str, directory: str, info: dict, torque_li
 
     ET.indent(tree, space="  ")                            # 让输出可读
     output_path = os.path.join(directory, f"{info['default_model']}_torque.xml")
+    try:
+        source_path = os.path.relpath(base_xml, PACKAGE_ROOT)
+    except ValueError:
+        # Windows cannot express a relative path between different drives.
+        source_path = os.path.abspath(base_xml)
     header = (
         f"<!-- ============================================================================\n"
         f"     {os.path.basename(output_path)} —— {info['display_name']} 的**力矩接口**变体\n"
         f"     由 tools/import_model.py 自动生成，**请勿手工编辑**（重新导入会覆盖）。\n"
-        f"     来源模型 : {os.path.relpath(base_xml, PACKAGE_ROOT)}\n"
+        f"     来源模型 : {source_path}\n"
         f"     改了什么 : ① 执行器（位置伺服）→ <motor> 力矩电机（ctrl 就是关节力矩 N·m）\n"
         f"                ② 丢掉非关节执行器（{'、'.join(discarded_actuators) if discarded_actuators else '无'}）→ 保证 nu == nv\n"
         f"                ③ keyframe 的 ctrl 重写为 {new_nu} 个 0\n"
@@ -298,7 +303,7 @@ def generate_torque_variant(model_id: str, directory: str, info: dict, torque_li
         f.write(tree_xml + "\n")
 
     statistics = {
-        "base_xml": os.path.relpath(base_xml, PACKAGE_ROOT),
+        "base_xml": source_path,
         "torque_objects": len(joint_actuators),
         "discarded_actuators": discarded_actuators,
         "torque_limits": torque_limits,

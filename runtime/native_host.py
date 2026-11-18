@@ -1,72 +1,11 @@
-"""
-宿主窗口.py —— P3 的核心：**我们自己的窗口**，Web 界面 + 原生 3D 视口同级并列
+"""macOS 桌面宿主，组合 WKWebView 和原生 3D 视口。
 
-它和另一个入口的关系：
+AppKit 和纹理上传在主线程执行。仿真与离屏渲染各用独立线程和
+MjData，视口通过状态快照同步。MuJoCo Renderer 在渲染线程创建。
 
-    | 入口 | 窗口 | 界面 | 3D |
-    |---|---|---|---|
-    | **`run_yubi.py`** | **我们自己的 NSWindow** | **窗口内 WKWebView 里的 React** | **✅ 原生 OpenGL 视口** |
-    | `run_yubi_web.py` | 无（外部浏览器） | 浏览器里的 React | ❌ 无原生 3D |
-
-为什么可行：早期架构验证已经证明"原生视图 + WKWebView 同级并列"可行；
-验证过程保留在 Git 历史和 CHANGELOG 中。
-
-═══ 线程排法（本项目的硬约束，没有例外）═══════════════════════════════════
-    AppKit **必须占主线程**（macOS 硬要求）→ 窗口与 3D 都在主线程；
-    仿真退回**后台线程**（`启动.启动外壳(无窗=True, 后台线程=True)`）；
-    MuJoCo 的**渲染**在第三个线程。
-    三者之间只走消息，**不共享 `MjData`** —— 视口有自己那份，靠状态快照同步。
-
-═══ 这个文件踩过的坑（每一条都花了很久，别再犯）═════════════════════════
-① **ObjC 类名必须是 ASCII**：`class 视口(...)` 报
-   `'视口' not a valid Objective-C class name`。所以类名是 `Viewport` / `HostApp`。
-
-② **方法名决定它会不会被注册成 ObjC 选择器**（规则在 `objc/_transform.py` 的
-   `default_selector()`）：**名字里第 2 个字符起若含 `_`、且不以 `_` 结尾 → 纯 Python 方法**。
-     · `drawRect_` / `mouseDown_` / `窗口改尺寸_`：**故意**要注册成选择器 → 尾巴一个下划线；
-     · 纯内部方法 → `准_备` / `同步_状态` / `视角_复位`（中间下划线）。
-   ⚠️ **前缀式 `_准备` 也不行**：实测 `default_selector("_加线")` 返回一个 0 参
-      选择器 `_加线`，PyObjC 会把它当 ObjC 方法注册，然后因为 Python 实现带了 4 个
-      参数而直接 `BadPrototypeError`（本次真的踩到）。内部方法统一用**中间**下划线
-      （`加_线` / `准_备` / `适配_视图`），不要用前缀。
-   ⚠️ 尾下划线 `准备_` 会被当选择器 `准备:`（要 0 参、实现有 1 参 → 报错）；
-   ⚠️ 无下划线的 `同步状态` 被当 0 参选择器 → 同样报错。
-   自查：`objc._transform.default_selector("方法名")`，返回 None 才是纯 Python 方法。
-
-③ **绝不在 AppKit 回调里建第二套 GL 上下文**：`mujoco.Renderer` 自建 CGL 上下文，
-   在 `prepareOpenGL` / `drawRect_` / run loop 回调里建它会**直接 SIGTRAP**，
-   Python 侧连 traceback 都没有（`faulthandler` 抓不到、`setObjCExceptionHandler` 也不触发）。
-   → 渲染器只在**独立线程**里建。
-
-④ **`NSOpenGLView` 是被动绘制的**：没人 `setNeedsDisplay_` 就一帧都不画。
-
-⑤ **别给窗口装 delegate 收 resize**：实测 `窗口.setDelegate_(任意对象)` 会 SIGTRAP
-   （与那个对象是否实现 `windowDidResize_` 无关）→ 用 `NSNotificationCenter`。
-
-⑥ **PyObjC 的 `NSTimer` target-selector 在本机完全不触发、也不报错**
-   （中文名与 ASCII 名都试过，`isValid()` 返回 True，就是不回调）。
-   它还会伪装成"能跑"：`setNeedsDisplay_` 由**窗口系统**驱动，所以界面看着在刷新，
-   而真正依赖定时器的东西（状态同步、命令搬运）一直没跑。
-   → 用 `runtime/定时器.py`（CoreFoundation 的 `CFRunLoopTimer`），走纯 C 回调，实测稳定。
-
-⑦ **委托方法里抛异常 = 静默失效**：AppKit 回调里抛出的 Python 异常会变成 ObjC 异常
-   （输出一行 `<class 'NameError'>: ...`），**而且异常之后的代码全部不执行**。
-   本次两次"定时器不触发"的真正原因，都是我在 delegate 末尾插的代码里有 `NameError`
-   （`定时器` / `记诊断` 未定义），于是"起定时器"那两行从来没被执行到。
-   教训：**delegate 里任何改动之后，都要确认它末尾真的执行到了**
-   （本文件用 `记诊断()` 写文件来做这件事：`驭臂_宿主诊断=/tmp/宿主.log`）。
-
-⑧ **不要在 run loop 回调里做重活**：主线程的核心动画有硬截止时间，
-   在回调里做重活会被 CF 直接杀掉进程（崩溃报告里是 `hard deadline`）。
-   所以主线程每帧只做一次 `setNeedsDisplay_`，渲染全在渲染线程。
-
-═══ 为什么渲染要单独一个线程 ═══════════════════════════════════════════════
-    MuJoCo 离屏渲染一帧约 7.6 ms（760×420，实测）。看着 60 fps 放得下，
-    但放在主线程的绘制路径里会与 AppKit 的显示事务互相干扰（教训 ③⑧）。
-    放渲染线程后，主线程每帧只剩一次纹理上传（几十微秒）。
-
-    渲染线程**按需渲染**：只有"有新状态"或"相机变了"才渲一帧，否则空转。
-    机器人静止时几乎不耗 CPU；动起来时自然跑到 60 fps。
+PyObjC 类名须用 ASCII。尾下划线表示 Objective-C 选择器，
+纯 Python 方法须避免被注册为选择器。窗口尺寸由通知中心监听，
+状态同步由 runloop_timers 驱动，主线程通过 setNeedsDisplay_ 请求重绘。
 """
 from __future__ import annotations
 
@@ -97,14 +36,7 @@ try:
 except Exception:                                                     # noqa: BLE001
     _highlight_bridge = None
 
-# 布局：下方 3D 视口，上方 Web 界面（与 P2 spike 的验收布局一致）
-# 布局：**左 Web 界面 / 右 3D 视口**（横向切分）
-#
-# ★ 为什么从"上下切"改成"左右切"（这是用户明确要求的根本性修改）：
-#   上下切的时候，3D 永远是窗口**底下的一条**，看起来像"界面下面挖了个黑窟窿"，
-#   而不是"主画面"。实测反馈也确实是这么说的。
-#   左右切之后 3D 是右侧**主区域**（占 60%+ 宽、整窗高），和参考项目一致：
-#   左边是面板（资产/参数/日志），右边是场景。
+# 左侧是 Web 工作台，右侧是 3D 视口与运行信息。
 DEFAULT_WEB_WIDTH_RATIO = 0.40      # 左侧 Web 面板占窗口宽度的比例
 MIN_WEB_WIDTH = 500.0       # 再窄就放不下活动栏 + 侧栏
 MIN_VIEWPORT_WIDTH = 560.0       # 3D 再窄就不好操作了（原 420 太窄，曲线/机械臂都挤）
@@ -347,14 +279,10 @@ class Viewport(NSOpenGLView):
         self._model_generation = 0
         self._model_path = ""
         self.switching = False
-        # ★ 用 Event 等"该渲染了"，**不要用 sleep 忙等**：忙等会一直抢 GIL，
-        #   把主线程饿死（实测表现为主线程在跑、而渲染/显示一帧都没有）。
+        # 用 Event 唤醒渲染线程，避免忙等占用 GIL。
         import threading as _th
         self._render_requested = _th.Event()
-        # ★ 画布（离屏渲染分辨率）与窗口大小**解耦**：窗口拉伸只是把这张图放大，
-        #   不重新渲染。理由是渲染成本随像素数涨得很快：
-        #   760×420 ≈ 7.6 ms/帧，而 1280×464 ≈ 258 ms/帧（实测，约 34 倍）。
-        #   视口是"看机器人姿态"用的，760×420 足够；真要更清晰再单独调这里。
+        # 离屏分辨率独立于窗口尺寸，以控制渲染成本。
         # 离屏渲染分辨率。0×0 表示"还没算过"，首次 `按视口重算画布()` 会填上
         # （= 视口的原生像素尺寸，渲染与显示 1:1，不缩放 → 不糊）。
         self.canvas_size = (760, 420)
@@ -407,8 +335,7 @@ class Viewport(NSOpenGLView):
         self.latest_state = None
         self.default_camera = None
         self._first_frame_framed = False
-        # ★ 不清 self.画面 / 纹理：新模型装载期间继续显示上一帧，
-        #   避免"点一下先黑屏再出现"。新帧到达后由渲染线程自然覆盖。
+        # 新模型加载时保留上一帧，避免视口闪黑。
         self.prepare_viewport(model_path)
         self.setNeedsDisplay_(True)
         record_diagnostic(f'换模型：开始装载 {os.path.basename(model_path)}')
@@ -482,18 +409,12 @@ class Viewport(NSOpenGLView):
                     record_diagnostic(f'自动取景失败，退回默认视角：{_framing_error}')
                 options = mujoco.MjvOption()
                 mujoco.mjv_defaultOption(options)
-                # ★ **渲染器不在这里建**：`mujoco.Renderer` 会自建一套 GL 上下文，
-                #   而"在哪建"和"在哪用"必须同一个线程 —— 在装载线程建、却在渲染线程用，
-                #   实测会**卡死在第一次 render() 里**（不报错、不返回）。
-                #   所以渲染器放到 `_渲染循环` 开头建。
+                # Renderer 在渲染线程创建，避免 OpenGL 上下文跨线程使用。
                 if generation != self._model_generation:
                     return
                 self.model, self.data = model, data
                 self.camera, self.options = camera, options
-                # ★ 缓冲尺寸必须与**发布方的签名**一致。仿真那边发的是
-                #   `mjSTATE_INTEGRATION`（nq+nv 个数），这里若按 FULLPHYSICS 开缓冲，
-                #   `mj_setState` 会报 `state size should equal mj_stateSize(m, sig)`。
-                #   所以两种尺寸都备好，按快照里的签名选（见 `同步_状态`）。
+                # 状态缓冲区按发布方的状态签名分配。
                 self.buffers = {
                     int(mujoco.mjtState.mjSTATE_INTEGRATION): np.zeros(
                         mujoco.mj_stateSize(model, int(mujoco.mjtState.mjSTATE_INTEGRATION)),
@@ -1622,7 +1543,7 @@ class HostApp(NSObject):
         record_diagnostic("delegate：建窗口完成")
 
         import runloop_timers as timers
-        # ★ 用 `定时器`（CFRunLoopTimer），**不要用 PyObjC 的 NSTimer**（教训 ⑥）
+        # 使用 runloop_timers 的 CFRunLoopTimer 驱动窗口刷新。
         self._frame_timer = timers.start(1.0 / 60.0, self._main_thread_tick)
         self._diagnostic_timer = timers.once(2.0, self._self_diagnose)
         record_diagnostic("delegate：定时器已起，delegate 结束")
@@ -1986,7 +1907,7 @@ class HostApp(NSObject):
             NSBackingStoreBuffered, False)
         window.setTitle_(parameters.title)
         window.setBackgroundColor_(NSColor.blackColor())
-        # ★ 不设窗口 delegate（教训 ⑤），用通知收 resize
+        # 用通知中心接收窗口尺寸变化。
         NSNotificationCenter.defaultCenter().addObserver_selector_name_object_(
             # ⚠️ 这里传的是**选择器字符串**，不是 Python 方法名：
             #    选择器里用**冒号**表示参数，所以是 `"windowResized:"` 而不是 `"窗口改尺寸_:"`。

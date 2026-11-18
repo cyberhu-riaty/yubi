@@ -1,37 +1,7 @@
-"""
-package_macos_app.py —— 生成 macOS 的 .app（双击即启动）
+"""生成复用项目虚拟环境的 macOS .app 启动器。
 
-为什么不用 Platypus / PyInstaller：
-    macOS 的 .app 本质就是一个"有固定目录结构的文件夹"：
-        驭臂.app/Contents/Info.plist           ← 名字/版本/版权声明（XML）
-        驭臂.app/Contents/MacOS/驭臂            ← **原生 arm64 启动器**（编译出来的小可执行文件）
-        驭臂.app/Contents/Resources/launch.sh      ← 启动逻辑（bash 脚本，真正干活的那个）
-    ★ Contents/MacOS/ 里只放 Mach-O，不放脚本 —— 这样整个 .app 才能被签名，
-      也避免系统在判断架构时看到"非 Mach-O 的可执行文件"而产生歧义。
-    PyInstaller 会试图把整个 Python 环境和 mujoco 的 16 个 .so 一起打包，
-    mujoco 包里还带 Filament 材质资产，很容易漏文件；而我们的 .venv 本来就现成，
-    启动脚本直接调它即可 —— **更小、更可控、不依赖打包工具**。
-
-★ 为什么需要那个"原生 arm64 启动器"（踩过的坑，别删）：
-    最初 .app 的 CFBundleExecutable 直接指向一个 **bash 脚本**。
-    脚本没有架构信息 → macOS 查不到 `kMDItemExecutableArchitectures`（返回 null）
-    → 在 Apple Silicon 上无法确认是原生应用 → **双击时弹"要安装 Rosetta"**。
-    明明整个软件都是 arm64 原生的，却被要求装 Intel 翻译层。
-    解决：编译一个几行的 arm64 C 程序作为 CFBundleExecutable，它只负责
-    "算出自己在哪 → exec /bin/bash 那个脚本"。这样 macOS 一眼看出是原生 arm64，
-    不再提示 Rosetta；而启动逻辑仍然留在 bash 脚本里（改代码不用重新打包）。
-
-特点：
-    · 启动器自己算"包根"（四级回退），所以**整个包搬到任何目录都能跑**
-    · 环境缺失时弹中文对话框提示，而不是闪退
-    · 运行日志写到 包根/启动日志.txt（双击时看不到终端，靠这个排查）
-    · Bundle Identifier 自动保证唯一（避免两个 .app 撞 id、互相干扰）
-
-用法：
-    .venv/bin/python tools/package_macos_app.py                  # 在资料包根目录生成 .app
-    .venv/bin/python tools/package_macos_app.py --包根 /路径       # 指定包根
-    .venv/bin/python tools/package_macos_app.py --名字 "小软件"     # 换软件名
-    .venv/bin/python tools/package_macos_app.py --标识 local.digitwin.yubi   # 显式指定 bundle id
+arm64 启动器调用 Resources/launch.sh。脚本负责定位项目、选择启动入口
+并记录日志。原生编译成功后可对应用包签名。
 """
 from __future__ import annotations
 

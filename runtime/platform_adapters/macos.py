@@ -1,14 +1,4 @@
-"""
-macos.py —— 平台适配层的 macOS 实现
-
-★ 它的写法是**薄委托**：真正的窗口逻辑仍然在 `runtime/宿主窗口.py`（那是 P3-a 的成果，
-  实测 60.0 fps、状态一步不漏）。这一层只做两件事：
-    ① 把"平台能力"这套接口翻译成 宿主窗口 的调用
-    ② 把"能不能用"变成**可查询**的（缺 PyObjC 时给结论，而不是抛栈）
-
-  为什么不在这一层重写窗口：P3-a 的坑（NSTimer 不触发、GL 上下文建用同线程、
-  delegate 抛异常静默失效…）都是真金白银换来的，重写等于把坑再踩一遍。
-"""
+"""macOS 平台适配，探测 PyObjC 依赖并委托 native_host 管理窗口。"""
 from __future__ import annotations
 
 from typing import Any

@@ -1,27 +1,5 @@
-"""
-web_app.py —— **浏览器入口**：起 Web 服务，用外部浏览器打开同一套界面
-
-它和主入口的关系（一句话）：
-    **同一个数据层，两种前端。**
-    `run_yubi.py` → 平台原生窗口，React 界面 + 原生 MuJoCo 3D 视口
-    `run_yubi_web.py` → 外部浏览器，React 界面，无原生 3D（仿真直接在主线程里跑）
-
-为什么不是"复制一份主程序"：
-    模型装载、项目装配、各桥、参数/辨识这些**一模一样**。复制等于把每一处修复
-    都维护两遍，必然分叉。所以 `runtime_engine.start()` 提供了无窗口模式：
-    窗口与 3D 那两段变成可跳过的，其余原样复用。
-
-现在能用什么 / 还不能用什么（诚实清单）：
-    ✅ 真物理、控制算法、参数可改、辨识、项目/模型切换、6 套皮肤、中英双语
-    ⚠️ **没有原生 3D 视口** —— 这是浏览器入口的设计取舍，不是遗漏；
-       要看 3D 请用 `run_yubi.py`。
-    ⚠️ 官方 Studio 的 19 个 ImGui 面板不在这里，能力由 Web 界面覆盖。
-
-用法：
-    .venv/bin/python run_yubi_web.py                  # 起服务 + 自动开浏览器
-    .venv/bin/python run_yubi_web.py --no-browser     # 只起服务（远程/排查用）
-    .venv/bin/python run_yubi_web.py --web-port 8899
-    .venv/bin/python run_yubi_web.py --check          # 不开服务，只做环境与前端产物自检
+"""浏览器启动入口，复用仿真运行核心，提供 React 工作台。
+需要原生 3D 视口时运行 run_yubi.py。
 """
 from __future__ import annotations
 

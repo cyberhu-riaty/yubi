@@ -39,6 +39,8 @@ export interface LiveTrackingSeries {
   key: string;
   label: string;
   values: Float64Array;
+  /** Full series for a fixed vertical scale during progressive playback. */
+  scaleValues?: Float64Array;
   /** CSS 变量名，例如 `--palette-1`；换肤后自动跟随。 */
   colorVariable: string;
   /** 空数组 = 实线；例如 `[5, 4]` = 虚线。 */
@@ -219,7 +221,7 @@ function drawChart(options: DrawOptions): CanvasLayout {
   const spanS = Math.max(1e-6, range.endS - range.startS);
   const valueRange =
     computeValueRange(
-      series.map((item) => item.values),
+      series.map((item) => item.scaleValues ?? item.values),
       times,
       range,
       scale,

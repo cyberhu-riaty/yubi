@@ -1,25 +1,7 @@
-"""
-runtime_engine.py —— 桌面、浏览器与无界面实验共用的仿真运行核心
+"""桌面和浏览器共用的仿真运行核心。
 
-背景（这个坑很硬，必须先讲清楚）：
-  官方给的写法是 `launch_passive(...)`，它内部用 launch_native → launch_thread，
-  **把创建窗口的活儿丢给一个 daemon 线程**。而 macOS 规定：NSWindow 只能在主线程创建。
-  实测结果：无论用 python 还是 mjpython，都立刻报
-      ERROR: Error creating window: NSWindow should only be instantiated on the main thread!
-  也就是说官方这套 launch_passive 在 macOS 上目前是坏的（mujoco 3.13.0 实测）。
-
-我们的排法（把两个线程的任务对调）：
-  ┌─ 主线程   ：跑 viewer（建窗口 + 渲染 + 界面）   ← macOS 要求窗口在这儿
-  └─ 后台线程 ：跑仿真（算控制律 + 推进物理 + 发状态）
-  两者之间用官方现成的 endpoints 消息通道通信（线程安全队列，官方自己就是这么设计的）。
-
-这个文件就是上面那套排法的落地。**你不需要改它**，除非官方修好了 launch_passive。
-
-★ 方案 C 之后本文件多了一项职责：**换模型时按项目重新装配控制算法**。
-  所以它同时是"线程排法"和"项目装配的执行点"。
-  装配规则在 `project_registry.py`（读声明）和
-  `plugin_assembler.py`（把声明变成实例），
-  本文件只负责"什么时候装、装完通知谁"。
+桌面窗口占用主线程，仿真在线程中推进物理并通过消息通道发布状态。
+模型切换时按项目配置重新装配插件。
 """
 from __future__ import annotations
 
@@ -39,17 +21,11 @@ import plugin_system as plugin_framework                                        
 import project_registry as _project                                           # noqa: E402
 import model_loader as _model_loader                                           # noqa: E402
 
-# `模型桥` 同时被界面侧和仿真侧用，这里在模块级导入一次：
-# `_装配项目()` 与主循环都要发 `项目状态`（方案 C：算法列表随项目变化）。
-# 它只依赖官方 messages 与标准库，不建窗口，所以导入是安全的。
 import model_bridge as _model_bridge                                            # noqa: E402
 import simulation_control as _simulation_control                              # noqa: E402
 import control_bridge as _control_bridge                                         # noqa: E402
 from model_bridge import ProjectState                                           # noqa: E402
 
-# Web 桥（方案 B 的 P0）：给仿真侧的消息再开一个出口，送给浏览器。
-# ★ 它是**只读旁路**：官方面板照旧收消息，Web 只是多一个订阅者。
-#   起不来（端口被占 / 库缺失）也只打一行字，不影响界面与仿真。
 import web_bridge as _web_bridge                                                 # noqa: E402
 
 
@@ -95,9 +71,7 @@ def apply_theme(window_plugins: list) -> None:
 # ---------------------------------------------------------------------------
 # 宿主窗口（P3）用的命令队列
 # ---------------------------------------------------------------------------
-# ★ 宿主窗口和仿真循环不在同一个线程。以前这里用普通 list，并采用
-#   "先复制、再 clear"的方式排空；如果另一个线程恰好在两步之间 append，
-#   新命令就可能被 clear 掉。Queue 把这个边界交给标准库处理。
+# 跨线程命令通过 Queue 传递，排空时不会丢掉并发入队的命令。
 command_queue_obj: queue.Queue = queue.Queue()
 
 
@@ -288,10 +262,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
     for message in list(initial_messages or ()):
         command_queue_obj.put_nowait(message)
 
-    # ★ 把"这次加载哪个模型"告诉外面（放进环境变量）：
-    #   宿主窗口的 **3D 视口**需要自己再装一份模型（渲染在自己的线程/上下文里，
-    #   不与仿真线程共享 MjData；相关架构验证记录保留在 CHANGELOG 和 Git 历史中）。
-    #   与其让两个入口各自猜路径，不如由**已经决定好的那一处**发出来。
+    # 将模型路径提供给持有独立渲染数据的宿主视口。
     env_config.write("YUBI_CURRENT_MODEL", str(model_path or ""))
     env_config.write("YUBI_CURRENT_PROJECT", str(project_name or ""))
 
@@ -372,8 +343,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
         try:
             bridge = _web_bridge.start(port=_web_port)
             if bridge.enabled:
-                # ★ 必须用返回值替换 `发送`：无窗模式下出口是个闭包函数，
-                #   改不了它的属性，只能把装好水龙头的新函数换进来。
+                # 包装当前发送实现，再安装包装后的实现，避免递归。
                 # ★ 包的是**出口对象的实现**，不是某个局部名字 ——
                 #   这样无论有窗/无窗，调用链永远只有一层，不可能自递归。
                 _web_tap, _new_implementation = _web_bridge.install_faucet(send_outlet._implementation)
@@ -595,11 +565,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                     run_config = [str(x.get("plugin", "")) for x in _project.parse_algorithms(data)
                             if isinstance(x, dict) and str(x.get("plugin", "")).strip()]
 
-                # ★ 重置必须在**装配之前**：多数算法的设计是"拿第一次看到的位置当基准"
-                #   （关节pd控制的 `目标`、正弦摆动的 `基准`）。先把机器人摆回默认姿态，
-                #   新算法接手时看到的基准才是干净的。
-                #   放装配之后就晚了 —— 那时算法的 `收到模型()` 已经拿旧姿态跑过一轮，
-                #   有的算法（正弦摆动）在第一步就把 `基准` 定下来了。
+                # 先复位姿态，让新控制器以默认位置初始化。
                 reset_note = _reset_pose(new_model, new_data) if reset_pose else ""
 
                 new_instance, report = _assembler.assemble_project(
@@ -613,6 +579,8 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                     report.append(restore)
 
                 # ② 换掉注册表里的用户算法（内部插件保持不动，见 SafeRegistry.set_user_plugins）
+                from trajectory_runtime import clear_trajectory_visualization
+                clear_trajectory_visualization()
                 registry.set_user_plugins(new_instance)
 
                 # ③ 让常驻的内部插件重新认识这一组算法。
@@ -762,11 +730,7 @@ def _start_impl(config, model_path: str, window_class, plugins: list, registry, 
                             continue
                 return f"（已恢复项目里存的 {restored_count} 个参数值）" if restored_count else ""
 
-            # ★ 算法库里有哪些可选算法 —— **只在这里算一次**。
-            #   为什么不放进 `_装配项目()` 或发布循环：它要扫盘（os.walk），
-            #   而主循环是 ~500 Hz 的热路径，每次扫盘会白白吃掉性能。
-            #   它的用途有两个：① 发给界面做【Algorithms】面板的候选列表
-            #   ② 进发布指纹，好让"往算法库里加了个 .py"这件事能被界面看见。
+            # 算法目录仅扫描一次，避免在仿真循环中访问磁盘。
             try:
                 current_algorithm_library = [d["plugin"] for d in _project.discover_algorithms()]
                 print(f"【算法库】可选算法 {len(current_algorithm_library)} 个：{'、'.join(current_algorithm_library)}", flush=True)
