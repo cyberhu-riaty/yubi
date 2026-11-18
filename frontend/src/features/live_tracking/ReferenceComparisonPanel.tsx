@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReferenceDataset, ReferenceSummary } from "../../data/reference";
 import { LiveTrackingChart, type LiveTrackingSeries } from "./LiveTrackingChart";
 import { liveTrackingLabels } from "./labels";
+import { upperBound } from "./live_tracking_math";
 import { referenceComparisonLabels, type ReferenceComparisonLabels } from "./reference_labels";
 import type { LiveTrackingLocale } from "./labels";
 import type { LiveTrackingStatus } from "./types";
@@ -51,21 +52,6 @@ function formatNumber(value: number | undefined | null, digits = 2): string {
 function formatSeconds(value: number | undefined | null): string {
   if (value === undefined || value === null || !Number.isFinite(value)) return "—";
   return Math.abs(value) >= 100 ? value.toFixed(1) : value.toFixed(2);
-}
-
-function nearestSampleIndex(dataset: ReferenceDataset, timeS: number): number {
-  const times = dataset.time_s;
-  if (!times.length) return 0;
-  let low = 0;
-  let high = times.length;
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (times[middle] < timeS) low = middle + 1;
-    else high = middle;
-  }
-  if (low <= 0) return 0;
-  if (low >= times.length) return times.length - 1;
-  return timeS - times[low - 1] <= times[low] - timeS ? low - 1 : low;
 }
 
 function downloadCsv(dataset: ReferenceDataset, metric: Metric, source: Source,
@@ -152,22 +138,16 @@ export function ReferenceComparisonPanel({
     if (!dataset) return [];
     const isTorque = metric === "torque";
     const modelPrefix = effectiveSource === "recompute" ? "recompute" : "model";
-    const suffix = isTorque
-      ? effectiveSource === "recompute" ? "torque_friction_off_Nm" : "torque_friction_off_Nm"
-      : "current_friction_off_A";
     const onSuffix = isTorque
-      ? effectiveSource === "recompute" ? "torque_nonlinear_friction_Nm" : "torque_nonlinear_friction_Nm"
+      ? "torque_nonlinear_friction_Nm"
       : "current_nonlinear_friction_A";
     const measuredKey = isTorque ? "measured_torque_Nm" : "measured_current_A";
-    const offKey = `${modelPrefix}_${suffix}`;
     const onKey = `${modelPrefix}_${onSuffix}`;
-    const offLabel = effectiveSource === "recompute" ? labels.legendRecomputeOff : labels.legendModelOff;
     const onLabel = effectiveSource === "recompute" ? labels.legendRecomputeOn : labels.legendModelOn;
     const dash = effectiveSource === "recompute" ? [5, 3] : [];
     const joints: LiveTrackingSeries[][] = [];
     for (let joint = 0; joint < 6; joint += 1) {
       const measured = inputColumn(dataset, measuredKey, joint);
-      const frictionOff = inputColumn(dataset, offKey, joint);
       const frictionOn = inputColumn(dataset, onKey, joint);
       const series: LiveTrackingSeries[] = [
         {
@@ -178,15 +158,6 @@ export function ReferenceComparisonPanel({
           dash: [],
           marker: "circle",
           lineWidth: 1.25,
-        },
-        {
-          key: "model-off",
-          label: offLabel,
-          values: frictionOff,
-          colorVariable: "--tracking-ref-model",
-          dash,
-          marker: "square",
-          lineWidth: 1.05,
         },
         {
           key: "model-on",
@@ -214,8 +185,26 @@ export function ReferenceComparisonPanel({
     return joints;
   }, [dataset, metric, effectiveSource, labels]);
 
+  const sampleCount = status === "running" || status === "paused" || status === "completed"
+    ? upperBound(times, playbackTime)
+    : 0;
+  const visibleSeriesByJoint = useMemo(
+    () => seriesByJoint.map((series) => series.map((item) =>
+      item.key === "target" ? item : {
+        ...item,
+        values: item.values.subarray(0, sampleCount),
+        scaleValues: item.values,
+      },
+    )),
+    [seriesByJoint, sampleCount],
+  );
+  const sampleIndex = Math.max(0, sampleCount - 1);
+  const cursorTime = times[sampleIndex] ?? null;
+  const chartHoverTime = hoverTime === null || sampleCount === 0 || cursorTime === null
+    ? hoverTime
+    : Math.min(hoverTime, cursorTime);
+
   const durationText = dataset ? formatSeconds(dataset.duration_s) : "—";
-  const sampleIndex = dataset ? nearestSampleIndex(dataset, playbackTime) : 0;
   const progress = dataset ? Math.min(100, Math.max(0, (playbackTime / duration) * 100)) : 0;
   const recompute = dataset?.recompute;
   const recomputeTone =
@@ -398,7 +387,7 @@ export function ReferenceComparisonPanel({
             </span>
           </div>
           <div className="live-tracking__reference-grid">
-            {seriesByJoint.map((series, joint) => (
+            {visibleSeriesByJoint.map((series, joint) => (
               <LiveTrackingChart
                 key={`${dataset.index}-${joint}-${metric}-${effectiveSource}`}
                 title={`${labels.joint} ${joint + 1}`}
@@ -411,8 +400,8 @@ export function ReferenceComparisonPanel({
                 includeZero
                 minSpan={1e-4}
                 labels={liveLabels}
-                hoverTime={hoverTime}
-                cursorTime={playbackTime}
+                hoverTime={chartHoverTime}
+                cursorTime={cursorTime}
                 onHover={setHoverTime}
                 hasAnySamples
               />
@@ -422,9 +411,9 @@ export function ReferenceComparisonPanel({
       ) : null}
 
       <footer className="live-tracking__footer">
-        <span className="live-tracking__hover-hint" data-active={hoverTime !== null}>
-          {hoverTime !== null
-            ? liveLabels.readoutHover(formatSeconds(hoverTime))
+        <span className="live-tracking__hover-hint" data-active={chartHoverTime !== null}>
+          {chartHoverTime !== null
+            ? liveLabels.readoutHover(formatSeconds(chartHoverTime))
             : labels.hoverHint}
         </span>
         <span className="live-tracking__reference-source">

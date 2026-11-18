@@ -260,20 +260,16 @@ def main(argv: list[str] | None = None) -> int:
     config = plugin_system.viewer_protocol.ViewerConfig(
         title=args.title, width=int(args.width), height=int(args.height), gfx="")
 
-    # ★ 后台线程：与"有窗模式"同一套排法（窗口在哪，仿真就不在哪）。
-    #   命令注入靠 `runtime_engine.command_queue`：主线程放入命令，仿真线程每圈排空。
-    # ★ 3D 视口的"状态来源"：放在**仿真线程**里的观察者，只做一次引用替换
-    #   （回调里绝不能碰 AppKit —— 那必须在主线程）
+    # 主线程运行窗口并入队命令，仿真线程执行命令并发布状态。
     viewport_slot = {'viewport': None, 'pending_model': None}
     def receive_state(snapshot):
-        # ⚠️ 这个函数在**仿真线程**里被调用：只允许做"放好引用"这种事
+        # 视口接收快照，窗口操作留在主线程。
         viewport = viewport_slot['viewport']
         if viewport is not None:
             viewport.receive_state(snapshot)
 
     def receive_model_event(event):
-        # 模型桥在换模型成功后会广播 ModelEvent；这里只记路径，绝不碰 AppKit。
-        # 主线程的 _主线程每帧 会取走它，停旧渲染线程、重装新模型。
+        # 记录新模型路径，由窗口线程处理切换。
         path = str(getattr(event, "path", "") or "")
         if path:
             viewport_slot['pending_model'] = path

@@ -37,7 +37,7 @@ class MuJoCoViewport(QWidget):
         self._status_text = "正在加载…"
         self._frame_image: QImage | None = None
         self._drag_point = None
-        self._panning = False
+        self._drag_button = Qt.MouseButton.NoButton
 
         self._stop = threading.Event()
         self._wake = threading.Event()
@@ -56,8 +56,7 @@ class MuJoCoViewport(QWidget):
         self.frame_ready.connect(self._receive_frame)
         self.status_changed.connect(self._receive_status)
 
-        # 调整分栏时分两拍更新：拖动中约 20 Hz 跟手，停止 180 ms 后再提交最终尺寸。
-        # 旧实现只等“安静 180 ms”才更新，所以分割线在动、3D 画面却像卡住了。
+        # 拖动时约 20 Hz 更新，停止 180 ms 后提交最终尺寸。
         self._resize_timer = QTimer(self)
         self._resize_timer.setSingleShot(True)
         self._resize_timer.setInterval(50)
@@ -168,27 +167,45 @@ class MuJoCoViewport(QWidget):
         self._wake.set()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.setFocus()
-            self._drag_point = event.position()
-            self._panning = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+        button = event.button()
+        if button not in (Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton):
+            super().mousePressEvent(event)
+            return
+        self.setFocus()
+        self._drag_point = event.position()
+        self._drag_button = button
+        event.accept()
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        if self._drag_point is None or not (event.buttons() & Qt.MouseButton.LeftButton):
+        if self._drag_point is None or not (event.buttons() & self._drag_button):
             return
         point = event.position()
         dx, dy = point.x() - self._drag_point.x(), point.y() - self._drag_point.y()
         self._drag_point = point
-        self._actions.put(("pan" if self._panning else "rotate", float(dx), float(dy)))
+        if self._drag_button == Qt.MouseButton.RightButton:
+            height = max(1, self.height())
+            self._actions.put(("pan", dx / height, dy / height))
+        else:
+            self._actions.put(("rotate", float(dx), float(dy)))
         self._wake.set()
+        event.accept()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == self._drag_button:
             self._drag_point = None
+            self._drag_button = Qt.MouseButton.NoButton
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
 
-    def mouseDoubleClickEvent(self, _event: QMouseEvent) -> None:
-        self._actions.put(("fit",))
-        self._wake.set()
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._actions.put(("fit",))
+            self._wake.set()
+            event.accept()
+        else:
+            self.mousePressEvent(event)
+
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         self._actions.put(("zoom", float(event.angleDelta().y())))
@@ -223,9 +240,10 @@ class MuJoCoViewport(QWidget):
                 camera.azimuth -= action[1] * 0.4
                 camera.elevation = max(-89.0, min(89.0, camera.elevation - action[2] * 0.4))
             elif action[0] == "pan":
-                ratio = max(0.0002, float(camera.distance) * 0.0015)
-                camera.lookat[0] -= action[1] * ratio
-                camera.lookat[2] += action[2] * ratio
+                import mujoco
+
+                mujoco.mjv_moveCamera(
+                    model, mujoco.mjtMouse.mjMOUSE_MOVE_V, action[1], action[2], camera)
             elif action[0] == "zoom":
                 factor = 0.88 if action[1] > 0 else 1.14
                 camera.distance = max(0.08, min(100.0, float(camera.distance) * factor))
@@ -323,7 +341,7 @@ class MuJoCoViewport(QWidget):
                     self.error = ""
                     self.status_changed.emit(
                         f'3D 已加载：{os.path.basename(pending_model)}\n'
-                        "左键拖动旋转 · Shift+拖动平移 · 滚轮缩放 · 双击/F 适配")
+                        "左键拖动旋转 · 右键拖动平移 · 滚轮缩放 · 左键双击/F 适配")
 
                 if model is None:
                     continue
@@ -358,8 +376,7 @@ class MuJoCoViewport(QWidget):
                 if not (has_new_state or camera_changed or size_changed
                         or self._statistics['rendered_frames'] == 0):
                     continue
-                # 仿真可以是 500 Hz，但显示器通常只有 60 Hz。这里只取最新状态，
-                # 不为每个物理步都排一张图，避免 Qt 事件队列越积越多。
+                # 只渲染最新状态，避免物理步进快于显示时积压帧。
                 if frame_time:
                     remaining = (1.0 / 60.0) - (time.perf_counter() - frame_time[-1])
                     if remaining > 0:

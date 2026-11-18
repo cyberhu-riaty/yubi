@@ -17,6 +17,12 @@ from plugin_system import ControlPlugin, step_handler
 from simulation_control import SimulationControlCommand
 from experiment_registry import experiment_registry
 from reference_replay import JOINT_NAMES, load_trajectory, trajectory_indices
+from inverse_kinematics import find_end_effector
+from trajectory_runtime import (
+    append_actual_trajectory_point,
+    begin_trajectory_visualization,
+    clear_trajectory_visualization,
+)
 
 
 class ReferenceReplayPlayer(ControlPlugin):
@@ -40,6 +46,8 @@ class ReferenceReplayPlayer(ControlPlugin):
         self._start_time: float | None = None
         self._last_time: float | None = None
         self._last_error = ""
+        self._endpoint: tuple[int, str, str] | None = None
+        self._last_trace_time: float | None = None
 
     def check_model_compatibility(self, model) -> str:
         mj = studio.mujoco
@@ -58,6 +66,8 @@ class ReferenceReplayPlayer(ControlPlugin):
         self._start_time = None
         self._last_time = None
         model = self._model
+        self._endpoint = find_end_effector(model, studio.mujoco) if model is not None else None
+        self._last_trace_time = None
         if model is None:
             self._qpos_addresses = ()
             self._dof_addresses = ()
@@ -117,15 +127,36 @@ class ReferenceReplayPlayer(ControlPlugin):
         data.qfrc_applied[:] = 0.0
         studio.mujoco.mj_forward(self._model, data)
 
+    def _trace_endpoint(self, elapsed_s: float) -> None:
+        if self._endpoint is None or self._reference is None or self._data is None:
+            return
+        time_s = min(elapsed_s, self._reference.duration_s)
+        previous = self._last_trace_time
+        if previous is not None and time_s <= previous:
+            return
+        if previous is not None and time_s - previous < 1.0 / 30 and time_s < self._reference.duration_s:
+            return
+        endpoint_id, endpoint_type, endpoint_name = self._endpoint
+        if previous is None:
+            begin_trajectory_visualization("ur10_reference_replay", endpoint_name, np.empty((0, 3)))
+        point = (self._data.site_xpos[endpoint_id] if endpoint_type == "site"
+                 else self._data.xpos[endpoint_id])
+        append_actual_trajectory_point("ur10_reference_replay", point)
+        self._last_trace_time = time_s
+
     @step_handler
     def on_simulation_command(self, command: SimulationControlCommand) -> bool:
         action = str(getattr(command, "action", "") or "")
         if action in ("run", "运行"):
             self._ensure_reference()
-            self._start_time = float(getattr(self._data, "time", 0.0))
-            self._last_time = self._start_time
-            self._apply(0.0)
+            if self._start_time is None:
+                self._start_time = float(getattr(self._data, "time", 0.0))
+                self._last_time = self._start_time
+                self._apply(0.0)
+                self._trace_endpoint(0.0)
         elif action in ("reset", "复位"):
+            self._last_trace_time = None
+            clear_trajectory_visualization()
             self._start_time = None
             self._last_time = None
             if self._reference is None:
@@ -143,9 +174,11 @@ class ReferenceReplayPlayer(ControlPlugin):
         data_time = float(event.data.time)
         if self._start_time is None or (self._last_time is not None and data_time + 1e-12 < self._last_time):
             self._start_time = data_time
+            self._last_trace_time = None
         self._last_time = data_time
         elapsed = max(0.0, data_time - float(self._start_time))
         self._apply(elapsed)
+        self._trace_endpoint(elapsed)
         return False
 
     def adjustable_parameters(self) -> dict:
@@ -170,6 +203,9 @@ class ReferenceReplayPlayer(ControlPlugin):
             return f"参考轨迹 {index} 不存在"
         self._index = index
         self._index_initialized = True
+        self._last_trace_time = None
+        if self._data is not None:
+            clear_trajectory_visualization()
         self._reference = None
         self._start_time = None
         self._last_time = None

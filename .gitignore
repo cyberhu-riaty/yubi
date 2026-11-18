@@ -146,6 +146,8 @@ research_*.md
 # 依赖不入库（几万文件 / 几百 MB），靠 pnpm-lock.yaml 重建。
 frontend/node_modules/
 frontend/dist/
+# 任意位置的 node_modules（包括迁移/复制留下的 前端/node_modules 等副本）
+node_modules/
 # ★ 但 `runtime/web/`（构建产物 + Python 生成的契约/主题）**要入库**：
 #   它是"双击即用、离线可用"的一部分 —— 用户不该为了看界面去装 Node。
 #   重新构建见 frontend/约定.md §四。

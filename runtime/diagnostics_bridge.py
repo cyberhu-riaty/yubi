@@ -82,9 +82,6 @@ def _run_suite(script: str, package_root: str) -> tuple[bool, str, float]:
     """跑一个检查脚本，返回 (通过?, 说明, 耗时秒)。"""
     started_at = time.perf_counter()
     try:
-        # ★ 不猜参数：直接跑脚本的默认行为。
-        #   我第一版按脚本名猜着加 `--简`，结果 `project_selfcheck.py` 不认这个参数，
-        #   于是"诊断把好脚本报成失败"——诊断自己报假错是最不能接受的那类错。
         result = subprocess.run(
             [sys.executable, "-X", "utf8", script],
             cwd=package_root, capture_output=True, encoding="utf-8", timeout=SUITE_TIMEOUT_SECONDS,
@@ -97,9 +94,7 @@ def _run_suite(script: str, package_root: str) -> tuple[bool, str, float]:
     elapsed_time = time.perf_counter() - started_at
     passed = result.returncode == 0
 
-    # 说明：优先取**含结论关键词**的行（那些脚本的结论都带"结果/通过/失败/项"），
-    #   取不到才退回最后一行非空。★ 不能只取最后一行 —— 好几个脚本最后一行是
-    #   `======` 分隔线，界面上就会显示一整排等号，等于没说。
+    # 优先取结论行，避免把末尾分隔线显示成诊断结果。
     lines = [l.strip() for l in (result.stdout or "").splitlines() if l.strip()]
     keywords = ("结果", "通过", "失败", "不含", "不在", "全部")
     candidates = [l for l in lines if any(k in l for k in keywords)]

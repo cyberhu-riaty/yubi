@@ -25,7 +25,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_REFERENCE_DIRECTORY = ROOT / "ur10/experiments/legacy/outputs/results"
-REFERENCE_MODEL = ROOT / "ur10/models/ur10_extfric.xml"
+REFERENCE_MODEL = ROOT / "ur10/models/ur10_extfric_new.xml"
 TOLERANCE_NM = 1e-5
 JOINT_NAMES = (
     "shoulder_pan_joint",

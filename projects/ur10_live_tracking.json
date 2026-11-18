@@ -3,10 +3,15 @@
   "project": "ur10_live_tracking",
   "model": "ur10/models/ur10.xml",
   "algorithms": [
-    {"plugin": "trajectory_target_player"},
-    {"plugin": "joint_position_servo"}
+    {
+      "plugin": "trajectory_target_player"
+    },
+    {
+      "plugin": "joint_position_servo"
+    }
   ],
   "parameters": {},
   "notes": "使用已有辨识动力学与内置简化摩擦的位置伺服模型，ctrl 为 rad，图中力矩来自 qfrc_actuator。",
+  "_order_note": "列表顺序 = 每步的执行顺序：最后一项最后写 ctrl[:]，所以它说了算。（本列表由界面【Algorithms】面板的 Save 写回）",
   "experiment_only": true
 }

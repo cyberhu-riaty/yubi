@@ -1,12 +1,18 @@
 {
   "schema_version": 2,
   "project": "ur10_reference_replay",
-  "model": "ur10/models/ur10_extfric.xml",
+  "model": "ur10/models/ur10_extfric_new.xml",
   "algorithms": [
     {
       "plugin": "reference_replay_player"
     }
   ],
+  "parameters": {
+    "reference_replay_player": {
+      "trajectory": 0.0
+    }
+  },
   "notes": "处理后的实机参考轨迹回放；q/dq 来自 trajectory_N_identified_results.mat，不代表正向控制器复现。",
+  "_order_note": "列表顺序 = 每步的执行顺序：最后一项最后写 ctrl[:]，所以它说了算。（本列表由界面【Algorithms】面板的 Save 写回）",
   "experiment_only": true
 }
